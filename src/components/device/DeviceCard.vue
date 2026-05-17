@@ -1,6 +1,13 @@
 <template>
   <div class="device-card-wrapper">
-  <div class="lamp-card">
+  <div
+    class="lamp-card"
+    :class="{
+      'is-online': device.online,
+      'is-offline': !device.online,
+      'online-flash': onlineFlash,
+    }"
+  >
     <div class="card-header clickable-header" @click="handleHeaderClick">
       <div class="device-title-block">
         <h3>{{ displayNameText }}</h3>
@@ -21,7 +28,12 @@
       min="0"
       max="100"
       :disabled="!!localForm.autoMode"
+      @pointerdown="beginSliderInteraction('brightness')"
+      @pointerup="endSliderInteraction('brightness')"
+      @pointercancel="endSliderInteraction('brightness')"
+      @lostpointercapture="endSliderInteraction('brightness')"
       @input="handleBrightnessInput"
+      @change="endSliderInteraction('brightness')"
     />
 
     <label class="field-label">色温：{{ displayTemp }}</label>
@@ -32,7 +44,12 @@
       max="6500"
       step="100"
       :disabled="!!localForm.autoMode"
+      @pointerdown="beginSliderInteraction('temp')"
+      @pointerup="endSliderInteraction('temp')"
+      @pointercancel="endSliderInteraction('temp')"
+      @lostpointercapture="endSliderInteraction('temp')"
       @input="handleTempInput"
+      @change="endSliderInteraction('temp')"
     />
 
     <label class="checkbox-row">
@@ -336,6 +353,76 @@ const emit = defineEmits<{
   (e: 'update-realtime', value: { id: number; payload: DeviceCreatePayload; lightControl?: boolean }): void
   (e: 'delete', id: number): void
 }>()
+
+const onlineFlash = ref(false)
+let onlineFlashTimer: ReturnType<typeof setTimeout> | null = null
+const brightnessInteracting = ref(false)
+const tempInteracting = ref(false)
+let brightnessInteractionTimer: ReturnType<typeof setTimeout> | null = null
+let tempInteractionTimer: ReturnType<typeof setTimeout> | null = null
+
+type LightSliderKind = 'brightness' | 'temp'
+const SLIDER_WS_SYNC_GRACE_MS = 900
+
+function triggerOnlineFlash() {
+  onlineFlash.value = false
+  if (onlineFlashTimer) {
+    clearTimeout(onlineFlashTimer)
+  }
+
+  requestAnimationFrame(() => {
+    onlineFlash.value = true
+    onlineFlashTimer = setTimeout(() => {
+      onlineFlash.value = false
+      onlineFlashTimer = null
+    }, 900)
+  })
+}
+
+function clearSliderInteractionTimer(kind: LightSliderKind) {
+  if (kind === 'brightness') {
+    if (brightnessInteractionTimer) {
+      clearTimeout(brightnessInteractionTimer)
+      brightnessInteractionTimer = null
+    }
+    return
+  }
+
+  if (tempInteractionTimer) {
+    clearTimeout(tempInteractionTimer)
+    tempInteractionTimer = null
+  }
+}
+
+function beginSliderInteraction(kind: LightSliderKind) {
+  clearSliderInteractionTimer(kind)
+  if (kind === 'brightness') {
+    brightnessInteracting.value = true
+    return
+  }
+
+  tempInteracting.value = true
+}
+
+function endSliderInteraction(kind: LightSliderKind) {
+  clearSliderInteractionTimer(kind)
+  const timer = setTimeout(() => {
+    if (kind === 'brightness') {
+      brightnessInteracting.value = false
+      brightnessInteractionTimer = null
+      return
+    }
+
+    tempInteracting.value = false
+    tempInteractionTimer = null
+  }, SLIDER_WS_SYNC_GRACE_MS)
+
+  if (kind === 'brightness') {
+    brightnessInteractionTimer = timer
+  } else {
+    tempInteractionTimer = timer
+  }
+}
 
 const localForm = reactive<DeviceCreatePayload>({
   chipId: '',
@@ -943,13 +1030,20 @@ async function handleStartOtaUpdate() {
 }
 
 function syncFromProps() {
+  const keepBrightness = brightnessInteracting.value
+  const keepTemp = tempInteracting.value
+
   localForm.chipId = props.device.chipId
   localForm.ip = props.device.ip || ''
   localForm.displayName = props.device.displayName || ''
   localForm.deviceType = props.device.deviceType || ''
   localForm.deviceNo = props.device.deviceNo || ''
-  localForm.brightness = props.device.brightness ?? 50
-  localForm.temp = props.device.temp ?? 4000
+  if (!keepBrightness) {
+    localForm.brightness = props.device.brightness ?? 50
+  }
+  if (!keepTemp) {
+    localForm.temp = props.device.temp ?? 4000
+  }
   localForm.autoMode = props.device.autoMode ?? false
   localForm.recommendedBrightness = props.device.recommendedBrightness ?? 50
   localForm.recommendedTemp = props.device.recommendedTemp ?? 4000
@@ -972,6 +1066,15 @@ watch(
 )
 
 watch(
+  () => props.device.online,
+  (isOnline, wasOnline) => {
+    if (wasOnline === false && isOnline === true) {
+      triggerOnlineFlash()
+    }
+  },
+)
+
+watch(
   () => props.device.chipId,
   () => {
     resetOtaProgressState()
@@ -989,6 +1092,11 @@ watch(
 
 onBeforeUnmount(() => {
   stopOtaProgressTimer()
+  if (onlineFlashTimer) {
+    clearTimeout(onlineFlashTimer)
+  }
+  clearSliderInteractionTimer('brightness')
+  clearSliderInteractionTimer('temp')
 })
 
 function resetForm() {
@@ -1019,6 +1127,7 @@ function emitRealtimeUpdate(lightControl = false) {
 
 function handleBrightnessInput(event: Event) {
   if (localForm.autoMode) return
+  beginSliderInteraction('brightness')
   const target = event.target as HTMLInputElement
   localForm.brightness = Number(target.value)
   emitRealtimeUpdate(true)
@@ -1026,6 +1135,7 @@ function handleBrightnessInput(event: Event) {
 
 function handleTempInput(event: Event) {
   if (localForm.autoMode) return
+  beginSliderInteraction('temp')
   const target = event.target as HTMLInputElement
   localForm.temp = Number(target.value)
   emitRealtimeUpdate(true)
@@ -1239,6 +1349,17 @@ const textColor = computed(() => {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .status-badge.online {
@@ -1255,6 +1376,35 @@ const textColor = computed(() => {
 @keyframes breathe {
   0%, 100% { opacity: 0.9; transform: scale(1); }
   50% { opacity: 0.55; transform: scale(1.08); }
+}
+
+@keyframes onlineCardFlash {
+  0% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-2px);
+    box-shadow:
+      0 18px 36px rgba(34, 197, 94, 0.16),
+      0 0 0 1px rgba(34, 197, 94, 0.2);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes onlineCardSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
 }
 
 
@@ -1544,10 +1694,50 @@ const textColor = computed(() => {
 
 .lamp-card,
 .placeholder-card {
+  position: relative;
+  overflow: hidden;
   background: var(--card-bg);
+  border: 1px solid rgba(226, 232, 240, 0.86);
   border-radius: var(--border-radius);
   padding: 20px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.lamp-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(115deg, transparent 0%, rgba(34, 197, 94, 0.14) 45%, transparent 58%);
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.lamp-card.is-online {
+  border-color: rgba(34, 197, 94, 0.26);
+  box-shadow:
+    0 8px 22px rgba(15, 23, 42, 0.06),
+    0 0 0 1px rgba(34, 197, 94, 0.08);
+}
+
+.lamp-card.is-offline {
+  opacity: 0.82;
+  border-color: rgba(226, 232, 240, 0.9);
+}
+
+.lamp-card.online-flash {
+  animation: onlineCardFlash 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lamp-card.online-flash::after {
+  animation: onlineCardSweep 0.9s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lamp-card h3 {

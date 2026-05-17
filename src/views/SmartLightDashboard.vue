@@ -3,7 +3,20 @@
     <SidebarNav v-model="activeTab" />
 
     <div class="main-content">
-      <section v-if="activeTab === 'main'" class="page-section">
+      <div
+        class="page-switcher"
+        :class="{ 'is-switching': pageSwitching }"
+        :style="pageSwitcherStyle"
+      >
+      <Transition
+        :name="pageTransitionName"
+        @before-leave="measurePagePushDistance"
+        @before-enter="beginPageSwitch"
+        @after-enter="endPageSwitch"
+        @enter-cancelled="endPageSwitch"
+        @leave-cancelled="endPageSwitch"
+      >
+      <section v-if="activeTab === 'main'" key="main" class="page-section">
         <div class="dashboard-top-status">
           <div class="current-time">{{ currentTime }}</div>
           <div class="weather-status-row">
@@ -53,19 +66,37 @@
               <div class="stat-item">
                 <span class="stat-label">温度</span>
                 <strong class="stat-value">
-                  <OdometerRoll :value="hasWeatherData ? envInfo.temp : null" :decimals="1" suffix="℃" />
+                  <OdometerRoll
+                    :class="{ 'odometer-motion-pending': !pageNumberMotionReady }"
+                    :value="hasWeatherData ? envInfo.temp : null"
+                    :decimals="1"
+                    suffix="℃"
+                    :play="pageNumberMotionReady"
+                  />
                 </strong>
               </div>
               <div class="stat-item">
                 <span class="stat-label">体感</span>
                 <strong class="stat-value">
-                  <OdometerRoll :value="hasWeatherData ? envInfo.apparentTemp : null" :decimals="1" suffix="℃" />
+                  <OdometerRoll
+                    :class="{ 'odometer-motion-pending': !pageNumberMotionReady }"
+                    :value="hasWeatherData ? envInfo.apparentTemp : null"
+                    :decimals="1"
+                    suffix="℃"
+                    :play="pageNumberMotionReady"
+                  />
                 </strong>
               </div>
               <div class="stat-item">
                 <span class="stat-label">湿度</span>
                 <strong class="stat-value">
-                  <OdometerRoll :value="hasWeatherData ? envInfo.humidity : null" :decimals="0" suffix="%" />
+                  <OdometerRoll
+                    :class="{ 'odometer-motion-pending': !pageNumberMotionReady }"
+                    :value="hasWeatherData ? envInfo.humidity : null"
+                    :decimals="0"
+                    suffix="%"
+                    :play="pageNumberMotionReady"
+                  />
                 </strong>
               </div>
               <div class="stat-item">
@@ -98,17 +129,21 @@
               <OdometerRoll
                 v-if="latestLux != null"
                 class="lux-odometer-web"
+                :class="{ 'odometer-motion-pending': !pageNumberMotionReady }"
                 :value="latestLux"
                 :decimals="0"
                 suffix=" lux"
+                :play="pageNumberMotionReady"
               />
               <OdometerRoll
                 v-if="latestLux != null"
                 class="lux-odometer-mobile"
+                :class="{ 'odometer-motion-pending': !pageNumberMotionReady }"
                 :value="latestLux"
                 :decimals="0"
                 :digit-height="16"
                 suffix=" lux"
+                :play="pageNumberMotionReady"
               />
               <span v-if="latestLux == null" class="lux-placeholder">-- lux</span>
             </div>
@@ -126,13 +161,18 @@
             服务器地址：
             <input v-model.trim="serverHost" type="text" placeholder="127.0.0.1" />
           </label>
-          <div id="scanStatus">
-            {{ connected ? `WS 已连接 · ${scanStatus}` : `WS 未连接 · ${scanStatus}` }}
+          <div id="scanStatus" class="ws-status-pill" :class="connectionStatusClass">
+            <span class="ws-status-dot" aria-hidden="true"></span>
+            <span>{{ connected ? `WS 已连接 · ${scanStatus}` : `WS 未连接 · ${scanStatus}` }}</span>
           </div>
         </div>
 
 <Transition name="ios-panel">
-  <div v-if="scanning || scanFinished || scannedDevices.length > 0" class="scan-panel">
+  <div
+    v-if="scanning || scanFinished || scannedDevices.length > 0"
+    class="scan-panel"
+    :class="{ scanning }"
+  >
     <div class="scan-panel-header">
       <div class="scan-panel-title">
         {{ scanPanelTitle }}
@@ -147,7 +187,16 @@
       </button>
     </div>
 
+    <div v-if="scanning" class="scan-progress">
+      <div class="scan-progress-track">
+        <div class="scan-progress-fill" :style="{ width: `${scanProgress}%` }"></div>
+      </div>
+    </div>
+
     <div v-if="scannedDevices.length === 0" class="scan-empty">
+      <span v-if="scanning" class="scan-radar" aria-hidden="true">
+        <span class="scan-radar-sweep"></span>
+      </span>
       {{ scanEmptyText }}
     </div>
 
@@ -202,15 +251,7 @@
       </section> 
 
 
-  <DeviceAddModal
-    v-if="showAddDeviceModal"
-    :submitting="creating"
-    :initial-data="pendingScannedDevice"
-    @close="closeAddDeviceModal"
-    @submit="handleCreateDevice"
-  />
-
-      <section v-else-if="activeTab === 'flow'" class="page-section">
+      <section v-else-if="activeTab === 'flow'" key="flow" class="page-section">
         <FlowOverview
           :devices="devices"
           :latest-lux="latestLux"
@@ -223,7 +264,7 @@
         />
       </section>
 
-    <section v-else-if="activeTab === 'settings'" class="page-section">
+    <section v-else-if="activeTab === 'settings'" key="settings" class="page-section">
       <div class="settings-layout">
         <StoreSettingsPanel
           v-model="storeSettings"
@@ -248,9 +289,19 @@
        <SmartConfigPanel class="settings-full-card" />
     </section>
 
-    <section v-else-if="activeTab === 'firmware'" class="page-section">
+    <section v-else-if="activeTab === 'firmware'" key="firmware" class="page-section">
       <FirmwareManagePanel />
     </section>
+    </Transition>
+      </div>
+
+  <DeviceAddModal
+    v-if="showAddDeviceModal"
+    :submitting="creating"
+    :initial-data="pendingScannedDevice"
+    @close="closeAddDeviceModal"
+    @submit="handleCreateDevice"
+  />
     </div>
   </div>
 </template>
@@ -310,6 +361,13 @@ function getInitialTab(): DashboardTab {
 }
 
 const activeTab = ref<DashboardTab>(getInitialTab())
+const dashboardTabOrder: DashboardTab[] = ['main', 'flow', 'settings', 'firmware']
+const PAGE_PUSH_GAP_PX = 28
+const pageTransitionName = ref('tab-page-next')
+const pageSwitching = ref(false)
+const pageNumberMotionReady = ref(true)
+const pagePushDistance = ref(0)
+const pageSwitchHeight = ref(0)
 const devices = ref<DeviceItem[]>([])
 const lightEffectState = ref<LightEffectState | null>(null)
 const loading = ref(false)
@@ -327,6 +385,15 @@ const serverHost = computed(() => {
 
 const wsUrl = computed(() => {
   return `${API_BASE.replace(/^http/, 'ws')}/ws`
+})
+
+const pageSwitcherStyle = computed(() => {
+  return pagePushDistance.value > 0 || pageSwitchHeight.value > 0
+    ? {
+        '--page-push-distance': `${pagePushDistance.value || pageSwitchHeight.value}px`,
+        '--page-switch-height': `${pageSwitchHeight.value || pagePushDistance.value}px`,
+      }
+    : undefined
 })
 
 const wsProtocol = computed(() => {
@@ -502,6 +569,7 @@ function removeScannedDevice(chipId: string) {
 const scanning = ref(false)
 const scanCountdown = ref(0)
 const scanFinished = ref(false)
+const SCAN_DURATION_SECONDS = 10
 const pendingScannedDevice = ref<{
   chipId: string
   ip: string
@@ -512,6 +580,13 @@ const pendingScannedDevice = ref<{
 let scanTimer: number | null = null
 let scanCountdownTimer: number | null = null
 let scanResultTipTimer: number | null = null
+
+const scanProgress = computed(() => {
+  if (scanning.value) {
+    return Math.max(0, Math.min(100, ((SCAN_DURATION_SECONDS - scanCountdown.value) / SCAN_DURATION_SECONDS) * 100))
+  }
+  return scanFinished.value ? 100 : 0
+})
 
 const { currentTime, dateInfo, weekInfo } = useClock()
 
@@ -757,11 +832,65 @@ watch(
     }
   },
 )
-watch(activeTab, (tab) => {
+watch(activeTab, (tab, oldTab) => {
+  const nextIndex = dashboardTabOrder.indexOf(tab)
+  const oldIndex = dashboardTabOrder.indexOf(oldTab)
+  pageTransitionName.value = oldIndex >= 0 && nextIndex < oldIndex ? 'tab-page-prev' : 'tab-page-next'
+  if (oldTab && tab !== oldTab) {
+    pageNumberMotionReady.value = false
+  }
+
   if (tab === 'flow') {
     void preloadFlowData(false)
   }
 })
+
+function beginPageSwitch() {
+  pageNumberMotionReady.value = false
+  if (pagePushDistance.value <= 0) {
+    const viewportDistance = getViewportPagePushDistance()
+    pageSwitchHeight.value = viewportDistance
+    pagePushDistance.value = viewportDistance
+  }
+  pageSwitching.value = true
+}
+
+function endPageSwitch() {
+  pageSwitching.value = false
+  pagePushDistance.value = 0
+  pageSwitchHeight.value = 0
+  pageNumberMotionReady.value = true
+}
+
+function getViewportPagePushDistance() {
+  const mainContent = document.querySelector('.main-content')
+  const rect = mainContent?.getBoundingClientRect()
+  const top = Math.max(rect?.top ?? 0, 0)
+  return Math.max(window.innerHeight - top, 1)
+}
+
+function measurePagePushDistance(el: Element) {
+  const section = el as HTMLElement
+  const sectionRect = section.getBoundingClientRect()
+  const baseDistance = getViewportPagePushDistance()
+  const viewportBottom = window.innerHeight
+  let distance = baseDistance
+  pageSwitchHeight.value = baseDistance
+
+  const visibleElements = Array.from(section.querySelectorAll<HTMLElement>(
+    '.env-card, #controls, .scan-panel, .store-layout-row, .device-grid, .settings-layout, .settings-full-card, .flow-page, .firmware-section, .firmware-page, .flow-card, .chart-card',
+  ))
+
+  for (const item of visibleElements) {
+    const rect = item.getBoundingClientRect()
+    const intersectsViewportBottom = rect.top < viewportBottom && rect.bottom > viewportBottom
+    if (!intersectsViewportBottom) continue
+
+    distance = Math.max(distance, rect.bottom - sectionRect.top)
+  }
+
+  pagePushDistance.value = Math.ceil(distance + PAGE_PUSH_GAP_PX)
+}
 
 function normalizeChipId(value?: string) {
   return String(value || '').trim().toUpperCase()
@@ -911,7 +1040,7 @@ function handleScan() {
   scannedDevices.value = []
   scanning.value = true
   scanFinished.value = false
-  scanCountdown.value = 10
+  scanCountdown.value = SCAN_DURATION_SECONDS
   updateScanningStatusText()
 
   scanTimer = window.setTimeout(() => {
@@ -988,7 +1117,18 @@ async function handleCreateDevice(payload: DeviceCreatePayload) {
   }
 }
 
-const updateTimerMap = new Map<number, number>()
+const REALTIME_UPDATE_DEBOUNCE_MS = 300
+
+interface RealtimeUpdateState {
+  timer?: number
+  version: number
+  inFlight: boolean
+  flushAfterFlight: boolean
+  payload: DeviceCreatePayload
+  lightControl?: boolean
+}
+
+const updateTimerMap = new Map<number, RealtimeUpdateState>()
 
 function handleRealtimeUpdate({
   id,
@@ -999,15 +1139,55 @@ function handleRealtimeUpdate({
   payload: DeviceCreatePayload
   lightControl?: boolean
 }) {
-  const oldTimer = updateTimerMap.get(id)
-  if (oldTimer) {
-    window.clearTimeout(oldTimer)
+  let state = updateTimerMap.get(id)
+  if (!state) {
+    state = {
+      version: 0,
+      inFlight: false,
+      flushAfterFlight: false,
+      payload,
+      lightControl,
+    }
+    updateTimerMap.set(id, state)
   }
 
-  const timer = window.setTimeout(async () => {
-    try {
-      await updateDevice(id, payload, { lightControl })
+  state.version += 1
+  state.payload = payload
+  state.lightControl = lightControl
+  state.flushAfterFlight = false
 
+  if (state.timer) {
+    window.clearTimeout(state.timer)
+  }
+
+  const version = state.version
+  state.timer = window.setTimeout(() => {
+    void flushRealtimeUpdate(id, version)
+  }, REALTIME_UPDATE_DEBOUNCE_MS)
+}
+
+async function flushRealtimeUpdate(id: number, version: number) {
+  const state = updateTimerMap.get(id)
+  if (!state || version !== state.version) return
+
+  state.timer = undefined
+
+  if (state.inFlight) {
+    state.flushAfterFlight = true
+    return
+  }
+
+  const sentVersion = state.version
+  const payload = state.payload
+  const lightControl = state.lightControl
+
+  state.inFlight = true
+  state.flushAfterFlight = false
+
+  try {
+    await updateDevice(id, payload, { lightControl })
+
+    if (sentVersion === state.version) {
       const index = devices.value.findIndex(item => String(item.id) === String(id))
       if (index >= 0) {
         devices.value[index] = {
@@ -1015,14 +1195,23 @@ function handleRealtimeUpdate({
           ...payload,
         }
       }
-    } catch (error) {
-      console.error('realtime update error =', error)
-    } finally {
+    }
+  } catch (error) {
+    console.error('realtime update error =', error)
+  } finally {
+    state.inFlight = false
+
+    if (sentVersion !== state.version) {
+      if (!state.timer && state.flushAfterFlight) {
+        void flushRealtimeUpdate(id, state.version)
+      }
+      return
+    }
+
+    if (!state.timer) {
       updateTimerMap.delete(id)
     }
-  }, 150)
-
-  updateTimerMap.set(id, timer)
+  }
 }
 
 async function handleDeleteDevice(id: number) {
@@ -1221,6 +1410,12 @@ function handleWsMessage(message: any) {
 
 const { connected } = useWebSocket(wsUrl, handleWsMessage, wsProtocol)
 
+const connectionStatusClass = computed(() => ({
+  'ws-connected': connected.value,
+  'ws-scanning': scanning.value,
+  'ws-offline': !connected.value,
+}))
+
 watch(connected, (val) => {
   if (scanning.value || scanFinished.value) return
 
@@ -1234,8 +1429,10 @@ watch(connected, (val) => {
 onBeforeUnmount(() => {
   clearScanTimers()
 
-  updateTimerMap.forEach(timer => {
-    window.clearTimeout(timer)
+  updateTimerMap.forEach(state => {
+    if (state.timer) {
+      window.clearTimeout(state.timer)
+    }
   })
   updateTimerMap.clear()
 })
@@ -1302,20 +1499,65 @@ onBeforeUnmount(() => {
     );
 }
 
-.page-section {
+.page-switcher {
+  --page-push-distance: calc(100vh - 72px);
+  --page-switch-height: calc(100vh - 72px);
   position: relative;
-  animation: tabFadeIn 0.25s ease both;
+  min-height: calc(100vh - 72px);
+  overflow: visible;
 }
 
-@keyframes tabFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.page-switcher.is-switching {
+  height: var(--page-switch-height);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page-section {
+  position: relative;
+  width: 100%;
+  will-change: transform;
+}
+
+.page-switcher.is-switching .page-section {
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+.odometer-motion-pending {
+  visibility: hidden;
+}
+
+.tab-page-next-enter-active,
+.tab-page-next-leave-active,
+.tab-page-prev-enter-active,
+.tab-page-prev-leave-active {
+  transition: transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.tab-page-next-leave-active,
+.tab-page-prev-leave-active {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  pointer-events: none;
+}
+
+.tab-page-next-enter-from {
+  transform: translateY(var(--page-push-distance));
+}
+
+.tab-page-next-leave-to {
+  transform: translateY(calc(var(--page-push-distance) * -1));
+}
+
+.tab-page-prev-enter-from {
+  transform: translateY(calc(var(--page-push-distance) * -1));
+}
+
+.tab-page-prev-leave-to {
+  transform: translateY(var(--page-push-distance));
 }
 
 .dashboard-top-status {
@@ -1625,6 +1867,80 @@ onBeforeUnmount(() => {
   color: #64748b;
   font-size: 14px;
   font-weight: 700;
+}
+
+#scanStatus.ws-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.86);
+  transition:
+    background 0.22s ease,
+    border-color 0.22s ease,
+    color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.ws-status-dot {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
+.ws-status-dot::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 1px solid currentColor;
+  opacity: 0;
+}
+
+#scanStatus.ws-connected {
+  color: #15803d;
+  border-color: rgba(34, 197, 94, 0.24);
+  background: rgba(240, 253, 244, 0.9);
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.08);
+}
+
+#scanStatus.ws-connected .ws-status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.14);
+}
+
+#scanStatus.ws-connected .ws-status-dot::after,
+#scanStatus.ws-scanning .ws-status-dot::after {
+  animation: wsStatusPulse 1.8s ease-out infinite;
+}
+
+#scanStatus.ws-scanning {
+  color: #0369a1;
+  border-color: rgba(14, 165, 233, 0.28);
+  background: rgba(240, 249, 255, 0.92);
+}
+
+#scanStatus.ws-scanning .ws-status-dot {
+  background: #0ea5e9;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.14);
+}
+
+@keyframes wsStatusPulse {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.65);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
 }
 
 .settings-layout {
@@ -2229,6 +2545,8 @@ onBeforeUnmount(() => {
 }
 
 .scan-panel {
+  position: relative;
+  overflow: hidden;
   margin: 20px 0 24px;
   padding: 20px 22px;
   background: rgba(255, 255, 255, 0.88);
@@ -2239,6 +2557,17 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(226, 232, 240, 0.9);
   backdrop-filter: blur(18px) saturate(1.08);
   -webkit-backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.scan-panel.scanning::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0%, rgba(59, 130, 246, 0.08) 44%, transparent 58%);
+  transform: translateX(-100%);
+  animation: scanPanelSweep 2.6s ease-in-out infinite;
 }
 
 .scan-panel-header {
@@ -2280,15 +2609,68 @@ onBeforeUnmount(() => {
   transform: scale(0.965);
 }
 
+.scan-progress {
+  margin: -4px 0 14px;
+}
+
+.scan-progress-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(203, 213, 225, 0.52);
+}
+
+.scan-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #38bdf8, #2563eb);
+  box-shadow: 0 0 18px rgba(37, 99, 235, 0.38);
+  transition: width 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .scan-empty {
   min-height: 92px;
-  display: flex;
+  display: grid;
   align-items: center;
   justify-content: center;
+  justify-items: center;
+  gap: 10px;
   color: #64748b;
   background: rgba(248, 250, 252, 0.9);
   border: 1px dashed #cbd5e1;
   border-radius: 18px;
+}
+
+.scan-radar {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(59, 130, 246, 0.26) 0 4px, transparent 5px),
+    repeating-radial-gradient(circle at center, rgba(59, 130, 246, 0.14) 0 1px, transparent 1px 15px);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+}
+
+.scan-radar::before,
+.scan-radar::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+}
+
+.scan-radar::after {
+  inset: 18px;
+}
+
+.scan-radar-sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, rgba(37, 99, 235, 0.4), rgba(37, 99, 235, 0.04) 38%, transparent 39%);
+  animation: scanRadarSweep 1.25s linear infinite;
 }
 
 .scan-list {
@@ -2321,6 +2703,48 @@ onBeforeUnmount(() => {
   box-shadow:
     0 14px 30px rgba(59, 130, 246, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.ios-card-enter-active {
+  transition:
+    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ios-card-leave-active {
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.ios-card-enter-from {
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+}
+
+.ios-card-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+.ios-card-move {
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes scanPanelSweep {
+  0% {
+    transform: translateX(-105%);
+  }
+  55%, 100% {
+    transform: translateX(105%);
+  }
+}
+
+@keyframes scanRadarSweep {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .scan-item-info {
@@ -2518,6 +2942,28 @@ onBeforeUnmount(() => {
     padding: 12px 18px;
     box-sizing: border-box;
     overflow-x: hidden;
+  }
+
+  .page-switcher {
+    --page-push-distance: calc(100vh - 90px);
+    --page-switch-height: calc(100vh - 90px);
+    min-height: calc(100vh - 90px);
+  }
+
+  .tab-page-next-enter-from {
+    transform: translateX(100vw);
+  }
+
+  .tab-page-next-leave-to {
+    transform: translateX(-100vw);
+  }
+
+  .tab-page-prev-enter-from {
+    transform: translateX(-100vw);
+  }
+
+  .tab-page-prev-leave-to {
+    transform: translateX(100vw);
   }
 
   .dashboard-top-status {

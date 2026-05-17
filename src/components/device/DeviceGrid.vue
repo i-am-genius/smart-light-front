@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="device-grid">
     <div class="section-header">
       <h2>已绑定设备</h2>
       <button class="refresh-btn" @click="$emit('refresh')">刷新</button>
@@ -40,6 +40,25 @@ defineEmits<{
 </script>
 
 <style>
+.card-list-enter-active {
+  transition:
+    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.card-list-enter-from {
+  opacity: 0;
+  transform: translateY(14px) scale(0.98);
+  filter: blur(6px);
+}
+
+.card-list-enter-to {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
 .card-list-leave-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
