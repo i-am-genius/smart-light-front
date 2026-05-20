@@ -73,7 +73,7 @@
   {{ "RGB(" + (localForm.mainColorRgb || '暂无主色') + ")" }}
 </div>
 
-<div class="ai-actions">
+<div class="ai-actions" :class="{ shake: shakingAiActions }">
   <template v-if="isLamp">
     <input
       ref="fabricInputRef"
@@ -232,6 +232,7 @@
             <input
               v-model.trim="localForm.deviceNo"
               class="modal-input"
+              :class="{ shake: shakingDeviceNo }"
               type="text"
               inputmode="numeric"
               pattern="[1-9][0-9]*"
@@ -343,6 +344,8 @@ import {
 import { generateLightRecommendationReason } from '../../utils/lightRecommendationReason'
 import { getErrorMessage } from '../../utils/error'
 import { normalizeDeviceType } from '../../utils/device'
+import { useToast } from '../../composables/useToast'
+import { useShake } from '../../composables/useShake'
 
 const props = defineProps<{
   device: DeviceItem
@@ -354,6 +357,10 @@ const emit = defineEmits<{
   (e: 'update-realtime', value: { id: number; payload: DeviceCreatePayload; lightControl?: boolean }): void
   (e: 'delete', id: number): void
 }>()
+
+const toast = useToast()
+const { shaking: shakingDeviceNo, trigger: shakeDeviceNo } = useShake()
+const { shaking: shakingAiActions, trigger: shakeAiActions } = useShake()
 
 const onlineFlash = ref(false)
 let onlineFlashTimer: ReturnType<typeof setTimeout> | null = null
@@ -914,7 +921,8 @@ const deviceNoError = computed(() => {
 
 function saveDeviceBaseInfo() {
   if (deviceNoError.value) {
-    window.alert(deviceNoError.value)
+    toast.show(deviceNoError.value, 'error')
+    shakeDeviceNo()
     return
   }
 
@@ -1159,13 +1167,15 @@ async function handleFabricFileChange(event: Event) {
   if (!file) return
 
   if (file.size > MAX_IMAGE_SIZE) {
-    window.alert('图片大小不能超过 20MB，请压缩后再上传')
+    toast.show('图片大小不能超过 20MB，请压缩后再上传', 'error')
+    shakeAiActions()
     input.value = ''
     return
   }
 
   if (!localForm.chipId) {
-    window.alert('设备缺少 chipId，无法上传面料识别图片')
+    toast.show('设备缺少 chipId，无法上传面料识别图片', 'error')
+    shakeAiActions()
     input.value = ''
     return
   }
@@ -1207,7 +1217,8 @@ async function handleFabricFileChange(event: Event) {
     const message = error instanceof Error && error.message
       ? error.message
       : '面料识别失败，请稍后重试'
-    window.alert(message)
+    toast.show(message, 'error')
+    shakeAiActions()
   } finally {
     fabricLoading.value = false
     input.value = ''

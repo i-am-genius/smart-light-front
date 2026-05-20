@@ -17,7 +17,7 @@
         </div>
 
         <form class="firmware-form" @submit.prevent="handleSubmit">
-          <label class="form-field file-field">
+          <label class="form-field file-field" :class="{ shake: shakingFile }">
             <span>固件文件</span>
             <input
               ref="fileInputRef"
@@ -28,7 +28,7 @@
           </label>
 
           <div class="form-grid">
-            <div class="form-field">
+            <div class="form-field" :class="{ shake: shakingDeviceType }">
               <span>设备类型</span>
               <BaseSelect
                 v-model="deviceType"
@@ -36,7 +36,7 @@
               />
             </div>
 
-            <div class="form-field">
+            <div class="form-field" :class="{ shake: shakingChannel }">
               <span>发布通道</span>
               <BaseSelect
                 v-model="channel"
@@ -44,12 +44,12 @@
               />
             </div>
 
-            <label class="form-field">
+            <label class="form-field" :class="{ shake: shakingVersion }">
               <span>版本号</span>
               <input v-model.trim="version" type="text" placeholder="1.0.1" />
             </label>
 
-            <label class="form-field">
+            <label class="form-field" :class="{ shake: shakingVersionCode }">
               <span>版本数字</span>
               <input v-model.number="versionCode" type="number" min="1" placeholder="10001" />
             </label>
@@ -65,15 +65,7 @@
             <input v-model.trim="md5" type="text" placeholder="可选" />
           </label>
 
-          <div v-if="errorMessage" class="message error-message">
-            {{ errorMessage }}
-          </div>
-
-          <div v-if="successMessage" class="message success-message">
-            {{ successMessage }}
-          </div>
-
-          <button class="submit-btn" type="submit" :disabled="uploading">
+          <button class="submit-btn" type="submit" :class="{ shake: shakingSubmitBtn }" :disabled="uploading">
             {{ uploading ? '上传中...' : '上传固件' }}
           </button>
         </form>
@@ -203,6 +195,8 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import BaseSelect from '../common/BaseSelect.vue'
 import { getFirmwareHistory, uploadFirmware } from '../../api/device'
 import { getErrorMessage } from '../../utils/error'
+import { useToast } from '../../composables/useToast'
+import { useShake } from '../../composables/useShake'
 import type {
   FirmwareChannel,
   FirmwareDeviceType,
@@ -234,6 +228,14 @@ const historyChannelOptions = [
   ...channelOptions,
 ]
 
+const toast = useToast()
+const { shaking: shakingFile, trigger: shakeFile } = useShake()
+const { shaking: shakingDeviceType, trigger: shakeDeviceType } = useShake()
+const { shaking: shakingChannel, trigger: shakeChannel } = useShake()
+const { shaking: shakingVersion, trigger: shakeVersion } = useShake()
+const { shaking: shakingVersionCode, trigger: shakeVersionCode } = useShake()
+const { shaking: shakingSubmitBtn, trigger: shakeSubmitBtn } = useShake()
+
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const deviceType = ref<UploadDeviceType>('lamp')
@@ -243,8 +245,6 @@ const versionCode = ref<number | null>(null)
 const changelog = ref('')
 const md5 = ref('')
 const uploading = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
 const uploadResult = ref<FirmwareUploadResult | null>(null)
 
 const historyDeviceType = ref<FilterDeviceType>('lamp')
@@ -258,7 +258,15 @@ const suppressHistoryWatch = ref(false)
 function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   selectedFile.value = input.files?.[0] || null
-  errorMessage.value = ''
+}
+
+const VALIDATION_SHAKE_MAP: Record<string, () => void> = {
+  'firmware.bin': shakeFile,
+  '.bin': shakeFile,
+  '设备类型': shakeDeviceType,
+  '发布通道': shakeChannel,
+  '版本号不能为空': shakeVersion,
+  '版本数字': shakeVersionCode,
 }
 
 function validateForm() {
@@ -289,11 +297,20 @@ function validateForm() {
   return ''
 }
 
+function shakeForError(msg: string) {
+  for (const [key, trigger] of Object.entries(VALIDATION_SHAKE_MAP)) {
+    if (msg.includes(key)) {
+      trigger()
+      return
+    }
+  }
+}
+
 async function handleSubmit() {
   const validationError = validateForm()
   if (validationError) {
-    errorMessage.value = validationError
-    successMessage.value = ''
+    toast.show(validationError, 'error')
+    shakeForError(validationError)
     return
   }
 
@@ -311,12 +328,10 @@ async function handleSubmit() {
   }
 
   uploading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
 
   try {
     uploadResult.value = await uploadFirmware(formData)
-    successMessage.value = '上传成功'
+    toast.show('固件上传成功', 'success')
     selectedFile.value = null
     if (fileInputRef.value) {
       fileInputRef.value.value = ''
@@ -328,7 +343,9 @@ async function handleSubmit() {
     suppressHistoryWatch.value = false
     await loadFirmwareHistory()
   } catch (error) {
-    errorMessage.value = getErrorMessage(error)
+    const message = getErrorMessage(error)
+    toast.show(message, 'error')
+    shakeSubmitBtn()
   } finally {
     uploading.value = false
   }
@@ -345,7 +362,9 @@ async function loadFirmwareHistory() {
       channel: historyChannel.value,
     })
   } catch (error) {
-    historyError.value = getErrorMessage(error, '固件历史版本加载失败')
+    const message = getErrorMessage(error, '固件历史版本加载失败')
+    historyError.value = message
+    toast.show(message, 'error')
     firmwareHistory.value = []
   } finally {
     historyLoading.value = false

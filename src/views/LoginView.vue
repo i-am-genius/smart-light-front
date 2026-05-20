@@ -46,7 +46,7 @@
       </div>
 
       <div class="auth-main">
-        <div class="form-card">
+        <div class="form-card" :class="{ shake: shakingFormCard }">
           <div class="form-header">
             <h2>欢迎登录</h2>
             <p>请输入账号信息进入系统</p>
@@ -109,6 +109,7 @@ const rememberMe = ref(false)
 const toast = useToast()
 const { shaking: shakingUsername, trigger: shakeUser } = useShake()
 const { shaking: shakingPassword, trigger: shakePwd } = useShake()
+const { shaking: shakingFormCard, trigger: shakeFormCard } = useShake()
 
 const form = reactive({
   username: '',
@@ -178,7 +179,8 @@ async function handleLogin() {
     }
   } catch (error: any) {
     console.error(error)
-    alert(error.message || '登录失败，请稍后重试')
+    toast.show(error.message || '登录失败，请稍后重试', 'error')
+    shakeFormCard()
   } finally {
     loading.value = false
   }

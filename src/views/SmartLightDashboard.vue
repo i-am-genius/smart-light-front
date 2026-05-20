@@ -152,7 +152,7 @@
 
         <h1>智能灯控</h1>
 
-        <div id="controls">
+        <div id="controls" :class="{ shake: shakingControls }">
           <button :disabled="scanning" @click="handleScan">
             {{ scanning ? '扫描中...' : '扫描设备' }}
           </button>
@@ -348,8 +348,12 @@ import { regions } from '../constants/china-region'
 import { STORE_STYLE_MAP } from '../constants/store'
 import { getErrorMessage } from '../utils/error'
 import { formatDate } from '../utils/format'
+import { useToast } from '../composables/useToast'
+import { useShake } from '../composables/useShake'
 const router = useRouter()
 const route = useRoute()
+const toast = useToast()
+const { shaking: shakingControls, trigger: shakeControls } = useShake()
 
 function getInitialTab(): DashboardTab {
   const tab = route.query.tab
@@ -1109,7 +1113,8 @@ async function handleCreateDevice(payload: DeviceCreatePayload) {
     } as unknown as DeviceItem)
   } catch (error) {
     console.error('createDevice error =', error)
-    alert(getErrorMessage(error, '添加设备失败'))
+    toast.show(getErrorMessage(error, '添加设备失败'), 'error')
+    shakeControls()
   } finally {
     creating.value = false
   }
@@ -1224,7 +1229,8 @@ async function handleDeleteDevice(id: number) {
     }
   } catch (error) {
     console.error('deleteDevice error =', error)
-    alert(getErrorMessage(error, '删除设备失败'))
+    toast.show(getErrorMessage(error, '删除设备失败'), 'error')
+    shakeControls()
   } finally {
     deletingId.value = null
   }

@@ -39,7 +39,7 @@
       </div>
 
       <div class="setup-main">
-        <div class="form-card">
+        <div class="form-card" :class="{ shake: shakingFormCard }">
           <div class="form-header">
             <h2>完善店铺信息</h2>
             <p>填写完成后即可进入系统首页</p>
@@ -53,6 +53,7 @@
                   v-model.trim="form.storeName"
                   type="text"
                   placeholder="请输入店铺名称"
+                  :class="{ shake: shakingStoreName }"
                 />
               </div>
 
@@ -64,12 +65,13 @@
                   min="1"
                   step="0.1"
                   placeholder="请输入店铺面积，如 80"
+                  :class="{ shake: shakingStoreArea }"
                 />
               </div>
             </div>
 
             <div class="form-grid">
-              <div class="form-item">
+              <div class="form-item" :class="{ shake: shakingProvince }">
                 <label>省份</label>
                   <BaseSelect
                     v-model="regionValue.province"
@@ -79,7 +81,7 @@
                   />
               </div>
 
-              <div class="form-item">
+              <div class="form-item" :class="{ shake: shakingCity }">
                 <label>城市</label>
                   <BaseSelect
                     v-model="regionValue.city"
@@ -92,7 +94,7 @@
             </div>
 
             <div class="form-grid">
-              <div class="form-item">
+              <div class="form-item" :class="{ shake: shakingStoreStyle }">
                 <label>店铺风格</label>
                   <BaseSelect
                     v-model="form.storeStyle"
@@ -134,8 +136,18 @@ import type { RegionCity, RegionProvince, RegionValue } from '../constants/china
 import { regions } from '../constants/china-region'
 import { STORE_STYLE_OPTIONS, STORE_STYLE_MAP } from '../constants/store'
 import BaseSelect from '../components/common/BaseSelect.vue'
+import { useToast } from '../composables/useToast'
+import { useShake } from '../composables/useShake'
+
 const router = useRouter()
 const loading = ref(false)
+const toast = useToast()
+const { shaking: shakingStoreName, trigger: shakeStoreName } = useShake()
+const { shaking: shakingStoreArea, trigger: shakeStoreArea } = useShake()
+const { shaking: shakingProvince, trigger: shakeProvince } = useShake()
+const { shaking: shakingCity, trigger: shakeCity } = useShake()
+const { shaking: shakingStoreStyle, trigger: shakeStoreStyle } = useShake()
+const { shaking: shakingFormCard, trigger: shakeFormCard } = useShake()
 
 const STORE_SETUP_URL = '/api/store/setup'
 const provinceOptions = computed(() => {
@@ -216,23 +228,28 @@ function parseCityCoordinates(value: string): { latitude?: number; longitude?: n
 
 function validateForm() {
   if (!form.storeName) {
-    alert('请输入店铺名称')
+    toast.show('请输入店铺名称', 'error')
+    shakeStoreName()
     return false
   }
   if (form.storeArea === '' || form.storeArea === null || Number(form.storeArea) <= 0) {
-    alert('请输入正确的店铺面积')
+    toast.show('请输入正确的店铺面积', 'error')
+    shakeStoreArea()
     return false
   }
   if (!regionValue.provinceLabel) {
-    alert('请选择省份')
+    toast.show('请选择省份', 'error')
+    shakeProvince()
     return false
   }
   if (!regionValue.cityLabel) {
-    alert('请选择城市')
+    toast.show('请选择城市', 'error')
+    shakeCity()
     return false
   }
   if (!form.storeStyle) {
-    alert('请选择店铺风格')
+    toast.show('请选择店铺风格', 'error')
+    shakeStoreStyle()
     return false
   }
   return true
@@ -296,7 +313,8 @@ async function handleSave() {
     router.push('/smartlightdashboard')
   } catch (error: any) {
     console.error(error)
-    alert(error.message || '保存失败，请稍后重试')
+    toast.show(error.message || '保存失败，请稍后重试', 'error')
+    shakeFormCard()
   } finally {
     loading.value = false
   }
