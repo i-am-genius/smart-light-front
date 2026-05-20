@@ -78,7 +78,6 @@ export function useWebSocket(urlSource: UrlSource, onMessage?: MessageHandler, p
 
     ws.onopen = () => {
       connected.value = true
-      console.log('WS connected:', url)
     }
 
     ws.onmessage = (event) => {
@@ -97,10 +96,9 @@ export function useWebSocket(urlSource: UrlSource, onMessage?: MessageHandler, p
       console.error('WS error:', error)
     }
 
-    ws.onclose = (event) => {
+    ws.onclose = () => {
       connected.value = false
       socket.value = null
-      console.log('WS closed, code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean)
 
       if (manualClose) return
 

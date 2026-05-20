@@ -146,6 +146,7 @@ import { computed, ref, watch } from 'vue'
 import { armControl, type ArmControlSpeed } from '../../api/device'
 import type { DeviceItem } from '../../types/device'
 import { getErrorMessage } from '../../utils/error'
+import { normalizeDeviceType as normDeviceType } from '../../utils/device'
 import BaseSelect from '../common/BaseSelect.vue'
 import { useToast } from '../../composables/useToast'
 import { useShake } from '../../composables/useShake'
@@ -265,14 +266,10 @@ watch(
 )
 
 function normalizeDeviceType(deviceType?: string): ArmDeviceType | '' {
-  const type = String(deviceType || '')
-    .replace(/[-_\s]/g, '')
-    .toLowerCase()
-
+  const type = normDeviceType(deviceType)
   if (type === 'lamp' || type === 'cam' || type === 'camlamp') {
     return type
   }
-
   return ''
 }
 

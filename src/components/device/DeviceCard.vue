@@ -342,6 +342,7 @@ import {
 } from '../../api/device'
 import { generateLightRecommendationReason } from '../../utils/lightRecommendationReason'
 import { getErrorMessage } from '../../utils/error'
+import { normalizeDeviceType } from '../../utils/device'
 
 const props = defineProps<{
   device: DeviceItem
@@ -1260,11 +1261,7 @@ const displayDeviceNo = computed(() => {
 const displayDeviceType = computed(() => {
   return props.device.deviceType?.trim() || '未知'
 })
-const normalizedDeviceType = computed(() => {
-  return String(localForm.deviceType || props.device.deviceType || '')
-    .replace(/[-_\s]/g, '')
-    .toLowerCase()
-})
+const normalizedDeviceType = computed(() => normalizeDeviceType(localForm.deviceType || props.device.deviceType))
 
 const isLamp = computed(() => normalizedDeviceType.value === 'lamp')
 const isCamLamp = computed(() => normalizedDeviceType.value === 'camlamp')

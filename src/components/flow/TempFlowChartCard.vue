@@ -47,6 +47,7 @@ import type { DeviceItem } from '../../types/device'
 import type { DurationSummaryItem } from '../../types/duration'
 import type { MultiLuxRespVO } from '../../api/lux'
 import type { StrategyCompareData, TempPeopleTrendData } from '../../types/analytics'
+import { formatDate } from '../../utils/format'
 
 const props = defineProps<{
   devices: DeviceItem[]
@@ -62,14 +63,6 @@ const strategyData = ref<StrategyCompareData | null>(null)
 const analyticsChipId = computed(() => {
   return props.devices.find(item => item.chipId)?.chipId
 })
-
-function pad(n: number) {
-  return String(n).padStart(2, '0')
-}
-
-function formatDate(date: Date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
 
 function getDateRange() {
   const end = new Date()

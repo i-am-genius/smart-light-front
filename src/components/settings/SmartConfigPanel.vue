@@ -215,7 +215,6 @@ async function getCurrentWifi() {
 
   try {
     const res = await normalizeBridgeResult(esptouch.getWifiInfo())
-    console.log('getWifiInfo:', res)
 
     const currentSsid = res?.ssid || res?.SSID || ''
     const currentBssid = res?.bssid || res?.BSSID || ''
@@ -282,8 +281,6 @@ async function startSmartConfig() {
         port,
       ),
     )
-
-    console.log('startSmartConfig result:', res)
 
     if (res?.status === 'failed') {
       configing.value = false

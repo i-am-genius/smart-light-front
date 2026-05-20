@@ -57,6 +57,7 @@ import type { DurationSummaryItem } from '../../types/duration'
 import BaseSelect from '../common/BaseSelect.vue'
 import { useToast } from '../../composables/useToast'
 import { useShake } from '../../composables/useShake'
+import { formatDate } from '../../utils/format'
 
 const toast = useToast()
 const { shaking, trigger: doShake } = useShake()
@@ -75,14 +76,6 @@ const errorText = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const recentDays = ref('')
-
-function pad(n: number) {
-  return String(n).padStart(2, '0')
-}
-
-function formatDate(date: Date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
 
 function formatSeconds(msOrSeconds: number) {
   if (!Number.isFinite(msOrSeconds)) return '-'

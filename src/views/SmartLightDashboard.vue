@@ -347,6 +347,7 @@ import OdometerRoll from '../components/common/OdometerRoll.vue'
 import { regions } from '../constants/china-region'
 import { STORE_STYLE_MAP } from '../constants/store'
 import { getErrorMessage } from '../utils/error'
+import { formatDate } from '../utils/format'
 const router = useRouter()
 const route = useRoute()
 
@@ -620,14 +621,11 @@ const flowCache = ref<{
 
 let flowPreloadPromise: Promise<void> | null = null
 
-function pad(n: number) { return String(n).padStart(2, '0') }
-function flowFormatDate(date: Date) { return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` }
-
 function getFlowDateRange() {
   const end = new Date()
   const start = new Date()
   start.setDate(end.getDate() - 6)
-  return { startDate: flowFormatDate(start), endDate: flowFormatDate(end) }
+  return { startDate: formatDate(start), endDate: formatDate(end) }
 }
 
 function getFlowChipId() {
@@ -1363,7 +1361,6 @@ function handleWsMessage(message: any) {
     latestLux.value = luxValue
     latestLuxText.value = `光照值：${luxValue} lux`
     requestLuxTrendRefresh()
-    console.log('lux message =', message)
     return
   }
 

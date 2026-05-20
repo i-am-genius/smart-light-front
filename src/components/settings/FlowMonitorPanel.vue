@@ -58,6 +58,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DeviceItem } from '../../types/device'
+import { normalizeDeviceType } from '../../utils/device'
 
 const props = defineProps<{
   devices: DeviceItem[]
@@ -65,11 +66,7 @@ const props = defineProps<{
 
 const camLampDevices = computed(() => {
   return props.devices.filter((device) => {
-    const type = String(device.deviceType || '')
-      .replace(/[-_\s]/g, '')
-      .toLowerCase()
-
-    return type === 'camlamp'
+    return normalizeDeviceType(device.deviceType) === 'camlamp'
   })
 })
 

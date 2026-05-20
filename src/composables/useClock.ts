@@ -1,8 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-
-function pad(n: number) {
-  return String(n).padStart(2, '0')
-}
+import { pad2 } from '../utils/format'
 
 const weekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
@@ -12,12 +9,12 @@ export function useClock() {
 
   const currentTime = computed(() => {
     const d = now.value
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`
   })
 
   const dateInfo = computed(() => {
     const d = now.value
-    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
+    return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`
   })
 
   const weekInfo = computed(() => weekMap[now.value.getDay()])

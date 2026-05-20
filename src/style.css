@@ -188,13 +188,6 @@ input {
   border-radius: 8px;
 }
 
-.error-text {
-  color: #f56c6c;
-  margin-top: 8px;
-}
-
-
-
 .selector-box {
   display: flex;
   flex-wrap: wrap;

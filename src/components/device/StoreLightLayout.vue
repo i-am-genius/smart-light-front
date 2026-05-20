@@ -862,23 +862,12 @@ async function saveLayout() {
       ...device,
     }))
 
-    console.log('最终保存快照 stateSnapshot =', stateSnapshot)
-
     for (const device of deviceSnapshot) {
       const state = stateSnapshot[device.id]
       if (!state) continue
 
       const nextDisplayName = state.zoneName || ''
       const nextDeviceNo = state.deviceNo || ''
-
-      console.log('发送设备更新 =', {
-        id: device.id,
-        chipId: device.chipId,
-        oldDisplayName: device.displayName,
-        oldDeviceNo: device.deviceNo,
-        nextDisplayName,
-        nextDeviceNo,
-      })
 
       await updateDevice(
         device.id,
