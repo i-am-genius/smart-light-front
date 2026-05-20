@@ -78,9 +78,11 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import http from '../api/http'
 import { loginApi } from '../api/auth'
+import { useToast } from '../composables/useToast'
 
 const router = useRouter()
 const loading = ref(false)
+const toast = useToast()
 
 const form = reactive({
   username: '',
@@ -91,27 +93,27 @@ const form = reactive({
 
 function validateForm() {
   if (!form.username) {
-    alert('请输入用户名')
+    toast.show('请输入用户名', 'error')
     return false
   }
   if (!form.phone) {
-    alert('请输入手机号')
+    toast.show('请输入手机号', 'error')
     return false
   }
   if (!/^1[3-9]\d{9}$/.test(form.phone)) {
-    alert('手机号格式不正确')
+    toast.show('手机号格式不正确', 'error')
     return false
   }
   if (!form.password) {
-    alert('请输入密码')
+    toast.show('请输入密码', 'error')
     return false
   }
   if (!form.confirmPassword) {
-    alert('请再次输入密码')
+    toast.show('请再次输入密码', 'error')
     return false
   }
   if (form.password !== form.confirmPassword) {
-    alert('两次输入的密码不一致')
+    toast.show('两次输入的密码不一致', 'error')
     return false
   }
   return true
@@ -146,7 +148,7 @@ async function handleRegister() {
     router.push('/store-setup')
   } catch (error: any) {
     console.error(error)
-    alert(error.message || '注册失败，请稍后重试')
+    toast.show(error.message || '注册失败，请稍后重试', 'error')
   } finally {
     loading.value = false
   }
