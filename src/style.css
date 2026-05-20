@@ -28,12 +28,21 @@ body,
   overflow-x: hidden;
 }
 
+html {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 body {
   font-family: 'Helvetica Neue', sans-serif;
   background: var(--bg);
   color: var(--text-color);
 }
-
 
 button,
 input {

@@ -97,9 +97,10 @@ export function useWebSocket(urlSource: UrlSource, onMessage?: MessageHandler, p
       console.error('WS error:', error)
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       connected.value = false
       socket.value = null
+      console.log('WS closed, code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean)
 
       if (manualClose) return
 

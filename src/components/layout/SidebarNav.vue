@@ -276,7 +276,10 @@ watch(() => props.modelValue, (key) => {
 
 @media (max-width: 768px) {
   .sidebar {
-    position: static;
+    position: relative;
+    left: auto;
+    top: auto;
+    z-index: auto;
     width: calc(100% - 24px);
     height: auto;
     min-height: 0;

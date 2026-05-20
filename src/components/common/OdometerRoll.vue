@@ -15,7 +15,7 @@
           class="odometer-roll"
           :style="{
             transform: `translateY(-${col.offset * digitHeight}px)`,
-            transitionDuration: `${0.4 + ci * 0.04}s`,
+            transitionDuration: props.play ? `${0.4 + ci * 0.04}s` : '0ms',
           }"
         >
           <span v-for="(n, ni) in col.digits" :key="ni" class="odometer-num" :style="{ height: digitHeight + 'px' }">
@@ -36,9 +36,11 @@ const props = withDefaults(defineProps<{
   decimals?: number
   suffix?: string
   digitHeight?: number
+  play?: boolean
 }>(), {
   decimals: 1,
   digitHeight: 28,
+  play: true,
 })
 
 const digitHeight = computed(() => props.digitHeight)
@@ -120,8 +122,24 @@ function rollInFromZero(val: number) {
   })
 }
 
+function preparePendingValue(val: number) {
+  integerWidth.value = getIntegerWidth(val)
+  displayValue.value = 0
+
+  const zeroStr = formatValue(0)
+  prevDigits.value = zeroStr
+    .split('')
+    .filter(ch => ch !== '.')
+    .map(Number)
+}
+
 watch(() => props.value, (v, oldV) => {
   if (v == null) return
+
+  if (!props.play) {
+    preparePendingValue(Number(v))
+    return
+  }
 
   if (oldV == null) {
     rollInFromZero(Number(v))
@@ -130,9 +148,23 @@ watch(() => props.value, (v, oldV) => {
   }
 })
 
+watch(() => props.play, (play) => {
+  if (props.value == null) return
+
+  if (play) {
+    rollInFromZero(Number(props.value))
+  } else {
+    preparePendingValue(Number(props.value))
+  }
+})
+
 onMounted(() => {
   if (props.value != null) {
-    rollInFromZero(Number(props.value))
+    if (props.play) {
+      rollInFromZero(Number(props.value))
+    } else {
+      preparePendingValue(Number(props.value))
+    }
   }
 })
 

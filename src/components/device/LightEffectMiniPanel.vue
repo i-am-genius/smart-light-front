@@ -38,11 +38,17 @@
       </div>
       <input
         class="effect-brightness-slider"
+        :class="{ 'is-dragging': effectBrightnessDragging }"
         type="range"
         min="0"
         max="100"
         :value="effectBrightness"
+        @pointerdown="handleEffectBrightnessDragStart"
+        @pointerup="handleEffectBrightnessDragEnd"
+        @pointercancel="handleEffectBrightnessDragEnd"
+        @lostpointercapture="handleEffectBrightnessDragEnd"
         @input="handleEffectBrightnessInput"
+        @change="handleEffectBrightnessCommit"
       />
       <p class="effect-brightness-hint">{{ effectBrightnessHint }}</p>
     </div>
@@ -231,6 +237,7 @@ const showSettings = ref(false)
 const activeEffect = ref<ActiveEffect>(null)
 const statusText = ref('未启动')
 const effectBrightnessInteracting = ref(false)
+const effectBrightnessDragging = ref(false)
 const applyingServerState = ref(false)
 const activeTempHandle = ref<'min' | 'max' | null>(null)
 
@@ -244,6 +251,9 @@ let brightnessTimer: number | undefined
 let brightnessInteractionTimer: number | undefined
 let scopeTimer: number | undefined
 let tempHandleTimer: number | undefined
+let brightnessMutationVersion = 0
+let brightnessSubmitting = false
+let queuedBrightnessSubmit: { value: number; version: number } | null = null
 
 interface EffectBrightnessPresetStore {
   global?: number
@@ -754,35 +764,99 @@ async function stopWave() {
 function handleEffectBrightnessInput(event: Event) {
   const target = event.target as HTMLInputElement
   const nextValue = clamp(Number(target.value), 0, 100)
+  const version = updateLocalEffectBrightness(nextValue)
 
+  scheduleEffectBrightnessSubmit(nextValue, version)
+}
+
+function updateLocalEffectBrightness(value: number) {
+  const nextValue = clamp(Math.round(value), 0, 100)
+  brightnessMutationVersion += 1
   effectBrightness.value = nextValue
   brightness.value = nextValue
   effectBrightnessInteracting.value = true
   saveEffectBrightnessPreset(nextValue)
 
+  if (!effectBrightnessDragging.value) {
+    scheduleBrightnessInteractionClear()
+  }
+
+  return brightnessMutationVersion
+}
+
+function scheduleBrightnessInteractionClear() {
   if (brightnessInteractionTimer) {
     window.clearTimeout(brightnessInteractionTimer)
   }
   brightnessInteractionTimer = window.setTimeout(() => {
     effectBrightnessInteracting.value = false
   }, EFFECT_BRIGHTNESS_DEBOUNCE_MS + 120)
+}
 
+function clearBrightnessSubmitTimer() {
   if (brightnessTimer) {
     window.clearTimeout(brightnessTimer)
+    brightnessTimer = undefined
   }
+}
 
+function scheduleEffectBrightnessSubmit(value: number, version = brightnessMutationVersion) {
+  clearBrightnessSubmitTimer()
   if (!activeEffect.value) {
     return
   }
 
   brightnessTimer = window.setTimeout(() => {
+    brightnessTimer = undefined
     if (!activeEffect.value) return
     if (!targetDevices.value.length) return
-    submitEffectBrightness(nextValue)
+    runEffectBrightnessSubmit(value, version)
   }, EFFECT_BRIGHTNESS_DEBOUNCE_MS)
 }
 
-async function submitEffectBrightness(value: number) {
+function handleEffectBrightnessDragStart(event: PointerEvent) {
+  brightnessMutationVersion += 1
+  effectBrightnessDragging.value = true
+  effectBrightnessInteracting.value = true
+  clearBrightnessSubmitTimer()
+  const target = event.target as HTMLInputElement
+  target.setPointerCapture?.(event.pointerId)
+}
+
+function handleEffectBrightnessDragEnd() {
+  if (!effectBrightnessDragging.value) return
+  effectBrightnessDragging.value = false
+  scheduleBrightnessInteractionClear()
+  scheduleEffectBrightnessSubmit(effectBrightness.value)
+}
+
+function handleEffectBrightnessCommit() {
+  if (effectBrightnessDragging.value) return
+  scheduleBrightnessInteractionClear()
+  scheduleEffectBrightnessSubmit(effectBrightness.value)
+}
+
+async function runEffectBrightnessSubmit(value: number, version = brightnessMutationVersion) {
+  if (brightnessSubmitting) {
+    queuedBrightnessSubmit = { value, version }
+    return
+  }
+
+  brightnessSubmitting = true
+  try {
+    await submitEffectBrightness(value, version)
+  } finally {
+    brightnessSubmitting = false
+    const queued = queuedBrightnessSubmit
+    queuedBrightnessSubmit = null
+
+    if (queued && queued.version === brightnessMutationVersion) {
+      scheduleEffectBrightnessSubmit(queued.value, queued.version)
+    }
+  }
+}
+
+async function submitEffectBrightness(value: number, version = brightnessMutationVersion) {
   if (!activeEffect.value) {
     return
   }
@@ -796,10 +870,12 @@ async function submitEffectBrightness(value: number) {
         ...buildWavePayload(true),
         brightness: value,
       })
+      if (version !== brightnessMutationVersion) return
       applyLightEffectState(state)
       statusText.value = 'Wave 灯效亮度已同步'
     } catch (error) {
       console.error('update wave brightness error =', error)
+      if (version !== brightnessMutationVersion) return
       effectBrightness.value = previousBrightness
       brightness.value = previousBrightness
       statusText.value = getErrorMessage(error, 'Wave 灯效亮度更新失败，请稍后重试')
@@ -825,6 +901,7 @@ async function submitEffectBrightness(value: number) {
         }),
         { lightControl: true },
       )
+      if (version !== brightnessMutationVersion) return
       device.brightness = value
       device.recommendedBrightness = value
     }
@@ -833,6 +910,7 @@ async function submitEffectBrightness(value: number) {
     statusText.value = `灯效亮度已同步 ${devices.length} 盏`
   } catch (error) {
     console.error('update effect brightness error =', error)
+    if (version !== brightnessMutationVersion) return
     effectBrightness.value = previousBrightness
     brightness.value = previousBrightness
     statusText.value = getErrorMessage(error, '灯效亮度更新失败，请稍后重试')
@@ -842,6 +920,7 @@ async function submitEffectBrightness(value: number) {
 watch(
   () => props.serverState,
   (state) => {
+    if (effectBrightnessInteracting.value || effectBrightnessDragging.value) return
     applyLightEffectState(state)
   },
 )
@@ -854,7 +933,7 @@ watch(
     targetDevices.value.length,
   ],
   () => {
-    if (!effectBrightnessInteracting.value && activeEffect.value !== 'loop') {
+    if (!effectBrightnessInteracting.value && !effectBrightnessDragging.value && activeEffect.value !== 'loop') {
       syncEffectBrightnessFromScope()
     }
   },
@@ -886,9 +965,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (brightnessTimer) {
-    window.clearTimeout(brightnessTimer)
-  }
+  clearBrightnessSubmitTimer()
   if (brightnessInteractionTimer) {
     window.clearTimeout(brightnessInteractionTimer)
   }
@@ -1210,6 +1287,12 @@ onBeforeUnmount(() => {
   width: 100%;
   margin: 9px 0 0;
   accent-color: #2563eb;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.effect-brightness-slider.is-dragging {
+  cursor: grabbing;
 }
 
 .effect-brightness-hint {

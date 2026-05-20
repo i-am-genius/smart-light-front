@@ -70,9 +70,10 @@
         v-for="(device, index) in layoutDevices"
         :key="device.id || device.chipId"
         class="lamp-node"
-       :class="{
+        :class="{
           active: draggingKey === getKey(device),
           selected: selectedDeviceId === device.id,
+          offline: !device.online,
           'no-animate': zoneDragging,
         }"
         :style="getNodeStyle(device, index)"
@@ -422,12 +423,60 @@ function getZoneStyle(zone: Zone) {
   }
 }
 
+function getLampVisualVars(device: DeviceItem) {
+  const brightnessValue = device.autoMode
+    ? (device.recommendedBrightness ?? device.brightness ?? 0)
+    : (device.brightness ?? 0)
+  const brightnessNumber = Number(brightnessValue)
+  const tempNumber = Number(device.autoMode ? (device.recommendedTemp ?? device.temp ?? 4000) : (device.temp ?? 4000))
+  const brightness = Number.isFinite(brightnessNumber) ? clamp(brightnessNumber, 0, 100) : 0
+  const temp = Number.isFinite(tempNumber) ? clamp(tempNumber, 2700, 6500) : 4000
+  const [red, green, blue] = resolveColorTemperatureRgb(temp)
+  const alpha = device.online ? Math.max(0.14, brightness / 100 * 0.45) : 0
+  const glowSize = device.online ? Math.round(10 + brightness / 100 * 24) : 0
+
+  return {
+    '--lamp-glow-color': `rgba(${red}, ${green}, ${blue}, ${alpha})`,
+    '--lamp-glow-size': `${glowSize}px`,
+    '--lamp-icon-glow': `${Math.round(glowSize * 0.7)}px`,
+    '--lamp-opacity': device.online ? '1' : '0.64',
+    '--lamp-bulb-bg': `linear-gradient(135deg, rgba(${red}, ${green}, ${blue}, 0.96), rgba(255, 255, 255, 0.78))`,
+  }
+}
+
+function resolveColorTemperatureRgb(temp: number): [number, number, number] {
+  const stops: Array<[number, [number, number, number]]> = [
+    [2700, [255, 183, 89]],
+    [3500, [255, 214, 150]],
+    [4500, [255, 244, 220]],
+    [5500, [235, 243, 255]],
+    [6500, [210, 228, 255]],
+  ]
+
+  for (let i = 0; i < stops.length - 1; i += 1) {
+    const [fromTemp, fromColor] = stops[i]
+    const [toTemp, toColor] = stops[i + 1]
+
+    if (temp <= toTemp) {
+      const ratio = (temp - fromTemp) / (toTemp - fromTemp)
+      return [
+        Math.round(fromColor[0] + (toColor[0] - fromColor[0]) * ratio),
+        Math.round(fromColor[1] + (toColor[1] - fromColor[1]) * ratio),
+        Math.round(fromColor[2] + (toColor[2] - fromColor[2]) * ratio),
+      ]
+    }
+  }
+
+  return stops[stops.length - 1][1]
+}
+
 function getNodeStyle(device: DeviceItem, index: number) {
   const key = getKey(device)
   if (positions.value[key]) {
     return {
       left: `${positions.value[key].x}%`,
       top: `${positions.value[key].y}%`,
+      ...getLampVisualVars(device),
     }
   }
 
@@ -444,6 +493,7 @@ function getNodeStyle(device: DeviceItem, index: number) {
       return {
         left: `${zone.x + zone.width * 0.5}%`,
         top: `${zone.y + nameH + gap + zi * 12}%`,
+        ...getLampVisualVars(device),
       }
     }
   }
@@ -456,11 +506,12 @@ function getNodeStyle(device: DeviceItem, index: number) {
     return {
       left: `${72}%`,
       top: `${6 + (idx >= 0 ? idx : index) * 12}%`,
+      ...getLampVisualVars(device),
     }
   }
   const spot = findFreeSpot()
   positions.value[getKey(device)] = spot
-  return { left: `${spot.x}%`, top: `${spot.y}%` }
+  return { left: `${spot.x}%`, top: `${spot.y}%`, ...getLampVisualVars(device) }
 }
 
 function getLampTitle(device: DeviceItem, index: number) {
@@ -1113,7 +1164,9 @@ onMounted(() => {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.96);
   border: 2px solid rgba(255, 255, 255, 0.95);
+  opacity: var(--lamp-opacity, 1);
   box-shadow:
+    0 0 var(--lamp-glow-size, 0) var(--lamp-glow-color, rgba(245, 158, 11, 0)),
     0 12px 30px rgba(15, 23, 42, 0.26),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
   cursor: grab;
@@ -1125,7 +1178,8 @@ onMounted(() => {
     transform 0.18s ease,
     box-shadow 0.18s ease,
     border-color 0.18s ease,
-    background 0.18s ease;
+    background 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .lamp-node.active {
@@ -1153,7 +1207,15 @@ onMounted(() => {
     transform 0.18s ease,
     box-shadow 0.18s ease,
     border-color 0.18s ease,
-    background 0.18s ease;
+    background 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.lamp-node.offline {
+  border-color: rgba(148, 163, 184, 0.4);
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .lamp-icon {
@@ -1163,10 +1225,20 @@ onMounted(() => {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  background: var(--lamp-bulb-bg, linear-gradient(135deg, #fef3c7, #fde68a));
   color: #92400e;
   font-size: 18px;
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.25);
+  box-shadow:
+    0 0 var(--lamp-icon-glow, 0) var(--lamp-glow-color, rgba(245, 158, 11, 0)),
+    inset 0 0 0 1px rgba(245, 158, 11, 0.25);
+  transition:
+    background 0.24s ease,
+    box-shadow 0.24s ease,
+    filter 0.24s ease;
+}
+
+.lamp-node.offline .lamp-icon {
+  filter: grayscale(0.85);
 }
 
 .lamp-info {
