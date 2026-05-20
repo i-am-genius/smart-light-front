@@ -56,26 +56,6 @@
           <p class="field-hint placeholder">占位</p>
         </div>
 
-        <!-- <div class="form-row host-field">
-          <label>服务器地址</label>
-          <input
-            v-model="serverHost"
-            placeholder="例如 192.168.1.100 或 110.41.81.4"
-          />
-          <p class="field-hint">
-            真机请填写电脑局域网 IP，不要使用 127.0.0.1 / localhost / 10.0.2.2。
-          </p>
-        </div>
-
-        <div class="form-row port-field">
-          <label>服务器端口</label>
-          <input
-            v-model.number="serverPort"
-            type="number"
-            placeholder="例如 3000"
-          />
-          <p class="field-hint placeholder">占位</p>
-        </div> -->
       </div>
 
       <div class="smart-actions">
@@ -491,10 +471,6 @@ onBeforeUnmount(() => {
 
 .wifi-field,
 .password-field {
-  grid-column: span 1;
-}
-
-.host-field {
   grid-column: span 1;
 }
 
