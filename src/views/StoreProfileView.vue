@@ -13,6 +13,11 @@
       </div>
 
       <div class="profile-card">
+        <div class="card-section-title">
+          <h2>基础信息</h2>
+          <span>用于系统展示、区域天气与照明推荐计算。</span>
+        </div>
+
         <div class="form-grid">
           <div class="form-item">
             <label>店铺名称</label>
@@ -68,6 +73,10 @@
             />
           </div>
         </div>
+
+        <p class="form-helper-note">
+          店铺地区会用于天气关联，店铺风格会影响推荐照明策略。
+        </p>
 
         <div v-if="errorText" class="error-text">{{ errorText }}</div>
         <div v-if="successText" class="success-text">{{ successText }}</div>
@@ -379,45 +388,68 @@ onMounted(() => {
 <style scoped>
 .store-profile-page {
   min-height: 100vh;
-  padding: 24px;
+  padding: 20px 24px 30px;
   background:
-    radial-gradient(circle at top left, rgba(79, 70, 229, 0.16), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.14), transparent 28%),
-    linear-gradient(135deg, #f5f7fb 0%, #eef2ff 100%);
+    radial-gradient(circle at 18% 6%, rgba(255, 255, 255, 0.64), transparent 24%),
+    linear-gradient(135deg, #f7f3eb 0%, #f4f7fb 46%, #eef3f7 100%);
   box-sizing: border-box;
 }
 
 .store-profile-shell {
-  max-width: 1080px;
+  max-width: 940px;
   margin: 0 auto;
 }
 
 .page-header {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .page-header h1 {
-  margin: 0 0 8px;
-  font-size: 30px;
+  margin: 0 0 6px;
+  font-size: 28px;
   color: #111827;
+  letter-spacing: 0;
 }
 
 .page-header p {
   margin: 0;
-  color: #6b7280;
-  font-size: 14px;
-  line-height: 1.7;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .profile-card {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 24px;
-  padding: 28px;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.64)),
+    rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(226, 232, 240, 0.74);
+  border-radius: 22px;
+  padding: 28px 30px;
+  box-shadow: 0 16px 34px rgba(65, 78, 96, 0.1);
+  backdrop-filter: blur(16px);
+}
+
+.card-section-title {
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.58);
+}
+
+.card-section-title h2 {
+  margin: 0 0 6px;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.card-section-title span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .form-grid {
@@ -431,41 +463,92 @@ onMounted(() => {
 }
 
 .form-item {
-  margin-bottom: 18px;
+  margin-bottom: 17px;
 }
 
 .form-item label {
   display: block;
   margin-bottom: 8px;
-  color: #374151;
-  font-size: 14px;
-  font-weight: 600;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .form-item input {
   width: 100%;
-  height: 46px;
-  border-radius: 14px;
-  border: 1px solid #dbe3f0;
+  height: 45px;
+  border-radius: 12px;
+  border: 1px solid #dbe3ee;
   padding: 0 14px;
   font-size: 14px;
   outline: none;
   box-sizing: border-box;
-  background: #fff;
-  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.88);
+  color: #0f172a;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .form-item input:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.08);
+  border-color: #7fb4ec;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(125, 179, 234, 0.14);
+}
+
+.form-item input::placeholder {
+  color: #94a3b8;
 }
 
 .form-item :deep(.base-select) {
   width: 100%;
 }
 
+.form-item :deep(.select-trigger) {
+  min-height: 45px;
+  border-radius: 12px;
+  border-color: #dbe3ee;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: none;
+  color: #0f172a;
+}
+
+.form-item :deep(.select-trigger:hover) {
+  border-color: #b7c4d7;
+}
+
+.form-item :deep(.open .select-trigger) {
+  border-color: #7fb4ec;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(125, 179, 234, 0.14);
+}
+
+.form-item :deep(.select-dropdown) {
+  max-height: 260px;
+  border-radius: 14px;
+  border-color: rgba(203, 213, 225, 0.9);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.11);
+}
+
+.form-item :deep(.select-option) {
+  min-height: 38px;
+  border-radius: 9px;
+}
+
+.form-item :deep(.select-option.active) {
+  background: rgba(219, 234, 254, 0.92);
+  color: #1d4ed8;
+}
+
+.form-helper-note {
+  margin: -2px 0 14px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .form-actions {
-  margin-top: 8px;
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(203, 213, 225, 0.58);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -473,37 +556,71 @@ onMounted(() => {
 
 .btn-primary,
 .btn-secondary {
-  height: 46px;
-  padding: 0 22px;
-  border-radius: 14px;
-  font-size: 14px;
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  border: none;
+  box-sizing: border-box;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  border: 1px solid #2563eb;
+  background: #2563eb;
   color: #fff;
-  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.22);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.14);
+}
+
+.btn-primary:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
 }
 
 .btn-secondary {
-  background: #eef2ff;
-  color: #4f46e5;
-  border: 1px solid #dbe3f0;
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  background: rgba(255, 255, 255, 0.66);
+  color: #475569;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #fff;
+  color: #334155;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  box-shadow: none;
+}
+
+.page-header .btn-secondary {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
 }
 
 .error-text {
-  color: #e74c3c;
-  margin-top: 6px;
-  margin-bottom: 6px;
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  border-radius: 10px;
+  background: rgba(254, 242, 242, 0.72);
+  color: #dc2626;
+  font-size: 13px;
 }
 
 .success-text {
-  color: #16a34a;
-  margin-top: 6px;
-  margin-bottom: 6px;
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  border-radius: 10px;
+  background: rgba(240, 253, 244, 0.72);
+  color: #15803d;
+  font-size: 13px;
 }
 
 @media (max-width: 768px) {
@@ -511,13 +628,34 @@ onMounted(() => {
     padding: 16px;
   }
 
+  .store-profile-shell {
+    max-width: 100%;
+  }
+
   .page-header {
+    margin-bottom: 14px;
     flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .page-header .btn-secondary {
+    width: auto;
+    height: 34px;
   }
 
   .profile-card {
-    padding: 20px;
+    padding: 18px 20px;
     border-radius: 18px;
+  }
+
+  .card-section-title {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
   }
 
   .form-grid {
@@ -525,13 +663,24 @@ onMounted(() => {
     gap: 0;
   }
 
+  .form-item {
+    margin-bottom: 14px;
+  }
+
+  .form-helper-note {
+    margin-bottom: 12px;
+  }
+
   .form-actions {
-    flex-direction: column;
+    flex-direction: column-reverse;
+    gap: 10px;
+    padding-top: 14px;
   }
 
   .btn-primary,
   .btn-secondary {
     width: 100%;
+    height: 40px;
   }
 }
 </style>

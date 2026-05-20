@@ -23,16 +23,35 @@
       </div>
 
       <div class="store-toolbar-actions">
-        <button type="button" class="btn-primary" @click="toggleMode">
-          {{ isNightMode ? '日间模式' : '夜间模式' }}
+        <button
+          type="button"
+          class="store-action-btn store-action-btn--theme"
+          :class="{ 'is-night': isNightMode }"
+          :aria-pressed="isNightMode"
+          aria-label="切换日间夜间模式"
+          @click="toggleMode"
+        >
+          <span class="theme-mode-icon" aria-hidden="true">
+            <span class="theme-mode-symbol theme-mode-symbol--sun">☀</span>
+            <span class="theme-mode-symbol theme-mode-symbol--moon">☾</span>
+          </span>
+          <span class="theme-mode-text">{{ isNightMode ? '夜间' : '日间' }}</span>
         </button>
 
-        <button type="button" class="btn-secondary" @click="handleOpenStoreSettings">
-          店铺设置
+        <button
+          type="button"
+          class="store-action-btn store-action-btn--neutral btn-secondary"
+          @click="handleOpenStoreSettings"
+        >
+          <span class="store-action-text">店铺设置</span>
         </button>
 
-        <button type="button" class="btn-logout" @click="handleLogout">
-          退出登录
+        <button
+          type="button"
+          class="store-action-btn store-action-btn--danger btn-logout"
+          @click="handleLogout"
+        >
+          <span class="store-action-text">退出登录</span>
         </button>
       </div>
     </div>
@@ -149,24 +168,153 @@ function handleOpenStoreSettings() {
 
 .store-toolbar-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
   justify-content: flex-end;
   flex-shrink: 0;
-}
-
-.btn-logout {
+  background: transparent;
   border: none;
-  border-radius: 10px;
-  padding: 10px 16px;
-  background: #fff1f0;
-  color: #f53f3f;
-  font-weight: 600;
-  cursor: pointer;
+  box-shadow: none;
 }
 
-.btn-logout:hover {
-  background: #ffe4e1;
+.store-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  width: 104px;
+  height: 38px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border: 1px solid rgba(226, 232, 240, 0.82);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.045);
+  backdrop-filter: blur(12px);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background .22s ease,
+    border-color .22s ease,
+    box-shadow .22s ease,
+    color .22s ease;
+}
+
+.store-action-btn:hover {
+  border-color: rgba(203, 213, 225, 0.96);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.065);
+}
+
+.store-action-btn:active {
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.store-action-btn:focus-visible {
+  outline: none;
+  border-color: rgba(148, 163, 184, 0.9);
+  box-shadow:
+    0 8px 20px rgba(15, 23, 42, 0.045),
+    0 0 0 3px rgba(148, 163, 184, 0.18);
+}
+
+.store-action-btn--theme {
+  width: 104px;
+  padding: 0 14px;
+  color: #475569;
+}
+
+.store-action-btn--neutral {
+  color: #334155;
+}
+
+.store-action-btn--danger {
+  border-color: rgba(248, 113, 113, 0.2);
+  color: #ef4444;
+}
+
+.store-action-btn--danger:hover,
+.store-action-btn--danger:focus-visible {
+  border-color: rgba(248, 113, 113, 0.26);
+  background: rgba(254, 242, 242, 0.72);
+  color: #dc2626;
+}
+
+.theme-mode-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.theme-mode-symbol {
+  grid-area: 1 / 1;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease,
+    color 0.22s ease;
+}
+
+.theme-mode-symbol--sun {
+  color: #c26a14;
+  opacity: 0.82;
+}
+
+.theme-mode-symbol--moon {
+  color: #6366f1;
+  opacity: 0;
+  transform: scale(0.65) rotate(-24deg);
+}
+
+.store-action-btn--theme.is-night .theme-mode-symbol--sun {
+  opacity: 0;
+  transform: scale(0.65) rotate(30deg);
+}
+
+.store-action-btn--theme.is-night .theme-mode-symbol--moon {
+  opacity: 0.86;
+  transform: scale(1) rotate(0deg);
+}
+
+.theme-mode-text,
+.store-action-text {
+  line-height: 1;
+}
+
+:global(.app-container.night-mode) .store-action-btn {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+}
+
+:global(.app-container.night-mode) .store-action-btn:hover,
+:global(.app-container.night-mode) .store-action-btn:focus-visible {
+  border-color: rgba(203, 213, 225, 0.32);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+:global(.app-container.night-mode) .store-action-btn--danger {
+  color: #f87171;
+}
+
+:global(.app-container.night-mode) .store-action-btn--danger:hover,
+:global(.app-container.night-mode) .store-action-btn--danger:focus-visible {
+  background: rgba(127, 29, 29, 0.2);
+  color: #fca5a5;
 }
 
 @media (max-width: 960px) {
@@ -211,17 +359,22 @@ function handleOpenStoreSettings() {
 
   .store-toolbar-actions {
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 8px;
   }
 
-  .store-toolbar-actions .btn-primary,
-  .store-toolbar-actions .btn-secondary,
-  .store-toolbar-actions .btn-logout {
+  .store-toolbar-actions .store-action-btn {
     flex: 1 1 0;
     min-width: 0;
-    padding: 7px 10px;
+    height: 40px;
+    padding: 0 10px;
     font-size: 13px;
     white-space: nowrap;
+  }
+
+  .store-toolbar-actions .store-action-btn--theme {
+    flex: 1 1 0;
   }
 }
 </style>
