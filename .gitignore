@@ -1,21 +1,33 @@
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+replay_*.log
 
-node_modules
-dist
-dist-ssr
-*.local
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+
+# Environment files
+# 注意：本项目允许提交 .env，因为里面只放 VITE_ 开头的前端公开配置
+.env.local
+.env.*.local
+
+# Claude local files
+CLAUDE.md
+.claude/settings.local.json
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
@@ -23,59 +35,16 @@ dist-ssr
 *.sln
 *.sw?
 
-# Project-specific
-.env
-CLAUDE.md
+# Project-specific local assets
 public/backgrounds/bg-day.png
 public/backgrounds/bg-night.png
 public/backgrounds/store-layout.png
 *.backup
 *.backup2
 
-# Local env
-.env.*
-.claude/settings.local.json
-
-# Android / Capacitor build outputs
-.gradle/
-android/.gradle/
-android/build/
-android/app/build/
-android/app/release/
-android/app/debug/
-android/captures/
-*.apk
-*.aab
-
-# Android local machine config
-android/local.properties
-local.properties
-
-# Android signing secrets
-*.jks
-*.keystore
-key.properties
-signing.properties
-android/key.properties
-android/signing.properties
-
-# Android Studio
-android/.idea/
-android/*.iml
-android/app/*.iml
-
-# Local env
-.env.*
-.claude/settings.local.json
-
-# Claude local files
-CLAUDE.md
-
-# Test / logs
+# Test / reports
 test-results/
 playwright-report/
-replay_*.log
-*.log
 
 # WeChat / local private config
 project.private.config.json
