@@ -2116,8 +2116,7 @@ onBeforeUnmount(() => {
 .app-container.night-mode :deep(.empty-flow),
 .app-container.night-mode :deep(.smart-step),
 .app-container.night-mode :deep(.smart-status),
-.app-container.night-mode :deep(.smart-message),
-.app-container.night-mode :deep(.meta-chip) {
+.app-container.night-mode :deep(.smart-message) {
   background: rgba(15, 23, 42, 0.62) !important;
   border-color: rgba(148, 163, 184, 0.22) !important;
   color: #e5e7eb !important;
@@ -3317,10 +3316,26 @@ onBeforeUnmount(() => {
 
   .settings-group-grid {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
 
   .settings-group-card {
     margin-top: 18px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-radius: 0;
+  }
+
+  .app-container.night-mode .settings-group-card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .settings-group-title {

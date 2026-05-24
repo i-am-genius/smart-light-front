@@ -138,32 +138,41 @@ function handleOpenStoreSettings() {
 .store-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  gap: 0;
 }
 
 .meta-chip {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 0 16px;
-  border-radius: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  gap: 6px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  border-radius: 0;
   white-space: nowrap;
+}
+
+.meta-chip + .meta-chip::before {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  margin: 0 12px;
+  background: #cbd5e1;
 }
 
 .meta-key {
   font-size: 13px;
   color: #64748b;
-  line-height: 1.2;
+  line-height: 1.4;
 }
 
 .meta-value {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #0f172a;
-  line-height: 1.2;
+  line-height: 1.4;
 }
 
 .store-toolbar-actions {
@@ -295,6 +304,22 @@ function handleOpenStoreSettings() {
   line-height: 1;
 }
 
+:global(.app-container.night-mode) .meta-key {
+  color: #94a3b8;
+}
+
+:global(.app-container.night-mode) .meta-value {
+  color: #e2e8f0;
+}
+
+.meta-chip + .meta-chip::before {
+  background: #cbd5e1;
+}
+
+:global(.app-container.night-mode) .meta-chip + .meta-chip::before {
+  background: rgba(148, 163, 184, 0.4);
+}
+
 :global(.app-container.night-mode) .store-action-btn {
   border-color: rgba(148, 163, 184, 0.24);
   background: rgba(255, 255, 255, 0.12);
@@ -342,19 +367,22 @@ function handleOpenStoreSettings() {
   }
 
   .meta-chip {
-    flex: 1 1 0;
-    min-height: 28px;
-    padding: 0 8px;
-    gap: 5px;
-    justify-content: center;
+    gap: 3px;
+    padding: 1px 0;
+    white-space: nowrap;
   }
 
   .meta-key {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .meta-value {
-    font-size: 11px;
+    font-size: 12px;
+  }
+
+  .meta-chip + .meta-chip::before {
+    height: 13px;
+    margin: 0 8px;
   }
 
   .store-toolbar-actions {
