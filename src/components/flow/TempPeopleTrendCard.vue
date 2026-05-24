@@ -104,7 +104,7 @@ function renderChart() {
           showLine: validTempCount.value > 1,
         },
         {
-          label: '人流',
+          label: '平均人数',
           data: normalizedPeopleSeries.value,
           tension: 0.35,
           borderColor: '#67C23A',

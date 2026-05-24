@@ -1336,24 +1336,32 @@ function handleWsMessage(message: any) {
 
   if (message.type === 'personDetection' && message.data) {
     const chipId = String(message.data.chipId ?? '').trim()
-    if (!chipId) return
 
-    const count = Number(message.data.count ?? 0)
-    const timestamp = message.data.timestamp ?? new Date().toISOString()
+    if (chipId) {
+      const count = Number(message.data.count ?? 0)
+      const timestamp = message.data.timestamp ?? new Date().toISOString()
 
-    updateDeviceByIncoming({
-      chipId,
-      personCount: count,
-      peopleCount: count,
-      flowPersonCount: count,
-      personDetected: count > 0,
-      hasPerson: count > 0,
-      personDetectTime: timestamp,
-      flowDetectTime: timestamp,
-      detectTime: timestamp,
-      personConfidence: Number(message.data.confidence ?? 0),
-      flowProcessingTime: Number(message.data.processingTime ?? 0),
-    })
+      updateDeviceByIncoming({
+        chipId,
+        personCount: count,
+        peopleCount: count,
+        flowPersonCount: count,
+        personDetected: count > 0,
+        hasPerson: count > 0,
+        personDetectTime: timestamp,
+        flowDetectTime: timestamp,
+        detectTime: timestamp,
+        personConfidence: Number(message.data.confidence ?? 0),
+        flowProcessingTime: Number(message.data.processingTime ?? 0),
+      })
+    }
+
+    window.dispatchEvent(new CustomEvent('person-flow-updated'))
+
+    if (flowCache.value.tempPeopleTrend != null) {
+      flowCache.value.tempPeopleTrend = null
+    }
+
     return
   }
 
