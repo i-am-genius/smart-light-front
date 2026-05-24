@@ -2022,6 +2022,10 @@ onBeforeUnmount(() => {
 
 .settings-group-grid :deep(.smart-config-section .smart-card) {
   max-width: none;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .night-mode {
@@ -2037,12 +2041,17 @@ onBeforeUnmount(() => {
 .app-container :deep(.env-card),
 .app-container :deep(.lamp-card),
 .app-container :deep(.settings-card),
+.app-container :deep(.smart-card),
 .app-container :deep(.layout-card),
 .app-container :deep(.light-effect-mini-card),
 .app-container :deep(.sidebar),
 .app-container :deep(.chart-card),
 .app-container :deep(#controls) {
   transition: background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease, color 0.5s ease;
+}
+
+.app-container .settings-group-card {
+  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, backdrop-filter 0.35s ease, color 0.35s ease;
 }
 
 /* 夜间模式：基础文字 */
@@ -2070,6 +2079,7 @@ onBeforeUnmount(() => {
 .app-container.night-mode :deep(.env-card),
 .app-container.night-mode :deep(.lamp-card),
 .app-container.night-mode :deep(.settings-card),
+.app-container.night-mode :deep(.smart-card),
 .app-container.night-mode :deep(.placeholder-card),
 .app-container.night-mode :deep(.empty-block),
 .app-container.night-mode :deep(.scan-panel),
@@ -2088,6 +2098,15 @@ onBeforeUnmount(() => {
 /* 夜间模式：设置页分组标题 */
 .night-mode .settings-group-title {
   border-bottom-color: rgba(148, 163, 184, 0.22);
+}
+
+/* 夜间模式：设置页分组大卡片 */
+.app-container.night-mode .settings-group-card {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(30, 41, 59, 0.58));
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* 夜间模式：设置页内部小卡片 */
@@ -2203,7 +2222,6 @@ onBeforeUnmount(() => {
 .app-container.night-mode :deep(.layout-card),
 .app-container.night-mode :deep(.light-effect-mini-card),
 .app-container.night-mode :deep(.smart-config-section),
-.app-container.night-mode :deep(.smart-card),
 .app-container.night-mode :deep(.direction-pad),
 .app-container.night-mode :deep(.preset-btn),
 .app-container.night-mode :deep(.slider-card),
@@ -2218,7 +2236,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35) !important;
 }
 
-.app-container.night-mode :deep(.smart-card),
 .app-container.night-mode :deep(.layout-card),
 .app-container.night-mode :deep(.light-effect-mini-card) {
   background: rgba(15, 23, 42, 0.82) !important;
