@@ -273,20 +273,26 @@
           @open-store-settings="goStoreSettings"
         />
 
-        <div class="settings-row">
-          <DurationQueryPanel class="settings-half-card" />
-          <ArmControlPanel
-            class="settings-half-card"
-            :devices="devices"
-          />
+        <div class="settings-group-card">
+          <h2 class="settings-group-title">设备功能</h2>
+          <div class="settings-group-grid">
+            <ArmControlPanel
+              :devices="devices"
+            />
+            <SmartConfigPanel />
+          </div>
         </div>
 
-        <FlowMonitorPanel
-          class="settings-full-card"
-          :devices="devices"
-        />
+        <div class="settings-group-card">
+          <h2 class="settings-group-title">数据分析</h2>
+          <div class="settings-group-grid">
+            <FlowMonitorPanel
+              :devices="devices"
+            />
+            <DurationQueryPanel />
+          </div>
+        </div>
       </div>
-       <SmartConfigPanel class="settings-full-card" />
     </section>
 
     <section v-else-if="activeTab === 'firmware'" key="firmware" class="page-section">
@@ -1968,6 +1974,56 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.settings-group-card {
+  width: 100%;
+  min-width: 0;
+  margin-top: 24px;
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-sizing: border-box;
+}
+
+.settings-group-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1d2129;
+  margin: 0 0 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.settings-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.settings-group-grid > * {
+  min-width: 0;
+}
+
+.settings-group-grid :deep(.smart-config-section) {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+}
+
+.settings-group-grid :deep(.smart-config-section .smart-card) {
+  max-width: none;
+}
+
 .night-mode {
   background: linear-gradient(180deg, #1f2329 0%, #14181f 100%);
   color: #e5eaf3;
@@ -1994,6 +2050,7 @@ onBeforeUnmount(() => {
 .night-mode .field-label,
 .night-mode .checkbox-row,
 .night-mode .settings-title,
+.night-mode .settings-group-title,
 .night-mode .readonly-box {
   color: #c9d1d9;
 }
@@ -2026,6 +2083,11 @@ onBeforeUnmount(() => {
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+/* 夜间模式：设置页分组标题 */
+.night-mode .settings-group-title {
+  border-bottom-color: rgba(148, 163, 184, 0.22);
 }
 
 /* 夜间模式：设置页内部小卡片 */
@@ -3234,6 +3296,20 @@ onBeforeUnmount(() => {
 
   .settings-half-card:focus-within {
     z-index: 80;
+  }
+
+  .settings-group-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-group-card {
+    margin-top: 18px;
+  }
+
+  .settings-group-title {
+    font-size: 15px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
   }
 }
 

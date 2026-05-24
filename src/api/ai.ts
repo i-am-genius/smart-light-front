@@ -142,6 +142,30 @@ export interface FabricRecognizeRespVO {
 }
 
 
+export interface PersonDetectRespVO {
+  count: number
+  confidence: number
+  timestamp: string
+  processing_time: number
+  annotated_image_base64: string
+}
+
+export async function detectPeopleByImage(file: File): Promise<PersonDetectRespVO> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const res = await http.post<CommonResult<PersonDetectRespVO>>(
+    '/admin/ai/person-detect',
+    formData,
+  )
+
+  if (res.data.code !== 200 || !res.data.data) {
+    throw new Error(res.data.msg || '人流检测失败，后端未返回检测结果')
+  }
+
+  return res.data.data
+}
+
 export async function fabricRecognize(file: File, chipId?: string): Promise<FabricRecognizeRespVO> {
   const formData = new FormData()
   const uploadFile = await prepareFabricUploadFile(file)
