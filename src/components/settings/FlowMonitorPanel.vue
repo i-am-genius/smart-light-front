@@ -95,41 +95,6 @@
       </Teleport>
     </div>
 
-    <!-- Recent detection records -->
-    <div class="recent-section">
-      <h4 class="recent-title">最近检测记录</h4>
-      <div v-if="recentRecordsLoading" class="recent-empty">加载中...</div>
-      <template v-else-if="recentRecords.length">
-        <div class="recent-table-wrap">
-          <table class="recent-table">
-            <thead>
-              <tr>
-                <th>检测时间</th>
-                <th>人数</th>
-                <th>置信度</th>
-                <th>处理时间</th>
-                <th>来源</th>
-                <th>设备</th>
-                <th>图片名</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="rec in recentRecords" :key="rec.id">
-                <td class="recent-time">{{ rec.detectTime }}</td>
-                <td>{{ rec.personCount }}</td>
-                <td>{{ rec.confidence != null ? (rec.confidence * 100).toFixed(1) + '%' : '-' }}</td>
-                <td>{{ rec.processingTime != null ? rec.processingTime + ' ms' : '-' }}</td>
-                <td><span class="recent-source">{{ rec.source }}</span></td>
-                <td class="recent-mono">{{ rec.chipId || '-' }}</td>
-                <td class="recent-img-name" :title="rec.imageName || ''">{{ rec.imageName || '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
-      <div v-else class="recent-empty">暂无人流数据</div>
-    </div>
-
     <div v-if="camLampDevices.length" class="flow-list">
       <div
         v-for="device in camLampDevices"
@@ -179,12 +144,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import type { DeviceItem } from '../../types/device'
 import { normalizeDeviceType } from '../../utils/device'
 import { detectPeopleByImage } from '../../api/ai'
 import type { PersonDetectRespVO } from '../../api/ai'
-import { getPersonFlowRecent, type PersonFlowRecordRespVO } from '../../api/personFlow'
 
 const props = defineProps<{
   devices: DeviceItem[]
@@ -203,32 +167,6 @@ const detecting = ref(false)
 const detectResult = ref<PersonDetectRespVO | null>(null)
 const detectError = ref<string>('')
 const lightboxOpen = ref(false)
-const recentRecords = ref<PersonFlowRecordRespVO[]>([])
-const recentRecordsLoading = ref(false)
-
-async function loadRecentRecords() {
-  recentRecordsLoading.value = true
-  try {
-    const result = await getPersonFlowRecent(10)
-    console.log('person flow recent raw:', result)
-    console.log('is array:', Array.isArray(result), result?.length)
-    recentRecords.value = Array.isArray(result) ? result : []
-  } catch (e: any) {
-    console.warn('Failed to load recent person flow records:', e)
-    recentRecords.value = []
-  } finally {
-    recentRecordsLoading.value = false
-  }
-}
-
-onMounted(() => {
-  loadRecentRecords()
-  window.addEventListener('person-flow-updated', loadRecentRecords)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('person-flow-updated', loadRecentRecords)
-})
 
 const annotatedImageSrc = computed(() => {
   if (!detectResult.value?.annotated_image_base64) return ''
@@ -293,7 +231,6 @@ async function startDetect() {
   try {
     const result = await detectPeopleByImage(selectedImage.value)
     detectResult.value = result
-    loadRecentRecords()
   } catch (error: any) {
     const msg = error?.message || error?.toString() || '检测失败'
     if (msg.includes('Network Error') || msg.includes('timeout') || msg.includes('超时')) {
@@ -736,88 +673,6 @@ function getDetectTime(device: DeviceItem) {
   background: #f7f8fa;
   color: #86909c;
   text-align: center;
-}
-
-/* Recent records */
-.recent-section {
-  margin-bottom: 16px;
-  border: 1px solid #e5e6eb;
-  border-radius: 14px;
-  padding: 14px;
-  background: #fff;
-}
-
-.recent-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1d2129;
-  margin: 0 0 12px;
-}
-
-.recent-table-wrap {
-  max-height: 340px;
-  overflow-y: auto;
-}
-
-.recent-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.recent-table th {
-  text-align: left;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #86909c;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  border-bottom: 2px solid #e5e6eb;
-  background: #f7f8fa;
-  white-space: nowrap;
-}
-
-.recent-table td {
-  padding: 8px 10px;
-  border-bottom: 1px solid #f2f3f5;
-}
-
-.recent-table tbody tr:hover {
-  background: #f7f8fa;
-}
-
-.recent-time {
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.recent-mono {
-  font-family: monospace;
-  font-size: 11px;
-}
-
-.recent-img-name {
-  font-size: 12px;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.recent-source {
-  padding: 3px 8px;
-  font-size: 11px;
-  border-radius: 999px;
-  background: #eef4ff;
-  color: #1677ff;
-}
-
-.recent-empty {
-  padding: 24px;
-  text-align: center;
-  color: #86909c;
-  font-size: 13px;
 }
 
 @media (max-width: 768px) {

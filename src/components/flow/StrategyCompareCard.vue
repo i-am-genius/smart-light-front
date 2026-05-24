@@ -68,6 +68,10 @@ function renderChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { display: false } },
+      },
     },
   })
 }

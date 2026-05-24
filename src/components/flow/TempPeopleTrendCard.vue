@@ -134,9 +134,11 @@ function renderChart() {
       scales: {
         x: {
           offset: chartLabels.value.length === 1,
+          grid: { display: false },
         },
         y: {
           suggestedMin: 0,
+          grid: { display: false },
         },
       },
     },

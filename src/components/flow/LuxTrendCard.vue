@@ -170,8 +170,12 @@ function renderChart() {
       scales: {
         x: {
           offset: chartLabels.value.length === 1,
+          grid: { display: false },
         },
-        y: yRange.value,
+        y: {
+          ...yRange.value,
+          grid: { display: false },
+        },
       },
     },
   })

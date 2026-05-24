@@ -65,6 +65,10 @@ function renderChart() {
           position: 'top',
         },
       },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { display: false } },
+      },
     },
   })
 }

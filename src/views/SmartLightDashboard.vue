@@ -337,6 +337,7 @@ import { getStrategyCompare, getTempPeopleTrend } from '../api/analytics'
 import type { LightEffectState } from '../api/lightEffect'
 import { getCurrentStoreApi } from '../api/store'
 import { getCurrentWeather } from '../api/weather'
+import { getPersonFlowRecent } from '../api/personFlow'
 import type {
   DashboardTab,
   DeviceCreatePayload,
@@ -561,6 +562,7 @@ onMounted(async () => {
   const ok = await loadCurrentStore()
   if (!ok) return
   await loadDevices()
+  void loadPeopleCount()
   void preloadFlowData(false)
 })
 
@@ -945,6 +947,17 @@ async function loadDevices() {
     scanStatus.value = '设备加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadPeopleCount() {
+  try {
+    const records = await getPersonFlowRecent(1)
+    if (records.length > 0) {
+      envInfo.value.people = records[0].personCount || 0
+    }
+  } catch {
+    console.warn('Failed to load people count for realtime overview')
   }
 }
 
@@ -1335,10 +1348,14 @@ function handleWsMessage(message: any) {
   }
 
   if (message.type === 'personDetection' && message.data) {
+    const count = Number(message.data.count ?? 0)
+    if (count > 0) {
+      envInfo.value.people = count
+    }
+
     const chipId = String(message.data.chipId ?? '').trim()
 
     if (chipId) {
-      const count = Number(message.data.count ?? 0)
       const timestamp = message.data.timestamp ?? new Date().toISOString()
 
       updateDeviceByIncoming({
@@ -2030,10 +2047,14 @@ onBeforeUnmount(() => {
 
 .settings-group-grid :deep(.smart-config-section .smart-card) {
   max-width: none;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  margin: 0;
+  padding: 20px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .night-mode {

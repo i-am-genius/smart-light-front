@@ -786,26 +786,6 @@ button:disabled {
   }
 }
 
-:global(.app-container.night-mode) .smart-config-section {
-  background: rgba(15, 23, 42, 0.58);
-  border-color: rgba(148, 163, 184, 0.18);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-  filter: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-:global(.app-container.night-mode) .smart-card {
-  background: rgba(15, 23, 42, 0.82);
-  border-color: rgba(148, 163, 184, 0.18);
-  box-shadow:
-    0 22px 52px rgba(0, 0, 0, 0.42),
-    0 1px 0 rgba(148, 163, 184, 0.12) inset;
-  filter: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
 :global(.app-container.night-mode) .smart-title,
 :global(.app-container.night-mode) .message-title {
   color: rgba(248, 250, 252, 0.96);

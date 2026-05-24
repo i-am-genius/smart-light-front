@@ -20,7 +20,7 @@
         :smart-series="smartSeries"
       />
 
-      <DistributionChartCard :devices="devices" />
+      <PersonFlowOverviewCard />
 
       <div class="info-card">
         <div class="card-title">实时统计</div>
@@ -39,7 +39,7 @@ import HeatmapCard from './HeatmapCard.vue'
 import LuxTrendCard from './LuxTrendCard.vue'
 import TempPeopleTrendCard from './TempPeopleTrendCard.vue'
 import StrategyCompareCard from './StrategyCompareCard.vue'
-import DistributionChartCard from './DistributionChartCard.vue'
+import PersonFlowOverviewCard from './PersonFlowOverviewCard.vue'
 import type { DeviceItem } from '../../types/device'
 import type { DurationSummaryItem } from '../../types/duration'
 
