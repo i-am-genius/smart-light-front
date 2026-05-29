@@ -13,6 +13,9 @@ declare global {
         serverPort?: number,
       ) => Promise<any> | any
       stopSmartConfig: () => Promise<any> | any
+      checkEnvironment: () => Promise<any> | any
+      openLocationSettings: () => void
+      openAppSettings: () => void
     }
   }
 }

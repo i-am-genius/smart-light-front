@@ -60,15 +60,24 @@ export async function deleteDevice(id: number): Promise<boolean> {
 
 export type ArmControlSpeed = 'slow' | 'normal' | 'fast'
 
-export async function armControl(
+/** 单独发送云台速度切换，不触发方向动作 */
+export async function sendArmSpeed(chipId: string, speed: ArmControlSpeed): Promise<boolean> {
+  const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
+    type: 'arm_speed',
+    speed,
+  })
+  return res.data.data
+}
+
+/** 发送云台方向动作，不带 speed 字段 */
+export async function sendArmAction(
   chipId: string,
   action: string,
-  speed: ArmControlSpeed = 'normal',
   position?: number,
 ): Promise<boolean> {
-  const payload: { action: string; speed: ArmControlSpeed; position?: number } = {
+  const payload: Record<string, unknown> = {
+    type: 'arm',
     action,
-    speed,
   }
 
   if (position !== undefined) {
@@ -76,6 +85,42 @@ export async function armControl(
   }
 
   const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, payload)
+  return res.data.data
+}
+
+/** 摇杆连续控制：按住时调用。前端每 250ms 续期一次 */
+export async function sendArmJoystick(
+  chipId: string,
+  x: number,
+  y: number,
+  durationMs = 500,
+): Promise<boolean> {
+  const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
+    type: 'arm_joystick',
+    x,
+    y,
+    durationMs,
+  })
+  return res.data.data
+}
+
+/** 停止摇杆运动：松开/离开/卸载/进入精确模式时调用 */
+export async function sendArmStop(chipId: string): Promise<boolean> {
+  const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
+    type: 'arm_stop',
+  })
+  return res.data.data
+}
+
+/** 精确模式位置控制：允许部分字段更新 */
+export async function sendArmPosition(
+  chipId: string,
+  position: { pan?: number; tilt?: number; slider?: number },
+): Promise<boolean> {
+  const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
+    type: 'arm_position',
+    ...position,
+  })
   return res.data.data
 }
 
