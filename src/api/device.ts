@@ -93,7 +93,7 @@ export async function sendArmJoystick(
   chipId: string,
   x: number,
   y: number,
-  durationMs = 500,
+  durationMs = 300,
 ): Promise<boolean> {
   const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
     type: 'arm_joystick',

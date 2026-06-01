@@ -238,8 +238,8 @@ const TILT_MAX = 45
 const SLIDER_MIN = 0
 const SLIDER_MAX_LAMP = 1200
 const SLIDER_MAX_CAM = 500
-const JOYSTICK_RENEW_INTERVAL = 250
-const JOYSTICK_DURATION_MS = 500
+const JOYSTICK_RENEW_INTERVAL = 150
+const JOYSTICK_DURATION_MS = 300
 
 const speedOptions: { label: string; value: ArmControlSpeed }[] = [
   { label: '慢', value: 'slow' },
