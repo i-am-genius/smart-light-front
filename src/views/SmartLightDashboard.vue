@@ -409,7 +409,8 @@ const pageSwitcherStyle = computed(() => {
 })
 
 const wsProtocol = computed(() => {
-  return (localStorage.getItem('TOKEN') || sessionStorage.getItem('TOKEN') || '').trim()
+  const token = (localStorage.getItem('TOKEN') || sessionStorage.getItem('TOKEN') || '').trim()
+  return token ? ['smartlight.v1', token] : []
 })
 
 const scannedDevices = ref<
@@ -906,6 +907,71 @@ function normalizeChipId(value?: string) {
   return String(value || '').trim().toUpperCase()
 }
 
+// ── 统一设备唯一键 ──
+// 优先级：chipId > deviceId > id
+// 不要只用 id，因为扫描出来的设备可能还没有数据库 id
+function getDeviceKey(device: Partial<DeviceItem> & { deviceId?: string | number }): string {
+  const chipId = (device as any).chipId
+  const deviceId = (device as any).deviceId
+  const id = (device as any).id
+  // chipId 和 deviceId 都做 trim + toUpperCase，避免大小写/空格导致同一设备出现多条
+  if (chipId != null && String(chipId).trim() !== '') return normalizeChipId(chipId)
+  if (deviceId != null && String(deviceId).trim() !== '') return String(deviceId).trim().toUpperCase()
+  if (id != null && String(id).trim() !== '') return String(id).trim()
+  return ''
+}
+
+// ── 服务端全量列表合并（用于 loadDevices / silentRefreshDeviceList）──
+// 服务端返回的列表是权威的：不在列表中的设备会被移除，本地额外字段保留
+function mergeDeviceList(list: DeviceItem[]) {
+  const map = new Map<string, DeviceItem>()
+
+  for (const device of list) {
+    const key = getDeviceKey(device)
+    if (!key) continue
+
+    // 查找本地已有设备，保留服务端可能不返回的字段
+    const existing = devices.value.find(item => getDeviceKey(item) === key)
+    map.set(key, { ...(existing || {}), ...device })
+  }
+
+  // 不在服务端列表中的旧设备自动移除
+  devices.value = Array.from(map.values())
+}
+
+// ── 单设备 upsert（用于 WebSocket 推送 / 添加设备）──
+// 只合并或追加，不删除其他设备
+function upsertDevice(device: DeviceItem) {
+  const key = getDeviceKey(device)
+  if (!key) return
+
+  const index = devices.value.findIndex(item => getDeviceKey(item) === key)
+  if (index >= 0) {
+    devices.value[index] = { ...devices.value[index], ...device }
+  } else {
+    devices.value.push(device)
+  }
+}
+
+// ── 静默刷新：不显示 loading，不闪烁 ──
+async function silentRefreshDeviceList() {
+  try {
+    const [deviceList, onlineList] = await Promise.all([
+      getMyDeviceListApi(),
+      getOnlineList(),
+    ])
+    mergeDeviceList(mergeDeviceOnline(deviceList, onlineList))
+
+    if (!scanning.value) {
+      scanStatus.value = `已加载 ${devices.value.length} 台设备`
+    }
+
+    await loadLatestLux()
+  } catch (error) {
+    console.error('silentRefreshDeviceList error =', error)
+  }
+}
+
 function mergeDeviceOnline(deviceList: DeviceItem[], onlineList: DeviceOnlineItem[]) {
   const onlineMap = new Map(
     (onlineList || []).map(item => [normalizeChipId(item.chipId), item]),
@@ -913,20 +979,28 @@ function mergeDeviceOnline(deviceList: DeviceItem[], onlineList: DeviceOnlineIte
 
   return (deviceList || []).map(device => {
     const onlineInfo = onlineMap.get(normalizeChipId(device.chipId))
+    const online = onlineInfo?.online === true
 
     return {
       ...device,
-      online: onlineInfo?.online === true,
-      lastSeen: onlineInfo?.lastSeen,
+      online,
+      lastSeen: onlineInfo?.lastSeen ?? device.lastSeen,
+      lastSeenAt: onlineInfo?.lastSeenAt || device.lastSeenAt,
       ip: onlineInfo?.ip || device.ip,
+      selfTestJson: online ? device.selfTestJson : undefined,
+      selfTestTime: online ? device.selfTestTime : undefined,
     }
   })
 }
 
 async function loadDevices() {
-  loading.value = true
+  // 只有首次进入且列表为空时才显示 loading，避免刷新闪烁
+  const isFirstLoad = devices.value.length === 0
+  if (isFirstLoad) {
+    loading.value = true
+  }
   if (!scanning.value && !scanFinished.value) {
-    scanStatus.value = '加载中...'
+    scanStatus.value = isFirstLoad ? '加载中...' : scanStatus.value
   }
 
   try {
@@ -935,7 +1009,8 @@ async function loadDevices() {
       getOnlineList(),
     ])
 
-    devices.value = mergeDeviceOnline(deviceList, onlineList)
+    // 静默合并，不清空列表，不闪烁
+    mergeDeviceList(mergeDeviceOnline(deviceList, onlineList))
 
     if (!scanning.value) {
       scanStatus.value = `已加载 ${devices.value.length} 台设备`
@@ -944,9 +1019,13 @@ async function loadDevices() {
     await loadLatestLux()
   } catch (error) {
     console.error('loadDevices error =', error)
-    scanStatus.value = '设备加载失败'
+    if (isFirstLoad) {
+      scanStatus.value = '设备加载失败'
+    }
   } finally {
-    loading.value = false
+    if (isFirstLoad) {
+      loading.value = false
+    }
   }
 }
 
@@ -1113,9 +1192,9 @@ async function handleCreateDevice(payload: DeviceCreatePayload) {
       item => normalizeChipId(item.chipId) !== createdChipId,
     )
 
-    // 本地插入新设备，WS 的 state 消息会补充完整数据
-    devices.value.push({
-      id: String(result),
+    // 使用 upsert 而非 push，避免与 WebSocket / 接口刷新产生重复
+    upsertDevice({
+      id: Number(result),
       chipId: payload.chipId || '',
       ip: payload.ip || '',
       displayName: payload.displayName || '',
@@ -1129,7 +1208,10 @@ async function handleCreateDevice(payload: DeviceCreatePayload) {
       fabric: payload.fabric || '',
       mainColorRgb: payload.mainColorRgb || '',
       online: false,
-    } as unknown as DeviceItem)
+    } as DeviceItem)
+
+    // 后台静默同步一次，不闪烁
+    await silentRefreshDeviceList()
   } catch (error) {
     console.error('createDevice error =', error)
     toast.show(getErrorMessage(error, '添加设备失败'), 'error')
@@ -1237,17 +1319,22 @@ async function flushRealtimeUpdate(id: number, version: number) {
 }
 
 async function handleDeleteDevice(id: number) {
+  // 乐观删除：先保存被删设备（不是整个列表），立即从 UI 移除，失败时只恢复该设备
+  const deletedDevice = devices.value.find(d => String(d.id) === String(id))
   deletingId.value = id
+
+  devices.value = devices.value.filter(d => String(d.id) !== String(id))
+
   try {
     await deleteDevice(id)
-    // 从本地数组中移除，触发 TransitionGroup 离场动画
-    const delId = String(id)
-    const idx = devices.value.findIndex(d => String(d.id) === delId)
-    if (idx >= 0) {
-      devices.value.splice(idx, 1)
-    }
+    // 后台静默同步一次
+    await silentRefreshDeviceList()
   } catch (error) {
     console.error('deleteDevice error =', error)
+    // 删除失败 → 只恢复被删除的设备，不覆盖期间 WebSocket 对其它设备的更新
+    if (deletedDevice) {
+      upsertDevice(deletedDevice)
+    }
     toast.show(getErrorMessage(error, '删除设备失败'), 'error')
     shakeControls()
   } finally {
@@ -1256,20 +1343,45 @@ async function handleDeleteDevice(id: number) {
 }
 
 function updateDeviceByIncoming(incoming: Partial<DeviceItem>) {
-  const index = devices.value.findIndex(item => {
-    if (incoming.id != null && String(item.id) === String(incoming.id)) return true
-    if (incoming.chipId && String(item.chipId) === String(incoming.chipId)) return true
-    return false
-  })
+  // 优先用统一 key 查找，找不到再用 id 匹配
+  const key = getDeviceKey(incoming)
+  let index = -1
+  if (key) {
+    index = devices.value.findIndex(item => getDeviceKey(item) === key)
+  }
+  if (index < 0 && incoming.id != null) {
+    index = devices.value.findIndex(item => String(item.id) === String(incoming.id))
+  }
+
+  const previous = index >= 0 ? devices.value[index] : undefined
+  const nextIncoming = { ...incoming }
+  if (!Object.prototype.hasOwnProperty.call(incoming, 'lastSeen')) {
+    nextIncoming.lastSeen = previous?.lastSeen
+  }
+  if (!Object.prototype.hasOwnProperty.call(incoming, 'lastSeenAt')) {
+    nextIncoming.lastSeenAt = previous?.lastSeenAt
+  }
+  const hasSelfTestPayload = Object.prototype.hasOwnProperty.call(incoming, 'selfTestJson')
+    || Object.prototype.hasOwnProperty.call(incoming, 'selfTestTime')
+
+  if (incoming.online === false) {
+    nextIncoming.selfTestJson = undefined
+    nextIncoming.selfTestTime = undefined
+  } else if (incoming.online === true && previous?.online !== true && !hasSelfTestPayload) {
+    nextIncoming.selfTestJson = undefined
+    nextIncoming.selfTestTime = undefined
+  }
 
   if (index >= 0) {
     devices.value[index] = {
       ...devices.value[index],
-      ...incoming,
+      ...nextIncoming,
     }
-  } else {
-    devices.value.push(incoming as DeviceItem)
+  } else if (key) {
+    // 有 key 才 upsert，避免无 key 时产生重复
+    upsertDevice(nextIncoming as DeviceItem)
   }
+  // 没有 key 且没找到匹配 → 不添加（无法去重）
 }
 
 function requestDurationSummaryRefresh() {
@@ -1302,12 +1414,16 @@ function handleWsMessage(message: any) {
   }
 
   if (message.type === 'onlineStatus' && message.data) {
-    updateDeviceByIncoming({
+    const incoming: Partial<DeviceItem> = {
       chipId: message.data.chipId,
       ip: message.data.ip,
       online: message.data.online,
       lastSeen: message.data.lastSeen,
-    })
+    }
+    if (message.data.lastSeenAt != null) {
+      incoming.lastSeenAt = message.data.lastSeenAt
+    }
+    updateDeviceByIncoming(incoming)
     return
   }
 

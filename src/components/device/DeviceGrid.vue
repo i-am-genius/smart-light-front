@@ -11,7 +11,7 @@
     <TransitionGroup v-else name="card-list" tag="div" id="deviceContainer">
       <DeviceCard
         v-for="device in devices"
-        :key="device.id"
+        :key="device.chipId || (device as any).deviceId || device.id"
         :device="device"
         :all-devices="devices"
         :deleting="deletingId === device.id"
