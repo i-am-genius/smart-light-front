@@ -3,6 +3,13 @@ import type {
   DeviceCreatePayload,
   DeviceItem,
   DeviceOnlineItem,
+  CameraAimTargetPayload,
+  CamCaptureTaskPayload,
+  CamCaptureTaskResult,
+  CamPresenceState,
+  CamRoiConfig,
+  CamStatusState,
+  CameraPtzPayload,
   FirmwareHistoryParams,
   FirmwareItem,
   FirmwareUploadResult,
@@ -121,6 +128,86 @@ export async function sendArmPosition(
     type: 'arm_position',
     ...position,
   })
+  return res.data.data
+}
+
+export async function sendCamPtz(payload: CameraPtzPayload): Promise<boolean> {
+  const res = await http.post<CommonResult<boolean>>('/admin/device/cam/ptz', payload)
+  return res.data.data
+}
+
+export async function sendCamAimTarget(payload: CameraAimTargetPayload): Promise<boolean> {
+  const res = await http.post<CommonResult<boolean>>('/admin/device/cam/aim-target', payload)
+  return res.data.data
+}
+
+export async function getCamRoiConfig(camChipId: string): Promise<CamRoiConfig> {
+  const res = await http.get<CommonResult<CamRoiConfig>>(
+    `/admin/device/cam/${encodeURIComponent(camChipId)}/roi`,
+  )
+  return res.data.data
+}
+
+export async function saveCamRoiConfig(
+  camChipId: string,
+  payload: CamRoiConfig,
+): Promise<CamRoiConfig> {
+  const res = await http.put<CommonResult<CamRoiConfig>>(
+    `/admin/device/cam/${encodeURIComponent(camChipId)}/roi`,
+    payload,
+  )
+  return res.data.data
+}
+
+export async function getCamPresence(camChipId: string): Promise<CamPresenceState | null> {
+  const res = await http.get<CommonResult<CamPresenceState | null>>(
+    `/admin/device/cam/${encodeURIComponent(camChipId)}/presence`,
+  )
+  return res.data.data || null
+}
+
+export async function getCamStatus(camChipId: string): Promise<CamStatusState | null> {
+  const res = await http.get<CommonResult<CamStatusState | null>>(
+    `/admin/device/cam/${encodeURIComponent(camChipId)}/status`,
+  )
+  return res.data.data || null
+}
+
+export async function createCamCaptureTask(
+  payload: CamCaptureTaskPayload,
+): Promise<CamCaptureTaskResult> {
+  const res = await http.post<CommonResult<CamCaptureTaskResult>>(
+    '/admin/device/cam/capture-task',
+    payload,
+  )
+  return res.data.data
+}
+
+export async function uploadCamCapturePhoto(
+  taskId: string,
+  file: File,
+): Promise<CamCaptureTaskResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await http.post<CommonResult<CamCaptureTaskResult>>(
+    `/admin/device/cam/capture-task/${encodeURIComponent(taskId)}/photo`,
+    formData,
+  )
+  return res.data.data
+}
+
+export async function uploadCamFlowPhoto(
+  camChipId: string,
+  file: File,
+  personCount?: number,
+  confidence?: number,
+): Promise<boolean> {
+  const formData = new FormData()
+  formData.append('camChipId', camChipId)
+  formData.append('file', file)
+  if (personCount != null) formData.append('personCount', String(personCount))
+  if (confidence != null) formData.append('confidence', String(confidence))
+  const res = await http.post<CommonResult<boolean>>('/admin/device/cam/flow-photo', formData)
   return res.data.data
 }
 

@@ -48,6 +48,7 @@ import type { DurationSummaryItem } from '../../types/duration'
 import type { MultiLuxRespVO } from '../../api/lux'
 import type { StrategyCompareData, TempPeopleTrendData } from '../../types/analytics'
 import { formatDate } from '../../utils/format'
+import { isLampDevice, normalizeDeviceType } from '../../utils/device'
 
 const props = defineProps<{
   devices: DeviceItem[]
@@ -60,8 +61,15 @@ const luxTrendData = ref<MultiLuxRespVO | null>(null)
 const tempPeopleData = ref<TempPeopleTrendData | null>(null)
 const strategyData = ref<StrategyCompareData | null>(null)
 
+const cameraFlowDevice = computed(() => {
+  return (
+    props.devices.find(item => normalizeDeviceType(item.deviceType) === 'cam') ||
+    props.devices.find(item => normalizeDeviceType(item.deviceType) === 'camlamp')
+  )
+})
+
 const analyticsChipId = computed(() => {
-  return props.devices.find(item => item.chipId)?.chipId
+  return cameraFlowDevice.value?.chipId
 })
 
 function getDateRange() {
@@ -112,10 +120,12 @@ const onlineCount = computed(() => {
   return props.devices.filter(item => item.online).length
 })
 
+const lampDevices = computed(() => props.devices.filter(isLampDevice))
+
 const avgBrightness = computed(() => {
-  if (props.devices.length === 0) return 0
-  const sum = props.devices.reduce((acc, item) => acc + (item.brightness ?? 0), 0)
-  return Math.round(sum / props.devices.length)
+  if (lampDevices.value.length === 0) return 0
+  const sum = lampDevices.value.reduce((acc, item) => acc + (item.brightness ?? 0), 0)
+  return Math.round(sum / lampDevices.value.length)
 })
 
 watch(

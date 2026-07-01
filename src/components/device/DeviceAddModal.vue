@@ -84,6 +84,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, reactive, ref, watch } from 'vue'
 import type { DeviceCreatePayload } from '../../types/device'
+import { isLampDevice } from '../../utils/device'
 import BaseSelect from '../common/BaseSelect.vue'
 type DeviceAddInitialData = {
   chipId?: string
@@ -93,9 +94,9 @@ type DeviceAddInitialData = {
   deviceNo?: string
 } | null
 const deviceTypeOptions = [
-  { label: 'lamp', value: 'lamp' },
-  { label: 'cam', value: 'cam' },
-  { label: 'camlamp', value: 'camlamp' },
+  { label: '射灯节点（lamp）', value: 'lamp' },
+  { label: '摄像头节点（cam）', value: 'cam' },
+  { label: '旧摄像头灯节点（camlamp）', value: 'camlamp' },
 ]
 const props = defineProps<{
   submitting?: boolean
@@ -162,7 +163,20 @@ function fillFormByInitialData(data?: DeviceAddInitialData) {
 
 function submit() {
   if (!form.chipId) return
-  emit('submit', { ...form })
+  const basePayload: DeviceCreatePayload = {
+    chipId: form.chipId,
+    ip: form.ip,
+    displayName: form.displayName,
+    deviceType: form.deviceType,
+    deviceNo: form.deviceNo,
+  }
+
+  if (isLampDevice({ deviceType: form.deviceType })) {
+    emit('submit', { ...form })
+    return
+  }
+
+  emit('submit', basePayload)
 }
 
 function handleClose() {

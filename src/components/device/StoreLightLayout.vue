@@ -119,6 +119,7 @@ import type { DeviceCreatePayload, DeviceItem } from '../../types/device'
 import { useToast } from '../../composables/useToast'
 import { useShake } from '../../composables/useShake'
 import { getErrorMessage } from '../../utils/error'
+import { isLampDevice } from '../../utils/device'
 
 const props = defineProps<{
   devices: DeviceItem[]
@@ -183,7 +184,7 @@ function getKey(device: DeviceItem) {
   return String(device.id || device.chipId || device.deviceNo || '')
 }
 
-const layoutDevices = computed(() => props.devices || [])
+const layoutDevices = computed(() => (props.devices || []).filter(isLampDevice))
 
 function createId() {
   return `zone-${Date.now()}-${Math.random().toString(16).slice(2)}`

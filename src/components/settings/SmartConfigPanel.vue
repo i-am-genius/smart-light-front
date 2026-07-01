@@ -227,7 +227,6 @@ function onSsidManualInput() {
   if (!manualSsidEdited.value && ssid.value.trim()) {
     manualSsidEdited.value = true
     manualSsidMode.value = true
-    console.log('[SmartConfig] user manually typed SSID:', ssid.value.trim())
   }
 }
 
@@ -384,12 +383,6 @@ async function getCurrentWifi() {
 
 async function startSmartConfig() {
   const esptouch = getEspTouchPlugin()
-
-  console.log('[SmartConfig] startSmartConfig clicked')
-  console.log('[SmartConfig]   bridge exists=%s', !!esptouch)
-  console.log('[SmartConfig]   ssid=%s', ssid.value.trim())
-  console.log('[SmartConfig]   password.length=%d', password.value.length)
-  console.log('[SmartConfig]   manualSsidMode=%s', manualSsidMode.value)
 
   if (!esptouch) {
     setMessage('当前浏览器环境不支持 SmartConfig，请在 Android App 真机中使用。浏览器 / 模拟器无法完成配网。', 'unsupported')

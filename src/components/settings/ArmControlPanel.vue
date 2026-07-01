@@ -22,6 +22,11 @@
       当前类型：{{ selectedDeviceTypeText }}
     </div>
 
+    <div v-if="selectedDevice" class="gimbal-self-test" :class="gimbalSelfTestClass">
+      <span>{{ gimbalSelfTestText }}</span>
+      <small>{{ gimbalSelfTestDetail }}</small>
+    </div>
+
     <div class="form-row">
       <label>动作速度：</label>
       <div class="speed-tabs">
@@ -195,6 +200,19 @@ type ArmAction = {
   label: string
   desc: string
 }
+type SelfTestResult = {
+  done?: boolean
+  overall?: boolean
+  nano?: boolean
+  nanoHoming?: boolean
+  nanoHallStatus?: boolean
+  nanoStatus?: string
+  hall?: {
+    pan?: string
+    tilt?: string
+    slider?: string
+  }
+}
 
 const selectedDeviceCode = ref('')
 const speed = ref<ArmControlSpeed>('normal')
@@ -291,6 +309,51 @@ const selectedDeviceTypeText = computed(() => {
   if (type === 'cam') return 'cam'
   if (type === 'camlamp') return 'camlamp（按 cam 控制）'
   return '未知'
+})
+
+function parseSelfTestJson(value?: string | null): SelfTestResult | null {
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function hallText(value?: string) {
+  if (value === 'triggered') return '触发'
+  if (value === 'clear') return '未触发'
+  return '未知'
+}
+
+const selectedSelfTest = computed(() => {
+  const device = selectedDevice.value
+  if (!device?.online) return null
+  return parseSelfTestJson(device.selfTestJson)
+})
+
+const gimbalSelfTestClass = computed(() => {
+  const data = selectedSelfTest.value
+  if (!data?.done) return 'unknown'
+  return data.nano && data.nanoHoming && data.nanoHallStatus ? 'ok' : 'bad'
+})
+
+const gimbalSelfTestText = computed(() => {
+  const data = selectedSelfTest.value
+  if (!data?.done) return '云台自检：暂无记录'
+  if (data.nano && data.nanoHoming && data.nanoHallStatus) return '云台自检：寻零完成'
+  if (data.nanoHoming === false) return '云台自检：寻零失败'
+  if (data.nano === false) return '云台自检：Nano 无响应'
+  if (data.nanoHallStatus === false) return '云台自检：霍尔读取失败'
+  return '云台自检：异常'
+})
+
+const gimbalSelfTestDetail = computed(() => {
+  const data = selectedSelfTest.value
+  if (!data?.done) return '设备联网后会自动执行一次'
+  const hall = data.hall || {}
+  return `Pan ${hallText(hall.pan)} · Tilt ${hallText(hall.tilt)} · Slider ${hallText(hall.slider)}`
 })
 
 const isCamDevice = computed(() => {
@@ -555,6 +618,47 @@ async function sendPreset(action: string) {
 .selected-meta {
   margin-top: 8px;
   padding-left: 100px;
+}
+
+.gimbal-self-test {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.gimbal-self-test span {
+  font-weight: 800;
+}
+
+.gimbal-self-test small {
+  text-align: right;
+  line-height: 1.4;
+}
+
+.gimbal-self-test.ok {
+  border-color: rgba(22, 163, 74, 0.22);
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.gimbal-self-test.bad {
+  border-color: rgba(220, 38, 38, 0.22);
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
+.gimbal-self-test.unknown {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
 }
 
 /* 速度按钮 */
@@ -1014,5 +1118,23 @@ async function sendPreset(action: string) {
 :global(.app-container.night-mode) .speed-tab.active {
   background: rgba(37, 99, 235, 0.26);
   border-color: rgba(96, 165, 250, 0.45);
+}
+
+:global(.app-container.night-mode) .gimbal-self-test {
+  background: rgba(15, 23, 42, 0.62);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: rgba(203, 213, 225, 0.76);
+}
+
+:global(.app-container.night-mode) .gimbal-self-test.ok {
+  background: rgba(6, 95, 70, 0.28);
+  border-color: rgba(52, 211, 153, 0.22);
+  color: #a7f3d0;
+}
+
+:global(.app-container.night-mode) .gimbal-self-test.bad {
+  background: rgba(127, 29, 29, 0.28);
+  border-color: rgba(248, 113, 113, 0.22);
+  color: #fecaca;
 }
 </style>

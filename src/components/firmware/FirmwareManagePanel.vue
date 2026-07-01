@@ -204,12 +204,13 @@ import type {
   FirmwareUploadResult,
 } from '../../types/device'
 
-type UploadDeviceType = Extract<FirmwareDeviceType, 'lamp' | 'camlamp'>
+type UploadDeviceType = FirmwareDeviceType
 type FilterDeviceType = UploadDeviceType | ''
 type FilterChannel = FirmwareChannel | ''
 
 const uploadDeviceTypeOptions = [
   { label: '灯光节点', value: 'lamp' },
+  { label: '摄像头节点', value: 'cam' },
   { label: '旧摄像头灯节点', value: 'camlamp' },
 ]
 
@@ -278,8 +279,8 @@ function validateForm() {
     return '固件文件必须是 .bin 文件'
   }
 
-  if (deviceType.value !== 'lamp' && deviceType.value !== 'camlamp') {
-    return '设备类型只能是 lamp 或 camlamp'
+  if (deviceType.value !== 'lamp' && deviceType.value !== 'cam' && deviceType.value !== 'camlamp') {
+    return '设备类型只能是 lamp、cam 或 camlamp'
   }
 
   if (channel.value !== 'stable' && channel.value !== 'test') {

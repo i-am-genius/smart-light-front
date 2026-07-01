@@ -212,6 +212,7 @@ import {
 } from '../../api/lightEffect'
 import type { DeviceCreatePayload, DeviceItem } from '../../types/device'
 import { getErrorMessage } from '../../utils/error'
+import { isLampDevice } from '../../utils/device'
 import BaseSelect from '../common/BaseSelect.vue'
 
 const props = defineProps<{
@@ -272,7 +273,7 @@ const quickActions: Array<{ key: QuickActionKey; label: string; desc: string }> 
 const zoneNames = computed(() => {
   const set = new Set<string>()
 
-  for (const device of props.devices || []) {
+  for (const device of (props.devices || []).filter(isLampDevice)) {
     set.add(getZoneName(device))
   }
 
@@ -293,7 +294,7 @@ const scopeOptions = computed(() => {
 })
 
 const targetDevices = computed(() => {
-  const list = props.devices || []
+  const list = (props.devices || []).filter(isLampDevice)
 
   if (selectedScope.value === 'all') {
     return [...list].sort((a, b) => {

@@ -354,6 +354,7 @@ import OdometerRoll from '../components/common/OdometerRoll.vue'
 import { regions } from '../constants/china-region'
 import { STORE_STYLE_MAP } from '../constants/store'
 import { getErrorMessage } from '../utils/error'
+import { isLampDevice, normalizeDeviceType } from '../utils/device'
 import { formatDate } from '../utils/format'
 import { useToast } from '../composables/useToast'
 import { useShake } from '../composables/useShake'
@@ -562,6 +563,7 @@ async function loadCurrentStore() {
 onMounted(async () => {
   const ok = await loadCurrentStore()
   if (!ok) return
+  window.addEventListener('person-flow-updated', handlePersonFlowUpdatedEvent)
   await loadDevices()
   void loadPeopleCount()
   void preloadFlowData(false)
@@ -642,7 +644,9 @@ function getFlowDateRange() {
 }
 
 function getFlowChipId() {
-  return devices.value.find(d => d.chipId)?.chipId
+  const camDevice = devices.value.find(d => normalizeDeviceType(d.deviceType) === 'cam' && d.chipId)
+  const legacyCamLampDevice = devices.value.find(d => normalizeDeviceType(d.deviceType) === 'camlamp' && d.chipId)
+  return camDevice?.chipId || legacyCamLampDevice?.chipId
 }
 
 function hasRequiredFlowCache() {
@@ -809,7 +813,7 @@ watch(
     persistNightMode(val.isNightMode)
 
     for (const device of devices.value) {
-      if (!device.autoMode) continue
+      if (!isLampDevice(device) || !device.autoMode) continue
 
       const nextPayload: DeviceCreatePayload = {
         chipId: device.chipId || '',
@@ -1034,10 +1038,23 @@ async function loadPeopleCount() {
     const records = await getPersonFlowRecent(1)
     if (records.length > 0) {
       envInfo.value.people = records[0].personCount || 0
+    } else {
+      envInfo.value.people = 0
     }
   } catch {
     console.warn('Failed to load people count for realtime overview')
   }
+}
+
+function handlePersonFlowUpdatedEvent(event: Event) {
+  const detail = event instanceof CustomEvent ? event.detail : null
+  const count = Number(detail?.personCount ?? detail?.count)
+  if (Number.isFinite(count)) {
+    envInfo.value.people = Math.max(0, count)
+    return
+  }
+
+  void loadPeopleCount()
 }
 
 async function loadLatestLux() {
@@ -1193,6 +1210,7 @@ async function handleCreateDevice(payload: DeviceCreatePayload) {
     )
 
     // 使用 upsert 而非 push，避免与 WebSocket / 接口刷新产生重复
+    const isLampLike = isLampDevice({ deviceType: payload.deviceType })
     upsertDevice({
       id: Number(result),
       chipId: payload.chipId || '',
@@ -1200,13 +1218,17 @@ async function handleCreateDevice(payload: DeviceCreatePayload) {
       displayName: payload.displayName || '',
       deviceType: payload.deviceType || '',
       deviceNo: payload.deviceNo || '',
-      brightness: payload.brightness ?? 50,
-      temp: payload.temp ?? 4000,
-      autoMode: payload.autoMode ?? false,
-      recommendedBrightness: payload.recommendedBrightness ?? 50,
-      recommendedTemp: payload.recommendedTemp ?? 4000,
-      fabric: payload.fabric || '',
-      mainColorRgb: payload.mainColorRgb || '',
+      ...(isLampLike
+        ? {
+            brightness: payload.brightness ?? 50,
+            temp: payload.temp ?? 4000,
+            autoMode: payload.autoMode ?? false,
+            recommendedBrightness: payload.recommendedBrightness ?? 50,
+            recommendedTemp: payload.recommendedTemp ?? 4000,
+            fabric: payload.fabric || '',
+            mainColorRgb: payload.mainColorRgb || '',
+          }
+        : {}),
       online: false,
     } as DeviceItem)
 
@@ -1355,6 +1377,10 @@ function updateDeviceByIncoming(incoming: Partial<DeviceItem>) {
 
   const previous = index >= 0 ? devices.value[index] : undefined
   const nextIncoming = { ...incoming }
+  const incomingDeviceType = normalizeDeviceType(nextIncoming.deviceType || previous?.deviceType)
+  if (incomingDeviceType === 'cam') {
+    stripLampOnlyFields(nextIncoming)
+  }
   if (!Object.prototype.hasOwnProperty.call(incoming, 'lastSeen')) {
     nextIncoming.lastSeen = previous?.lastSeen
   }
@@ -1382,6 +1408,88 @@ function updateDeviceByIncoming(incoming: Partial<DeviceItem>) {
     upsertDevice(nextIncoming as DeviceItem)
   }
   // 没有 key 且没找到匹配 → 不添加（无法去重）
+}
+
+function stripLampOnlyFields(device: Partial<DeviceItem>) {
+  const lampOnlyKeys: Array<keyof DeviceItem> = [
+    'brightness',
+    'temp',
+    'autoMode',
+    'recommendedBrightness',
+    'recommendedTemp',
+    'fabric',
+    'label',
+    'confidence',
+    'fabricConfidence',
+    'mainColorRgb',
+    'clothDetected',
+    'clothX',
+    'clothY',
+    'clothW',
+    'clothH',
+    'originalImageUrl',
+    'annotatedImageUrl',
+    'combinedImageUrl',
+    'lampClothState',
+    'tofDistanceMm',
+    'lastTakenAt',
+  ]
+
+  for (const key of lampOnlyKeys) {
+    delete device[key]
+  }
+}
+
+function findDeviceByChipId(chipId?: string) {
+  const normalizedChipId = normalizeChipId(chipId)
+  if (!normalizedChipId) return undefined
+  return devices.value.find(item => normalizeChipId(item.chipId) === normalizedChipId)
+}
+
+function hasOwnValue(source: any, key: string) {
+  return source && Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined
+}
+
+function buildLampAiIncomingFromCaptureResult(data: any): Partial<DeviceItem> {
+  const aiSource = data?.aiResult || data?.fabricResult || data?.recognizeResult || {}
+  const incoming: Partial<DeviceItem> = {}
+
+  const fabric = hasOwnValue(aiSource, 'fabric')
+    ? aiSource.fabric
+    : hasOwnValue(data, 'fabric')
+      ? data.fabric
+      : (hasOwnValue(aiSource, 'label') ? aiSource.label : data?.label)
+  if (fabric !== undefined) incoming.fabric = fabric || ''
+
+  const confidence = hasOwnValue(aiSource, 'confidence') ? aiSource.confidence : data?.confidence
+  if (confidence !== undefined) incoming.confidence = Number(confidence)
+
+  const fabricConfidence = hasOwnValue(aiSource, 'fabricConfidence') ? aiSource.fabricConfidence : data?.fabricConfidence
+  if (fabricConfidence !== undefined) incoming.fabricConfidence = Number(fabricConfidence)
+
+  const aiKeys: Array<keyof DeviceItem> = [
+    'mainColorRgb',
+    'recommendedBrightness',
+    'recommendedTemp',
+    'clothDetected',
+    'clothX',
+    'clothY',
+    'clothW',
+    'clothH',
+    'originalImageUrl',
+    'annotatedImageUrl',
+    'combinedImageUrl',
+  ]
+
+  for (const key of aiKeys) {
+    if (hasOwnValue(aiSource, key)) {
+      ;(incoming as any)[key] = aiSource[key]
+    } else if (hasOwnValue(data, key)) {
+      ;(incoming as any)[key] = data[key]
+    }
+  }
+
+  return incoming
 }
 
 function requestDurationSummaryRefresh() {
@@ -1428,25 +1536,28 @@ function handleWsMessage(message: any) {
   }
 
   if (message.type === 'fabricRecognize' && message.data) {
-    const chipId = String(message.data.chipId ?? '').trim()
+    const chipId = String(
+      message.data.targetChipId ??
+      message.data.lampChipId ??
+      message.data.chipId ??
+      '',
+    ).trim()
     if (!chipId) return
+
+    const targetDevice = findDeviceByChipId(chipId)
+    if (!targetDevice) {
+      console.warn('fabricRecognize target lamp not found:', chipId)
+      return
+    }
+    if (!isLampDevice(targetDevice)) {
+      console.warn('fabricRecognize target is not lamp device:', chipId)
+      return
+    }
 
     updateDeviceByIncoming({
       chipId,
       label: message.data.label,
-      fabric: message.data.fabric ?? message.data.label,
-      confidence: message.data.confidence,
-      mainColorRgb: message.data.mainColorRgb,
-      recommendedBrightness: message.data.recommendedBrightness,
-      recommendedTemp: message.data.recommendedTemp,
-      clothDetected: message.data.clothDetected,
-      clothX: message.data.clothX,
-      clothY: message.data.clothY,
-      clothW: message.data.clothW,
-      clothH: message.data.clothH,
-      originalImageUrl: message.data.originalImageUrl,
-      annotatedImageUrl: message.data.annotatedImageUrl,
-      combinedImageUrl: message.data.combinedImageUrl,
+      ...buildLampAiIncomingFromCaptureResult(message.data),
     })
     return
   }
@@ -1463,18 +1574,66 @@ function handleWsMessage(message: any) {
     return
   }
 
-  if (message.type === 'personDetection' && message.data) {
-    const count = Number(message.data.count ?? 0)
-    if (count > 0) {
-      envInfo.value.people = count
+  if (
+    ['personFlowUpdated', 'personFlowRecord', 'camFlowPhoto', 'camFlow'].includes(String(message.type)) &&
+    message.data
+  ) {
+    const count = Number(message.data.personCount ?? message.data.count ?? 0)
+    if (Number.isFinite(count)) {
+      envInfo.value.people = Math.max(0, count)
     }
 
-    const chipId = String(message.data.chipId ?? '').trim()
+    const chipId = String(message.data.camChipId ?? message.data.chipId ?? '').trim()
+    const timestamp = message.data.detectTime ?? message.data.timestamp ?? message.data.updateTime ?? new Date().toISOString()
+
+    if (chipId) {
+      const incoming: Partial<DeviceItem> = {
+        chipId,
+        personCount: Number.isFinite(count) ? count : undefined,
+        peopleCount: Number.isFinite(count) ? count : undefined,
+        flowPersonCount: Number.isFinite(count) ? count : undefined,
+        personDetected: Number.isFinite(count) ? count > 0 : undefined,
+        hasPerson: Number.isFinite(count) ? count > 0 : undefined,
+        personDetectTime: timestamp,
+        flowDetectTime: timestamp,
+        detectTime: timestamp,
+      }
+
+      if (message.data.confidence != null) {
+        incoming.personConfidence = Number(message.data.confidence)
+      }
+      if (message.data.processingTime != null) {
+        incoming.flowProcessingTime = Number(message.data.processingTime)
+      }
+      if (message.data.imageName) {
+        incoming.flowImageName = message.data.imageName
+      }
+
+      updateDeviceByIncoming(incoming)
+    }
+
+    window.dispatchEvent(new CustomEvent('person-flow-updated', {
+      detail: Number.isFinite(count) ? { personCount: count } : undefined,
+    }))
+
+    if (flowCache.value.tempPeopleTrend != null) {
+      flowCache.value.tempPeopleTrend = null
+    }
+
+    return
+  }
+
+  if (message.type === 'personDetection' && message.data) {
+    const count = Number(message.data.count ?? 0)
+    if (Number.isFinite(count)) {
+      envInfo.value.people = Math.max(0, count)
+    }
+
+    const chipId = String(message.data.camChipId ?? message.data.chipId ?? '').trim()
 
     if (chipId) {
       const timestamp = message.data.timestamp ?? new Date().toISOString()
-
-      updateDeviceByIncoming({
+      const incoming: Partial<DeviceItem> = {
         chipId,
         personCount: count,
         peopleCount: count,
@@ -1486,15 +1645,210 @@ function handleWsMessage(message: any) {
         detectTime: timestamp,
         personConfidence: Number(message.data.confidence ?? 0),
         flowProcessingTime: Number(message.data.processingTime ?? 0),
-      })
+      }
+      if (message.data.imageName) {
+        incoming.flowImageName = message.data.imageName
+      }
+
+      updateDeviceByIncoming(incoming)
     }
 
-    window.dispatchEvent(new CustomEvent('person-flow-updated'))
+    window.dispatchEvent(new CustomEvent('person-flow-updated', {
+      detail: Number.isFinite(count) ? { personCount: count } : undefined,
+    }))
 
     if (flowCache.value.tempPeopleTrend != null) {
       flowCache.value.tempPeopleTrend = null
     }
 
+    return
+  }
+
+  if (message.type === 'camStatus' && message.data) {
+    const camChipId = String(message.data.camChipId ?? message.data.chipId ?? '').trim()
+    if (!camChipId) return
+
+    const incoming: Partial<DeviceItem> = {
+      chipId: camChipId,
+      camWorkStatus: message.data.workStatus ?? message.data.status,
+      camStatusMessage: message.data.message,
+      camActiveTargetIndex: message.data.targetIndex ?? message.data.activeTargetIndex,
+      camActiveTargetChipId: message.data.targetChipId ?? message.data.activeTargetChipId,
+      detectTime: message.data.detectTime ?? message.data.timestamp ?? message.data.updateTime,
+    }
+
+    if (message.data.personCount != null) {
+      incoming.personCount = message.data.personCount
+      incoming.peopleCount = message.data.personCount
+      incoming.flowPersonCount = message.data.personCount
+      incoming.flowDetectTime = message.data.detectTime ?? message.data.timestamp ?? message.data.updateTime
+    }
+    if (message.data.confidence != null) {
+      incoming.personConfidence = Number(message.data.confidence)
+    }
+    if (message.data.imageName) {
+      incoming.flowImageName = message.data.imageName
+    }
+
+    updateDeviceByIncoming(incoming)
+
+    if (message.data.personCount != null) {
+      window.dispatchEvent(new CustomEvent('person-flow-updated', {
+        detail: { personCount: Number(message.data.personCount) },
+      }))
+      if (flowCache.value.tempPeopleTrend != null) {
+        flowCache.value.tempPeopleTrend = null
+      }
+    }
+    return
+  }
+
+  if (message.type === 'camPresence' && message.data) {
+    const camChipId = String(message.data.camChipId ?? message.data.chipId ?? '').trim()
+    if (!camChipId) return
+
+    const areas = Array.isArray(message.data.areas) ? message.data.areas : []
+    const hasPerson = areas.some((area: any) => Boolean(area?.present))
+    const personCount = message.data.personCount
+
+    const incoming: Partial<DeviceItem> = {
+      chipId: camChipId,
+      camPresence: {
+        camChipId,
+        workStatus: message.data.workStatus,
+        configured: message.data.configured,
+        personCount,
+        confidence: message.data.confidence,
+        updateTime: message.data.updateTime ?? message.data.timestamp,
+        areas,
+      },
+      camWorkStatus: message.data.workStatus ?? (hasPerson ? 'presence' : 'monitoring'),
+      personDetected: hasPerson,
+      hasPerson,
+      personDetectTime: message.data.updateTime ?? message.data.timestamp,
+      flowDetectTime: message.data.updateTime ?? message.data.timestamp,
+    }
+    if (personCount != null) {
+      incoming.personCount = personCount
+      incoming.peopleCount = personCount
+      incoming.flowPersonCount = personCount
+    }
+    updateDeviceByIncoming(incoming)
+    if (personCount != null) {
+      window.dispatchEvent(new CustomEvent('person-flow-updated', {
+        detail: { personCount: Number(personCount) },
+      }))
+      if (flowCache.value.tempPeopleTrend != null) {
+        flowCache.value.tempPeopleTrend = null
+      }
+    }
+    return
+  }
+
+  if (message.type === 'cameraCaptureTask' && message.data) {
+    const camChipId = String(message.data.camChipId ?? '').trim()
+    if (!camChipId) return
+
+    updateDeviceByIncoming({
+      chipId: camChipId,
+      camWorkStatus: 'capturing',
+      camStatusMessage: message.data.message || 'capture task created',
+      camActiveTargetIndex: message.data.targetIndex,
+      camActiveTargetChipId: message.data.targetChipId,
+      camLastCapture: message.data,
+    })
+    return
+  }
+
+  if (message.type === 'cameraCaptureResult' && message.data) {
+    const camChipId = String(message.data.camChipId ?? '').trim()
+    if (!camChipId) return
+    const captureStatus = String(message.data.status || '')
+    const camWorkStatus = ['success', 'ai_done', 'photo_saved_ai_failed'].includes(captureStatus)
+      ? 'returning_center'
+      : (['timeout', 'upload_failed'].includes(captureStatus) ? 'error' : (captureStatus || 'error'))
+
+    updateDeviceByIncoming({
+      chipId: camChipId,
+      camWorkStatus,
+      camStatusMessage: message.data.message || message.data.status,
+      camActiveTargetIndex: message.data.targetIndex,
+      camActiveTargetChipId: message.data.targetChipId,
+      camLastCapture: message.data,
+    })
+
+    const targetChipId = String(message.data.targetChipId ?? message.data.lampChipId ?? '').trim()
+    const targetDevice = findDeviceByChipId(targetChipId)
+    const lampAiIncoming = buildLampAiIncomingFromCaptureResult(message.data)
+    const hasLampAiIncoming = Object.keys(lampAiIncoming).length > 0
+
+    if (hasLampAiIncoming && targetChipId) {
+      if (!targetDevice) {
+        console.warn('cameraCaptureResult target lamp not found:', targetChipId)
+      } else if (!isLampDevice(targetDevice)) {
+        console.warn('cameraCaptureResult target is not lamp device:', targetChipId)
+      } else {
+        updateDeviceByIncoming({
+          chipId: targetChipId,
+          ...lampAiIncoming,
+        })
+      }
+    }
+    return
+  }
+
+  if (message.type === 'lampClothState' && message.data) {
+    const chipId = String(message.data.chipId ?? message.data.targetChipId ?? '').trim()
+    if (!chipId) return
+
+    updateDeviceByIncoming({
+      chipId,
+      lampClothState: {
+        chipId,
+        clothStatus: message.data.clothStatus ?? message.data.clothState,
+        tofDistanceMm: message.data.tofDistanceMm,
+        lastTakenAt: message.data.lastTakenAt,
+        tracking: message.data.tracking,
+        updateTime: message.data.updateTime ?? message.data.timestamp,
+      },
+      tofDistanceMm: message.data.tofDistanceMm,
+      lastTakenAt: message.data.lastTakenAt,
+      tracking: message.data.tracking,
+    })
+    return
+  }
+
+  if (message.type === 'trackingStatus' && message.data) {
+    const chipId = String(message.data.chipId ?? message.data.camChipId ?? message.data.targetChipId ?? message.data.lampChipId ?? '').trim()
+    if (!chipId) return
+
+    const trackingStatus = {
+      chipId: message.data.chipId,
+      camChipId: message.data.camChipId,
+      targetChipId: message.data.targetChipId ?? message.data.lampChipId,
+      targetIndex: message.data.targetIndex,
+      status: message.data.status ?? message.data.trackingStatus,
+      message: message.data.message,
+      timestamp: message.data.timestamp ?? message.data.updateTime,
+    }
+
+    updateDeviceByIncoming({
+      chipId,
+      trackingStatus,
+      tracking: trackingStatus.status === 'tracking',
+      camWorkStatus: message.data.camChipId ? trackingStatus.status : undefined,
+      camStatusMessage: message.data.message,
+      camActiveTargetIndex: message.data.targetIndex,
+      camActiveTargetChipId: trackingStatus.targetChipId,
+    })
+
+    if (trackingStatus.targetChipId && normalizeChipId(trackingStatus.targetChipId) !== normalizeChipId(chipId)) {
+      updateDeviceByIncoming({
+        chipId: trackingStatus.targetChipId,
+        trackingStatus,
+        tracking: trackingStatus.status === 'tracking',
+      })
+    }
     return
   }
 
@@ -1577,6 +1931,7 @@ watch(connected, (val) => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('person-flow-updated', handlePersonFlowUpdatedEvent)
   clearScanTimers()
 
   updateTimerMap.forEach(state => {

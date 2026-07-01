@@ -42,6 +42,7 @@ import StrategyCompareCard from './StrategyCompareCard.vue'
 import PersonFlowOverviewCard from './PersonFlowOverviewCard.vue'
 import type { DeviceItem } from '../../types/device'
 import type { DurationSummaryItem } from '../../types/duration'
+import { isLampDevice } from '../../utils/device'
 
 const props = defineProps<{
   devices: DeviceItem[]
@@ -84,9 +85,11 @@ const onlineCount = computed(() => {
   return props.devices.filter(item => item.online).length
 })
 
+const lampDevices = computed(() => props.devices.filter(isLampDevice))
+
 const avgBrightness = computed(() => {
-  if (props.devices.length === 0) return 0
-  const sum = props.devices.reduce((acc, item) => acc + (item.brightness ?? 0), 0)
-  return Math.round(sum / props.devices.length)
+  if (lampDevices.value.length === 0) return 0
+  const sum = lampDevices.value.reduce((acc, item) => acc + (item.brightness ?? 0), 0)
+  return Math.round(sum / lampDevices.value.length)
 })
 </script>

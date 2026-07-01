@@ -41,3 +41,12 @@ export async function getPersonFlowList(params: PersonFlowListParams): Promise<P
   )
   return res.data.data || []
 }
+
+export async function getPersonFlowImageObjectUrl(imageName: string): Promise<string> {
+  const encodedName = imageName.split('/').map(encodeURIComponent).join('/')
+  const res = await http.get<Blob>(
+    `/admin/device/cam/upload/${encodedName}`,
+    { responseType: 'blob' },
+  )
+  return URL.createObjectURL(res.data)
+}

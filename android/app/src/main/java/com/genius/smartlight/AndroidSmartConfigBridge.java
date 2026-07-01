@@ -196,16 +196,10 @@ public class AndroidSmartConfigBridge {
 
     @JavascriptInterface
     public String startSmartConfig(String ssid, String password, String serverHost, int serverPort) {
-        Log.d(TAG, "========== startSmartConfig called ==========");
-
         String targetSsid = normalizeText(ssid);
         String targetPassword = password == null ? "" : password;
         String targetServerHost = normalizeText(serverHost);
         int targetServerPort = serverPort > 0 ? serverPort : 3000;
-
-        Log.d(TAG, "  ssid=" + targetSsid + " (length=" + targetSsid.length() + ")");
-        Log.d(TAG, "  password.length=" + targetPassword.length());
-        Log.d(TAG, "  serverHost=" + targetServerHost + ", serverPort=" + targetServerPort);
 
         // ---- Check 1: SSID ----
         if (TextUtils.isEmpty(targetSsid)) {

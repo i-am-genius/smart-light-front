@@ -95,9 +95,9 @@
       </Teleport>
     </div>
 
-    <div v-if="camLampDevices.length" class="flow-list">
+    <div v-if="cameraDevices.length" class="flow-list">
       <div
-        v-for="device in camLampDevices"
+        v-for="device in cameraDevices"
         :key="device.id"
         class="flow-card"
       >
@@ -129,7 +129,28 @@
             <span>最近检测</span>
             <strong>{{ getDetectTime(device) }}</strong>
           </div>
+
+          <div class="flow-data-item">
+            <span>置信度</span>
+            <strong>{{ getConfidenceText(device) }}</strong>
+          </div>
         </div>
+
+        <div v-if="isCamDevice(device)" class="flow-presence-list">
+          <div
+            v-for="area in getPresenceRows(device)"
+            :key="area.targetIndex"
+            class="flow-presence-item"
+            :class="{ active: area.present, ready: area.trackingReady, muted: area.inactive }"
+          >
+            <span>{{ area.label }}</span>
+            <strong>{{ area.statusText }}</strong>
+          </div>
+        </div>
+
+        <p v-if="isCamDevice(device) && !isRoiConfigured(device)" class="flow-roi-warning">
+          ROI 未配置，请先完成区域标定
+        </p>
 
         <div class="flow-chart-box">
           人流图形显示区域
@@ -138,7 +159,7 @@
     </div>
 
     <div v-else class="empty-flow">
-      暂无摄像头灯设备
+      暂无摄像头设备
     </div>
   </div>
 </template>
@@ -154,11 +175,115 @@ const props = defineProps<{
   devices: DeviceItem[]
 }>()
 
-const camLampDevices = computed(() => {
+const cameraDevices = computed(() => {
+  const cams = props.devices.filter((device) => {
+    return normalizeDeviceType(device.deviceType) === 'cam'
+  })
+  if (cams.length) return cams
+
   return props.devices.filter((device) => {
     return normalizeDeviceType(device.deviceType) === 'camlamp'
   })
 })
+
+function isCamDevice(device: DeviceItem) {
+  return normalizeDeviceType(device.deviceType) === 'cam'
+}
+
+function isRoiConfigured(device: DeviceItem) {
+  if (!isCamDevice(device)) return true
+  if (device.camRoiConfig?.configured != null) return Boolean(device.camRoiConfig.configured)
+  const areas = device.camPresence?.areas || []
+  if (device.camPresence?.configured != null) return Boolean(device.camPresence.configured)
+  return areas.length >= 3 && areas.every(area => Boolean(area.targetChipId))
+}
+
+function getPresenceRows(device: DeviceItem) {
+  const areas = device.camPresence?.areas || []
+  const rois = device.camRoiConfig?.rois || []
+  const roiConfigured = isRoiConfigured(device)
+  const activeRoi = roiConfigured && isCenterMonitoringDevice(device)
+  return [1, 2, 3].map((index) => {
+    const area = areas.find(item => Number(item.targetIndex) === index)
+    const roi = rois.find(item => Number(item.targetIndex) === index)
+    const targetChipId = area?.targetChipId || roi?.targetChipId
+    const areaLabel = area?.areaName || roi?.areaName || `区域 ${index}`
+    const targetLamp = findTargetLamp(targetChipId)
+    const present = activeRoi && Boolean(area?.present)
+    const trackingReady = Boolean(present && targetLamp?.online && isLampClothTaken(targetLamp))
+    return {
+      targetIndex: index,
+      label: getPresenceLabel(areaLabel, targetChipId, index),
+      present,
+      trackingReady,
+      inactive: !activeRoi,
+      statusText: getPresenceStatusText(present, targetLamp, trackingReady, activeRoi, roiConfigured),
+    }
+  })
+}
+
+function getPresenceLabel(areaLabel: string, targetChipId: string | undefined, fallbackIndex: number) {
+  const targetLabel = getTargetLampLabel(targetChipId, fallbackIndex)
+  return targetLabel ? `${areaLabel} · ${targetLabel}` : areaLabel
+}
+
+function getTargetLampLabel(chipId: string | undefined, fallbackIndex: number) {
+  const target = findTargetLamp(chipId)
+  if (!target) return chipId || `灯具-${fallbackIndex}`
+  return target.displayName || target.deviceNo || target.chipId || `灯具-${fallbackIndex}`
+}
+
+function findTargetLamp(chipId: string | undefined) {
+  if (!chipId) return undefined
+  const normalizedChipId = normalizeChipId(chipId)
+  return props.devices.find((item) => {
+    const type = normalizeDeviceType(item.deviceType)
+    return (type === 'lamp' || type === 'camlamp') && normalizeChipId(item.chipId) === normalizedChipId
+  })
+}
+
+function isLampClothTaken(target?: DeviceItem) {
+  const status = String(target?.lampClothState?.clothStatus || '').trim().toLowerCase()
+  return ['taken', 'removed', 'off_rack', 'offrack'].includes(status)
+}
+
+function isCenterMonitoringDevice(device: DeviceItem) {
+  if (!device.online) return false
+  const trackingStatus = normalizeCamWorkStatus(device.trackingStatus?.status)
+  if (['tracking', 'lost', 'timeout', 'error'].includes(trackingStatus)) return false
+  const status = normalizeCamWorkStatus(device.camWorkStatus || device.camPresence?.workStatus || 'monitoring')
+  return status === 'monitoring' || status === 'presence'
+}
+
+function normalizeCamWorkStatus(status?: string) {
+  const value = String(status || '').trim().toLowerCase()
+  if (['centered', 'center_done', 'centered_monitoring', 'returned_center', 'returned_to_center', 'home', 'homed', 'idle'].includes(value)) {
+    return 'monitoring'
+  }
+  if (['returning', 'returningcenter', 'returning_center', 'return_to_center', 'homing', 'stopping', 'stopped'].includes(value)) {
+    return 'returning_center'
+  }
+  return value || 'monitoring'
+}
+
+function getPresenceStatusText(
+  present: boolean,
+  target: DeviceItem | undefined,
+  trackingReady: boolean,
+  activeRoi = true,
+  roiConfigured = true,
+) {
+  if (!activeRoi) return roiConfigured ? '暂停' : '未配置'
+  if (!present) return '无人'
+  if (!target) return '目标缺失'
+  if (!target.online) return '灯具离线'
+  if (trackingReady) return '可追踪'
+  return '未取下'
+}
+
+function normalizeChipId(value?: string) {
+  return String(value || '').trim().toUpperCase()
+}
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const selectedImage = ref<File | null>(null)
@@ -251,6 +376,20 @@ function getPersonCount(device: DeviceItem) {
 
   if (count === undefined || count === null) return '暂无'
   return `${count} 人`
+}
+
+function getConfidenceText(device: DeviceItem) {
+  const value =
+    device.camPresence?.confidence ??
+    (device as any).personConfidence ??
+    (device as any).confidence ??
+    (device as any).flowConfidence
+
+  if (value === undefined || value === null || value === '') return '暂无'
+
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return String(value)
+  return `${Math.round(Math.max(0, Math.min(1, numeric)) * 100)}%`
 }
 
 function getHasPerson(device: DeviceItem) {
@@ -652,6 +791,70 @@ function getDetectTime(device: DeviceItem) {
 .flow-data-item strong {
   color: #1d2129;
   font-size: 15px;
+}
+
+.flow-presence-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.flow-presence-item {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e5e6eb;
+}
+
+.flow-presence-item span,
+.flow-presence-item strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-presence-item span {
+  color: #86909c;
+  font-size: 11px;
+}
+
+.flow-presence-item strong {
+  margin-top: 2px;
+  color: #86909c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.flow-presence-item.active {
+  border-color: rgba(245, 63, 63, 0.28);
+  background: #fff7f7;
+}
+
+.flow-presence-item.active strong {
+  color: #f53f3f;
+}
+
+.flow-presence-item.ready {
+  border-color: rgba(22, 163, 74, 0.34);
+  background: #f0fdf4;
+}
+
+.flow-presence-item.ready strong {
+  color: #16a34a;
+}
+
+.flow-presence-item.muted {
+  opacity: 0.58;
+}
+
+.flow-roi-warning {
+  margin: 10px 0 0;
+  color: #d97706;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .flow-chart-box {

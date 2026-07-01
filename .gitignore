@@ -17,12 +17,14 @@ dist-ssr/
 
 # Environment files
 # 注意：本项目允许提交 .env，因为里面只放 VITE_ 开头的前端公开配置
+.env
 .env.local
 .env.*.local
 
 # Claude local files
 CLAUDE.md
 .claude/settings.local.json
+android/.claude/
 
 # Editor directories and files
 .vscode/*
