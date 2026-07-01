@@ -1,12 +1,11 @@
-<template>
+﻿<template>
   <div class="layout-card">
     <div class="layout-header">
       <div>
         <h2>店铺灯具布局</h2>
-        <p>拖动灯具进入分区，系统会自动生成分区内排序</p>
       </div>
 
-      <div class="layout-actions">
+      <div v-if="!useThreeLayoutMvp" class="layout-actions">
         <button class="reset-layout-btn" @click="addZone">新增分区</button>
         <button class="reset-layout-btn" @click="resetLayout">重置布局</button>
         <button
@@ -24,7 +23,11 @@
       </div>
     </div>
 
-    <div ref="stageRef" class="store-stage" :class="{ shake: shakingStage }">
+    <div v-if="useThreeLayoutMvp" class="three-layout-mvp-panel">
+      <ThreeLightingLayout />
+    </div>
+
+    <div v-else ref="stageRef" class="store-stage" :class="{ shake: shakingStage }">
       <img
         class="store-bg"
         src="/backgrounds/store-layout.png"
@@ -94,7 +97,7 @@
       </div>
     </div>
 
-    <div class="layout-tips">
+    <div v-if="!useThreeLayoutMvp" class="layout-tips">
       <div
         v-for="zone in zones"
         :key="zone.id"
@@ -113,13 +116,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import { updateDevice, locateDevice } from '../../api/device'
 import type { DeviceCreatePayload, DeviceItem } from '../../types/device'
 import { useToast } from '../../composables/useToast'
 import { useShake } from '../../composables/useShake'
 import { getErrorMessage } from '../../utils/error'
 import { isLampDevice } from '../../utils/device'
+
+const ThreeLightingLayout = defineAsyncComponent(() => import('./ThreeLightingLayout.vue'))
+const useThreeLayoutMvp = true
 
 const props = defineProps<{
   devices: DeviceItem[]
@@ -919,6 +925,7 @@ async function saveLayout() {
 watch(
   () => props.devices,
   () => {
+    if (useThreeLayoutMvp) return
     if (saving.value) return
 
     nextTick(() => {
@@ -931,6 +938,7 @@ watch(
   { deep: true },
 )
 onMounted(() => {
+  if (useThreeLayoutMvp) return
   loadPositions()
   loadZones()
 
@@ -995,6 +1003,15 @@ onMounted(() => {
   flex-wrap: wrap;
   flex: 0 1 auto;
 }
+
+.three-layout-mvp-panel {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+}
+
 
 .reset-layout-btn,
 .save-layout-btn,
@@ -1536,6 +1553,7 @@ onMounted(() => {
   color: rgba(203, 213, 225, 0.72);
 }
 
+
 :global(.app-container.night-mode) .store-stage {
   background: rgba(2, 6, 23, 0.78);
   border-color: rgba(148, 163, 184, 0.22);
@@ -1590,3 +1608,5 @@ onMounted(() => {
 }
 
 </style>
+
+
