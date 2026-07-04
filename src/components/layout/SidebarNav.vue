@@ -1,23 +1,36 @@
 <template>
-  <nav class="sidebar" ref="sidebarRef">
-    <div
-      class="indicator"
-      :class="'phase-' + phase"
-      :style="indicatorStyle"
-    />
+  <nav class="sidebar" ref="sidebarRef" @pointerdown.capture="onSidebarPointerDown">
     <ul>
       <li
         v-for="tab in tabs"
         :key="tab.key"
         :ref="el => setTabRef(tab.key, el)"
         class="sidebar-item sidebar-nav-item"
-        :class="{ active: modelValue === tab.key }"
-        @click="handleTabClick(tab.key)"
+        :class="{ active: targetKey === tab.key }"
+        @click="handleTabClick(tab.key, $event)"
       >
         <span class="sidebar-icon" :class="animatedTab === tab.key ? 'anim-' + tab.key : ''" v-html="tab.icon"></span>
         <span class="sidebar-nav-text">{{ tab.label }}</span>
       </li>
     </ul>
+
+    <!-- Canvas refraction layer — pixel-level lens + RGB split at pill edges -->
+    <canvas
+      ref="refractionCanvas"
+      class="refraction-canvas"
+    />
+
+    <!-- Glass pill — above tabs, draggable, snaps with spring overshoot -->
+    <div
+      ref="pillRef"
+      class="pill-indicator"
+      :class="{
+        'pill-dragging': isDragging,
+        'pill-snapping': isSnapping,
+      }"
+      :style="pillStyle"
+      @pointerdown.prevent="onPillDown"
+    />
   </nav>
 </template>
 
@@ -37,16 +50,16 @@ const emit = defineEmits<{
 const route = useRoute()
 const router = useRouter()
 const sidebarRef = ref<HTMLElement | null>(null)
+const pillRef = ref<HTMLElement | null>(null)
 
 const tabs: { key: DashboardTab; label: string; icon: string }[] = [
   { key: 'main', label: '实时灯控', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path class="icon-sun-ray ray-1" d="M12 2v2"/><path class="icon-sun-ray ray-2" d="M12 20v2"/><path class="icon-sun-ray ray-3" d="M4.93 4.93l1.41 1.41"/><path class="icon-sun-ray ray-4" d="M17.66 17.66l1.41 1.41"/><path class="icon-sun-ray ray-5" d="M2 12h2"/><path class="icon-sun-ray ray-6" d="M20 12h2"/><path class="icon-sun-ray ray-7" d="M6.34 17.66l-1.41 1.41"/><path class="icon-sun-ray ray-8" d="M19.07 4.93l-1.41 1.41"/><circle class="icon-sun-core" cx="12" cy="12" r="5"/></svg>' },
-  { key: 'flow', label: '数据仪表盘', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect class="icon-bar icon-bar-1" x="3" y="12" width="4" height="9" rx="1"/><rect class="icon-bar icon-bar-2" x="10" y="7" width="4" height="14" rx="1"/><rect class="icon-bar icon-bar-3" x="17" y="3" width="4" height="18" rx="1"/></svg>' },
+  { key: 'flow', label: '数据仪表', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect class="icon-bar icon-bar-1" x="3" y="12" width="4" height="9" rx="1"/><rect class="icon-bar icon-bar-2" x="10" y="7" width="4" height="14" rx="1"/><rect class="icon-bar icon-bar-3" x="17" y="3" width="4" height="18" rx="1"/></svg>' },
   { key: 'settings', label: '设置', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle class="icon-gear-center" cx="12" cy="12" r="3"/><path class="icon-gear-tooth" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' },
   { key: 'firmware', label: '固件管理', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect class="icon-device-body" x="4" y="2" width="16" height="20" rx="2"/><path class="icon-device-top-line" d="M9 6h6"/><path class="icon-device-dot" d="M12 18h.01"/></svg>' },
 ]
 
 const tabRefs = ref<Record<string, HTMLElement | null>>({})
-const phase = ref<'idle' | 'collapse' | 'slide' | 'expand'>('idle')
 const targetKey = ref(props.modelValue)
 const domReady = ref(false)
 const animatedTab = ref<string | null>(null)
@@ -56,144 +69,837 @@ function setTabRef(key: DashboardTab, el: unknown) {
   tabRefs.value[key] = el as HTMLElement | null
 }
 
+function triggerTabAnimation(key: DashboardTab) {
+  animatedTab.value = key as string
+  if (animTimer) clearTimeout(animTimer)
+  animTimer = window.setTimeout(() => { animatedTab.value = null }, 420)
+}
+
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 
 function onResize() {
   windowWidth.value = window.innerWidth
+  nextTick(() => rebuildScene())
 }
 
 onMounted(() => {
   window.addEventListener('resize', onResize)
   nextTick(() => {
     domReady.value = true
+    initRefractionCanvas()
   })
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
   if (animTimer) clearTimeout(animTimer)
+  stopRefractionTracking()
+  cleanupDrag()
 })
 
 const isMobile = computed(() => windowWidth.value <= 768)
 
-function getTabRect(key: DashboardTab) {
+/* ============================================================
+   Pill geometry
+   ============================================================ */
+
+function getPillRectForKey(key: DashboardTab) {
   const el = tabRefs.value[key]
   const sidebar = sidebarRef.value
   if (!el || !sidebar) return null
-  const tabRect = el.getBoundingClientRect()
-  const sidebarRect = sidebar.getBoundingClientRect()
-  if (isMobile.value) {
-    return {
-      cx: tabRect.left - sidebarRect.left + tabRect.width / 2,
-      cy: tabRect.top - sidebarRect.top + tabRect.height,
-      w: tabRect.width,
-    }
-  }
+  const tr = el.getBoundingClientRect()
+  const sr = sidebar.getBoundingClientRect()
+  const pad = isMobile.value ? -4 : -7
   return {
-    cx: 0,
-    cy: tabRect.top - sidebarRect.top + tabRect.height / 2,
-    w: 0,
+    x: tr.left - sr.left + pad,
+    y: tr.top - sr.top + pad,
+    w: tr.width - pad * 2,
+    h: tr.height - pad * 2,
   }
 }
 
+/** Get the pill rect as currently rendered (drag position or target tab position) */
+function currentPillRect() {
+  if (isDragging.value && dragRect.value) return dragRect.value
+  return getPillRectForKey(targetKey.value)
+}
+
+/* ============================================================
+   Pill style
+   ============================================================ */
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const indicatorStyle = computed<any>(() => {
-  void domReady.value
-  const rect = getTabRect(targetKey.value)
-  if (!rect) return { visibility: 'hidden' }
-  if (isMobile.value) {
+const pillStyle = computed<any>(() => {
+  if (isDragging.value && dragRect.value) {
     return {
-      left: `${rect.cx}px`,
-      bottom: '6px',
-      width: phase.value === 'collapse' || phase.value === 'slide' ? '4px' : `${rect.w * 0.6}px`,
-      height: phase.value === 'collapse' || phase.value === 'slide' ? '4px' : '3px',
-      borderRadius: phase.value === 'collapse' || phase.value === 'slide' ? '50%' : '999px',
-      transform: 'translateX(-50%)',
+      left: `${dragRect.value.x}px`,
+      top: `${dragRect.value.y}px`,
+      width: `${dragRect.value.w}px`,
+      height: `${dragRect.value.h}px`,
+      '--pill-drag-scale-x': dragScaleX.value.toFixed(3),
+      '--pill-drag-scale-y': dragScaleY.value.toFixed(3),
+      transition: 'transform 90ms cubic-bezier(0.2, 0.82, 0.2, 1)',
     }
   }
+  const rect = getPillRectForKey(targetKey.value)
+  if (!rect) return { visibility: 'hidden' }
   return {
-    left: '-2px',
-    top: `${rect.cy}px`,
-    width: '4px',
-    height: phase.value === 'collapse' || phase.value === 'slide' ? '4px' : `${Math.round((tabRefs.value[targetKey.value]?.offsetHeight ?? 40) * 0.6)}px`,
-    borderRadius: phase.value === 'collapse' || phase.value === 'slide' ? '50%' : '2px',
-    transform: 'translateY(-50%)',
+    left: `${rect.x}px`,
+    top: `${rect.y}px`,
+    width: `${rect.w}px`,
+    height: `${rect.h}px`,
+    transition: isSnapping.value
+      ? 'left 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), height 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), transform 0.45s cubic-bezier(0.22, 1.32, 0.36, 1)'
+      : 'left 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), top 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), width 0.3s ease, height 0.3s ease, transform 0.3s cubic-bezier(0.22, 1.2, 0.36, 1)',
   }
 })
 
-let phaseTimer: number | undefined
+/* ============================================================
+   Drag
+   ============================================================ */
 
-function handleTabClick(key: DashboardTab) {
+const isDragging = ref(false)
+const isSnapping = ref(false)
+const dragRect = ref<{ x: number; y: number; w: number; h: number } | null>(null)
+const dragScaleX = ref(0.94)
+const dragScaleY = ref(1.08)
+type PillRect = { x: number; y: number; w: number; h: number }
+type RefractionMode = 'static' | 'drag'
+const DRAG_SCALE_X = 0.94
+const DRAG_SCALE_Y = 1.08
+let dragOffsetX = 0
+let dragOffsetY = 0
+let dragPillW = 0
+let dragPillH = 0
+let lastDragClientX = 0
+let lastDragClientY = 0
+let lastDragSampleAt = 0
+let refractionRaf: number | undefined
+let dragPaintRaf: number | undefined
+let refractionStopAt = 0
+let lastRefractionRect: PillRect | null = null
+let suppressNextClick = false
+
+function onSidebarPointerDown(e: PointerEvent) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return
+  if (isDragging.value) return
+
+  const rect = getRenderedPillRect() || currentPillRect()
+  const sidebar = sidebarRef.value
+  if (!rect || !sidebar) return
+
+  const sr = sidebar.getBoundingClientRect()
+  const x = e.clientX - sr.left
+  const y = e.clientY - sr.top
+  const hitPad = isMobile.value ? 8 : 6
+  const insidePill =
+    x >= rect.x - hitPad &&
+    x <= rect.x + rect.w + hitPad &&
+    y >= rect.y - hitPad &&
+    y <= rect.y + rect.h + hitPad
+
+  if (!insidePill) return
+
+  e.preventDefault()
+  e.stopPropagation()
+  suppressNextClick = true
+  onPillDown(e)
+}
+
+function onPillDown(e: PointerEvent) {
+  const pill = pillRef.value
+  const sidebar = sidebarRef.value
+  if (!pill || !sidebar) return
+
+  try {
+    pill.setPointerCapture(e.pointerId)
+  } catch {
+    // Window-level listeners below keep dragging reliable when the pointerdown
+    // originated from text layered above the glass pill.
+  }
+
+  const pr = pill.getBoundingClientRect()
+  const sr = sidebar.getBoundingClientRect()
+
+  dragOffsetX = e.clientX - pr.left
+  dragOffsetY = e.clientY - pr.top
+  dragPillW = pr.width
+  dragPillH = pr.height
+  lastDragClientX = e.clientX
+  lastDragClientY = e.clientY
+  lastDragSampleAt = performance.now()
+  dragScaleX.value = DRAG_SCALE_X
+  dragScaleY.value = DRAG_SCALE_Y
+
+  isDragging.value = true
+  isSnapping.value = false
+
+  const oldRect = currentPillRect()
+  dragRect.value = { x: pr.left - sr.left, y: pr.top - sr.top, w: pr.width, h: pr.height }
+
+  window.addEventListener('pointermove', onPillMove)
+  window.addEventListener('pointerup', onPillUp)
+  window.addEventListener('pointercancel', onPillUp)
+
+  // Restore old refraction before drag visuals start
+  if (oldRect && !lastRefractionRect) restoreRefractionRegion(oldRect)
+  scheduleDragRefractionPaint(dragRect.value)
+}
+
+function onPillMove(e: PointerEvent) {
+  if (!isDragging.value || !sidebarRef.value) return
+  const sr = sidebarRef.value.getBoundingClientRect()
+  updateDragVelocityScale(e)
+
+  let nx = e.clientX - sr.left - dragOffsetX
+  let ny = e.clientY - sr.top - dragOffsetY
+
+  const pad = isMobile.value ? 10 : 12
+  nx = Math.max(pad, Math.min(nx, sr.width - dragPillW - pad))
+  ny = Math.max(pad, Math.min(ny, sr.height - dragPillH - pad))
+
+  const oldRect = { ...dragRect.value! }
+  dragRect.value = { x: nx, y: ny, w: dragPillW, h: dragPillH }
+
+  if (!lastRefractionRect) restoreRefractionRegion(oldRect)
+  scheduleDragRefractionPaint(dragRect.value)
+}
+
+function onPillUp(_e: PointerEvent) {
+  const releasedRect = dragRect.value
+  stopDragRefractionPaint()
+  window.removeEventListener('pointermove', onPillMove)
+  window.removeEventListener('pointerup', onPillUp)
+  window.removeEventListener('pointercancel', onPillUp)
+
+  if (!releasedRect || !sidebarRef.value) {
+    cleanupDrag()
+    return
+  }
+
+  const pillCX = releasedRect.x + releasedRect.w / 2
+  const pillCY = releasedRect.y + releasedRect.h / 2
+
+  let bestKey: DashboardTab = targetKey.value
+  let bestDist = Infinity
+
+  for (const tab of tabs) {
+    const rect = getPillRectForKey(tab.key)
+    if (!rect) continue
+    const cx = rect.x + rect.w / 2
+    const cy = rect.y + rect.h / 2
+    const dist = (pillCX - cx) ** 2 + (pillCY - cy) ** 2
+    if (dist < bestDist) { bestDist = dist; bestKey = tab.key }
+  }
+
+  const snapRect = getPillRectForKey(bestKey)
+
+  isDragging.value = false
+  isSnapping.value = true
+  const oldDragRect = { ...releasedRect }
+  dragRect.value = null
+
+  targetKey.value = bestKey
+  if (bestKey !== props.modelValue) {
+    triggerTabAnimation(bestKey)
+    emit('update:modelValue', bestKey)
+  }
+
+  if (snapRect) {
+    nextTick(() => startRefractionTracking(500, oldDragRect))
+  }
+
+  window.setTimeout(() => { suppressNextClick = false }, 120)
+
+  setTimeout(() => {
+    isSnapping.value = false
+    // Final render at settled position
+    const final = getPillRectForKey(bestKey)
+    if (final) {
+      rebuildScene()
+      renderRefractionAtRect(final)
+    }
+  }, 500)
+}
+
+function cleanupDrag() {
+  stopRefractionTracking()
+  stopDragRefractionPaint()
+  isDragging.value = false
+  dragRect.value = null
+  dragScaleX.value = DRAG_SCALE_X
+  dragScaleY.value = DRAG_SCALE_Y
+  window.removeEventListener('pointermove', onPillMove)
+  window.removeEventListener('pointerup', onPillUp)
+  window.removeEventListener('pointercancel', onPillUp)
+}
+
+function getRenderedPillRect() {
+  const pill = pillRef.value
+  const sidebar = sidebarRef.value
+  if (!pill || !sidebar) return null
+  const pr = pill.getBoundingClientRect()
+  const sr = sidebar.getBoundingClientRect()
+  return {
+    x: pr.left - sr.left,
+    y: pr.top - sr.top,
+    w: pr.width,
+    h: pr.height,
+  }
+}
+
+function getDragVisualRect(rect: PillRect): PillRect {
+  const w = rect.w * dragScaleX.value
+  const h = rect.h * dragScaleY.value
+  return {
+    x: rect.x + (rect.w - w) / 2,
+    y: rect.y + (rect.h - h) / 2,
+    w,
+    h,
+  }
+}
+
+function scheduleDragRefractionPaint(fallbackRect?: PillRect | null) {
+  if (dragPaintRaf) cancelAnimationFrame(dragPaintRaf)
+  dragPaintRaf = requestAnimationFrame(() => {
+    dragPaintRaf = undefined
+    const renderedRect = getRenderedPillRect()
+    const rect = renderedRect || (fallbackRect ? getDragVisualRect(fallbackRect) : null)
+    if (rect) paintRefractionRect(rect, 'drag')
+  })
+}
+
+function updateDragVelocityScale(e: PointerEvent) {
+  const now = performance.now()
+  const dt = Math.max(16, now - lastDragSampleAt)
+  const dx = e.clientX - lastDragClientX
+  const dy = e.clientY - lastDragClientY
+  const distance = Math.sqrt(dx * dx + dy * dy)
+  const speed = distance / dt
+  const speedIntensity = clamp((speed - 0.025) / 0.48, 0, 1)
+  const distanceIntensity = clamp((distance - 1.5) / 8, 0, 1)
+  const intensity = Math.max(speedIntensity, distanceIntensity)
+  const horizontal = Math.abs(dx) > Math.abs(dy)
+
+  const targetX = horizontal
+    ? DRAG_SCALE_X + intensity * 0.34
+    : DRAG_SCALE_X - intensity * 0.13
+  const targetY = horizontal
+    ? DRAG_SCALE_Y - intensity * 0.13
+    : DRAG_SCALE_Y + intensity * 0.28
+
+  dragScaleX.value += (targetX - dragScaleX.value) * 0.68
+  dragScaleY.value += (targetY - dragScaleY.value) * 0.68
+  lastDragClientX = e.clientX
+  lastDragClientY = e.clientY
+  lastDragSampleAt = now
+}
+
+function stopDragRefractionPaint() {
+  if (dragPaintRaf) {
+    cancelAnimationFrame(dragPaintRaf)
+    dragPaintRaf = undefined
+  }
+}
+
+function paintRefractionRect(rect: PillRect, mode: RefractionMode = 'static') {
+  if (lastRefractionRect) restoreRefractionRegion(lastRefractionRect)
+  renderRefractionAtRect(rect, mode)
+  lastRefractionRect = { ...rect }
+}
+
+function startRefractionTracking(duration = 420, fallbackRestore?: PillRect, mode: RefractionMode = 'static') {
+  stopRefractionTracking()
+  refreshRefractionSources()
+  if (!lastRefractionRect && fallbackRestore) lastRefractionRect = { ...fallbackRestore }
+  refractionStopAt = performance.now() + duration
+
+  const tick = () => {
+    const rect = getRenderedPillRect() || currentPillRect()
+    if (rect) paintRefractionRect(rect, mode)
+
+    if (performance.now() < refractionStopAt) {
+      refractionRaf = requestAnimationFrame(tick)
+      return
+    }
+
+    const finalRect = currentPillRect()
+    if (finalRect) paintRefractionRect(finalRect)
+    refractionRaf = undefined
+  }
+
+  tick()
+}
+
+function stopRefractionTracking() {
+  if (refractionRaf) {
+    cancelAnimationFrame(refractionRaf)
+    refractionRaf = undefined
+  }
+}
+
+/* ============================================================
+   Tab click
+   ============================================================ */
+
+function handleTabClick(key: DashboardTab, e?: MouseEvent) {
+  if (suppressNextClick) {
+    e?.preventDefault()
+    e?.stopPropagation()
+    suppressNextClick = false
+    return
+  }
+
   if (route.name !== 'smartlightdashboard' || route.query.tab !== key) {
     router.push({ path: '/smartlightdashboard', query: { tab: key } })
   } else {
     emit('update:modelValue', key)
   }
-  animateIndicator(key)
-  if (key !== targetKey.value) {
-    animatedTab.value = key as string
-    if (animTimer) clearTimeout(animTimer)
-    animTimer = window.setTimeout(() => {
-      animatedTab.value = null
-    }, 420)
+  const oldRect = currentPillRect()
+  targetKey.value = key
+  if (key !== props.modelValue) {
+    triggerTabAnimation(key)
   }
-}
-
-function animateIndicator(key: DashboardTab) {
-  if (phaseTimer) clearTimeout(phaseTimer)
-
-  phase.value = 'collapse'
-  phaseTimer = window.setTimeout(() => {
-    targetKey.value = key
-    phase.value = 'slide'
-    phaseTimer = window.setTimeout(() => {
-      phase.value = 'expand'
-      phaseTimer = window.setTimeout(() => {
-        phase.value = 'idle'
-      }, 200)
-    }, 380)
-  }, 150)
+  nextTick(() => {
+    startRefractionTracking(420, oldRect || undefined)
+  })
 }
 
 watch(() => props.modelValue, (key) => {
-  if (key !== targetKey.value) {
-    nextTick(() => animateIndicator(key))
-    animatedTab.value = key as string
-    if (animTimer) clearTimeout(animTimer)
-    animTimer = window.setTimeout(() => {
-      animatedTab.value = null
-    }, 420)
+  if (key !== targetKey.value && !isDragging.value) {
+    const oldRect = currentPillRect()
+    targetKey.value = key
+    triggerTabAnimation(key)
+    nextTick(() => {
+      startRefractionTracking(420, oldRect || undefined)
+    })
+  } else {
+    nextTick(() => {
+      refreshRefractionSources()
+      const rect = currentPillRect()
+      if (rect && !isDragging.value) paintRefractionRect(rect)
+    })
   }
-}, { flush: 'post' })
+})
 
+/* ============================================================
+   Canvas refraction — pixel displacement + RGB chromatic split
+   ============================================================ */
 
+const refractionCanvas = ref<HTMLCanvasElement | null>(null)
+let bgCanvas: HTMLCanvasElement | null = null
+let bgCtx: CanvasRenderingContext2D | null = null
+let dragBgCanvas: HTMLCanvasElement | null = null
+let dragBgCtx: CanvasRenderingContext2D | null = null
+let baseCanvas: HTMLCanvasElement | null = null
+let baseCtx: CanvasRenderingContext2D | null = null
+const iconImageCache = new Map<string, HTMLImageElement>()
+let SW = 0
+let SH = 0
+const REFRACTION_PAD = 12
+const MAX_BEND = 38
+const CHROMA = 1.15
+const EDGE_BAND = 8
+const DRAG_DEPTH_RATIO = 0.36
+const DRAG_OUTER_RATIO = 0.071
+const DRAG_BEND_RATIO = 0.38
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v))
+}
+
+function smoothstepR(edge0: number, edge1: number, x: number): number {
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1)
+  return t * t * (3 - 2 * t)
+}
+
+function getRoundedRectSDF(
+  px: number, py: number,
+  rx: number, ry: number, rw: number, rh: number, radius: number,
+): { distance: number; nx: number; ny: number } {
+  const cx = rx + rw / 2
+  const cy = ry + rh / 2
+  const dx = Math.abs(px - cx) - (rw / 2 - radius)
+  const dy = Math.abs(py - cy) - (rh / 2 - radius)
+  const mx = Math.max(dx, 0)
+  const my = Math.max(dy, 0)
+  const outside = Math.sqrt(mx * mx + my * my)
+  const inside = Math.min(Math.max(dx, dy), 0)
+  const distance = outside + inside - radius
+  let nx = 0, ny = 0
+  if (outside > 0.001) {
+    nx = mx > 0 ? (px > cx ? mx : -mx) : 0
+    ny = my > 0 ? (py > cy ? my : -my) : 0
+    const len = Math.sqrt(nx * nx + ny * ny)
+    if (len > 0) { nx /= len; ny /= len }
+  } else {
+    if (dx > dy) { nx = px > cx ? 1 : -1 } else { ny = py > cy ? 1 : -1 }
+  }
+  return { distance, nx, ny }
+}
+
+function sampleChannelBilinear(
+  img: ImageData, x: number, y: number, channel: number,
+): number {
+  const w = img.width, h = img.height
+  x = clamp(x, 0, w - 1)
+  y = clamp(y, 0, h - 1)
+  const x0 = Math.floor(x), y0 = Math.floor(y)
+  const x1 = Math.min(x0 + 1, w - 1), y1 = Math.min(y0 + 1, h - 1)
+  const tx = x - x0, ty = y - y0
+  const i00 = (y0 * w + x0) * 4 + channel
+  const i10 = (y0 * w + x1) * 4 + channel
+  const i01 = (y1 * w + x0) * 4 + channel
+  const i11 = (y1 * w + x1) * 4 + channel
+  const top = img.data[i00] * (1 - tx) + img.data[i10] * tx
+  const bottom = img.data[i01] * (1 - tx) + img.data[i11] * tx
+  return top * (1 - ty) + bottom * ty
+}
+
+function initRefractionCanvas() {
+  const sidebar = sidebarRef.value
+  if (!sidebar) return
+  const rect = sidebar.getBoundingClientRect()
+  SW = Math.round(rect.width)
+  SH = Math.round(rect.height)
+
+  // Visible canvas
+  const vis = refractionCanvas.value
+  if (vis) {
+    vis.width = SW
+    vis.height = SH
+  }
+
+  // Offscreen background scene canvas
+  if (!bgCanvas) {
+    bgCanvas = document.createElement('canvas')
+    bgCtx = bgCanvas.getContext('2d')!
+  }
+  if (!dragBgCanvas) {
+    dragBgCanvas = document.createElement('canvas')
+    dragBgCtx = dragBgCanvas.getContext('2d')!
+  }
+  if (!baseCanvas) {
+    baseCanvas = document.createElement('canvas')
+    baseCtx = baseCanvas.getContext('2d')!
+  }
+  bgCanvas.width = SW
+  bgCanvas.height = SH
+  dragBgCanvas.width = SW
+  dragBgCanvas.height = SH
+  baseCanvas.width = SW
+  baseCanvas.height = SH
+
+  rebuildScene()
+}
+
+function rebuildScene() {
+  const sidebar = sidebarRef.value
+  if (!sidebar || !bgCtx || !bgCanvas || !dragBgCtx || !dragBgCanvas || !baseCtx || !baseCanvas) return
+  const rect = sidebar.getBoundingClientRect()
+  SW = Math.round(rect.width)
+  SH = Math.round(rect.height)
+  bgCanvas.width = SW
+  bgCanvas.height = SH
+  dragBgCanvas.width = SW
+  dragBgCanvas.height = SH
+  baseCanvas.width = SW
+  baseCanvas.height = SH
+
+  // Also resize visible canvas
+  const vis = refractionCanvas.value
+  if (vis) { vis.width = SW; vis.height = SH }
+
+  refreshRefractionSources()
+
+  // Keep the visible canvas transparent outside refraction pixels.
+  const visCtx = refractionCanvas.value?.getContext('2d')
+  if (visCtx) {
+    visCtx.clearRect(0, 0, SW, SH)
+  }
+
+  // Render refraction at current pill position
+  const pillRect = currentPillRect()
+  if (pillRect) {
+    renderRefractionAtRect(pillRect)
+    lastRefractionRect = { ...pillRect }
+  } else {
+    lastRefractionRect = null
+  }
+}
+
+function refreshRefractionSources() {
+  if (!baseCtx || !bgCtx || !dragBgCtx) return
+  drawRefractionScene(baseCtx, false)
+  drawRefractionScene(bgCtx, true, false)
+  drawRefractionScene(dragBgCtx, true, true)
+}
+
+function isNightScene(): boolean {
+  return !!sidebarRef.value?.closest('.night-mode')
+}
+
+function drawRefractionScene(ctx: CanvasRenderingContext2D, includeNavContent: boolean, includeIcons = false) {
+  ctx.clearRect(0, 0, SW, SH)
+
+  const night = isNightScene()
+  const bgGrad = ctx.createLinearGradient(0, 0, SW, SH)
+  if (night) {
+    bgGrad.addColorStop(0, '#0f172a')
+    bgGrad.addColorStop(0.55, '#111827')
+    bgGrad.addColorStop(1, '#172033')
+  } else {
+    bgGrad.addColorStop(0, '#ffffff')
+    bgGrad.addColorStop(0.5, '#ffffff')
+    bgGrad.addColorStop(1, '#ffffff')
+  }
+  ctx.fillStyle = bgGrad
+  ctx.fillRect(0, 0, SW, SH)
+
+  ctx.fillStyle = night ? 'rgba(148,163,184,0.05)' : 'rgba(148,163,184,0.06)'
+  for (let i = 0; i < 280; i++) {
+    const dx = ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 * SW
+    const dy = ((Math.sin(i * 78.233) * 24634.6345) % 1 + 1) % 1 * SH
+    ctx.beginPath()
+    ctx.arc(dx, dy, 0.55 + ((i * 37) % 7) * 0.08, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  if (!includeNavContent) return
+
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
+  const sidebarRect = sidebarRef.value?.getBoundingClientRect()
+  if (!sidebarRect) return
+
+  for (const tab of tabs) {
+    const item = tabRefs.value[tab.key]
+    if (includeIcons) drawIconToRefractionScene(ctx, item, sidebarRect)
+
+    const textEl = item?.querySelector<HTMLElement>('.sidebar-nav-text')
+    if (!textEl) continue
+
+    const textRect = textEl.getBoundingClientRect()
+    const textStyle = window.getComputedStyle(textEl)
+    ctx.fillStyle = textStyle.color || (night ? 'rgba(226,232,240,0.7)' : '#64748b')
+    ctx.font = `${textStyle.fontWeight} ${textStyle.fontSize} ${textStyle.fontFamily}`
+    ctx.fillText(
+      tab.label,
+      textRect.left - sidebarRect.left,
+      textRect.top - sidebarRect.top + textRect.height / 2,
+    )
+  }
+
+  ctx.textAlign = 'start'
+}
+
+function drawIconToRefractionScene(
+  ctx: CanvasRenderingContext2D,
+  item: HTMLElement | null | undefined,
+  sidebarRect: DOMRect,
+) {
+  const iconEl = item?.querySelector<HTMLElement>('.sidebar-icon')
+  const svgEl = iconEl?.querySelector<SVGSVGElement>('svg')
+  if (!iconEl || !svgEl) return
+
+  const iconRect = iconEl.getBoundingClientRect()
+  const iconStyle = window.getComputedStyle(iconEl)
+  const itemStyle = item ? window.getComputedStyle(item) : iconStyle
+  const color = iconStyle.color || itemStyle.color || '#64748b'
+  const opacity = Number.parseFloat(iconStyle.opacity || '1')
+  const svgText = prepareSvgForCanvas(svgEl.outerHTML, color)
+  const cacheKey = `${color}|${svgText}`
+  let img = iconImageCache.get(cacheKey)
+
+  if (!img) {
+    img = new Image()
+    img.onload = () => rebuildScene()
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`
+    iconImageCache.set(cacheKey, img)
+  }
+
+  if (!img.complete || img.naturalWidth <= 0) return
+
+  ctx.save()
+  ctx.globalAlpha *= Number.isFinite(opacity) ? opacity : 1
+  ctx.drawImage(
+    img,
+    iconRect.left - sidebarRect.left,
+    iconRect.top - sidebarRect.top,
+    iconRect.width,
+    iconRect.height,
+  )
+  ctx.restore()
+}
+
+function prepareSvgForCanvas(svgText: string, color: string): string {
+  let prepared = svgText
+  if (!prepared.includes('xmlns=')) {
+    prepared = prepared.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')
+  }
+  return prepared.replace('<svg ', `<svg color="${escapeSvgAttr(color)}" `)
+}
+
+function escapeSvgAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function restoreRefractionRegion(rect: { x: number; y: number; w: number; h: number }) {
+  const vis = refractionCanvas.value
+  if (!vis) return
+  const ctx = vis.getContext('2d')
+  if (!ctx) return
+
+  const pad = REFRACTION_PAD
+  const sx = Math.floor(clamp(rect.x - pad, 0, SW))
+  const sy = Math.floor(clamp(rect.y - pad, 0, SH))
+  const sw = Math.ceil(clamp(rect.w + pad * 2, 0, SW - sx))
+  const sh = Math.ceil(clamp(rect.h + pad * 2, 0, SH - sy))
+  if (sw <= 0 || sh <= 0) return
+
+  ctx.clearRect(sx, sy, sw, sh)
+}
+
+function renderRefractionAtRect(rect: PillRect, mode: RefractionMode = 'static') {
+  const vis = refractionCanvas.value
+  if (!vis || !bgCanvas || !dragBgCanvas || !baseCtx) return
+  const ctx = vis.getContext('2d')
+  if (!ctx) return
+
+  const sourceCtx = mode === 'drag' ? dragBgCtx : bgCtx
+  if (!sourceCtx) return
+  const bgImage = sourceCtx.getImageData(0, 0, SW, SH)
+  const dragDepth = clamp(rect.h * DRAG_DEPTH_RATIO, 12, 20)
+  const dragOuterBand = clamp(rect.h * DRAG_OUTER_RATIO, 1, 3)
+  const dragMaxBend = clamp(rect.h * DRAG_BEND_RATIO, 14, 22)
+  const dragFoldDepth = dragDepth * 0.58
+  const maxDepth = mode === 'drag' ? dragFoldDepth : EDGE_BAND
+
+  const pad = REFRACTION_PAD
+  const minX = Math.floor(clamp(rect.x - pad, 0, SW))
+  const maxX = Math.ceil(clamp(rect.x + rect.w + pad, 0, SW))
+  const minY = Math.floor(clamp(rect.y - pad, 0, SH))
+  const maxY = Math.ceil(clamp(rect.y + rect.h + pad, 0, SH))
+
+  const pillRadius = Math.min(rect.w, rect.h) / 2
+  const outW = maxX - minX
+  const outH = maxY - minY
+  const outData = ctx.createImageData(outW, outH)
+
+  for (let y = minY; y < maxY; y++) {
+    for (let x = minX; x < maxX; x++) {
+      const sdf = getRoundedRectSDF(x, y, rect.x, rect.y, rect.w, rect.h, pillRadius)
+      const d = sdf.distance
+
+      if (d > 0 || d < -maxDepth) continue
+
+      const insideDepth = Math.max(0, -d)
+
+      const outerBand = mode === 'drag'
+        ? 1 - smoothstepR(0, dragOuterBand, insideDepth)
+        : 0
+      const darkGroove = mode === 'drag'
+        ? smoothstepR(dragDepth * 0.08, dragDepth * 0.25, insideDepth) *
+          (1 - smoothstepR(dragDepth * 0.25, dragDepth * 0.5, insideDepth))
+        : 0
+      const lens = mode === 'drag'
+        ? outerBand
+        : 1 - smoothstepR(0, EDGE_BAND, insideDepth)
+      const bend = mode === 'drag'
+        ? outerBand * dragMaxBend -
+          darkGroove * (dragMaxBend * 0.47)
+        : lens * MAX_BEND
+
+      const capSqueezeRelief = mode === 'drag'
+        ? smoothstepR(0.35, 0.95, Math.abs(sdf.nx)) * 0.55
+        : 0
+      const nx = sdf.nx * (1 - capSqueezeRelief)
+      const ny = sdf.ny
+      const tx = -ny
+      const ty = nx
+      const ripple = Math.sin(x * 0.055 + y * 0.035) * lens * 1.4
+
+      const baseX = mode === 'drag'
+        ? x + nx * bend + tx * ripple
+        : x - nx * bend + tx * ripple
+      const baseY = mode === 'drag'
+        ? y + ny * bend + ty * ripple
+        : y - ny * bend + ty * ripple
+
+      // RGB chromatic split — index.html original direction
+      const bendLimit = mode === 'drag' ? dragMaxBend : MAX_BEND
+      const distortionStrength = clamp(Math.abs(bend) / bendLimit, 0, 1)
+      const overDistort = mode === 'drag'
+        ? smoothstepR(0.58, 1, distortionStrength) * outerBand
+        : 0
+      const chroma = mode === 'drag'
+        ? outerBand * CHROMA + overDistort * 1.65
+        : lens * CHROMA
+      const tangentChroma = mode === 'drag'
+        ? overDistort * 0.32
+        : lens * 0.3
+
+      const r = mode === 'drag'
+        ? sampleChannelBilinear(bgImage, baseX + nx * chroma + tx * tangentChroma, baseY + ny * chroma + ty * tangentChroma, 0)
+        : sampleChannelBilinear(bgImage, baseX - nx * chroma + tx * tangentChroma, baseY - ny * chroma + ty * tangentChroma, 0)
+      const g = sampleChannelBilinear(bgImage, baseX, baseY, 1)
+      const b = mode === 'drag'
+        ? sampleChannelBilinear(bgImage, baseX - nx * chroma - tx * tangentChroma, baseY - ny * chroma - ty * tangentChroma, 2)
+        : sampleChannelBilinear(bgImage, baseX + nx * chroma - tx * tangentChroma, baseY + ny * chroma - ty * tangentChroma, 2)
+
+      const idx = ((y - minY) * outW + (x - minX)) * 4
+      outData.data[idx]     = clamp(Math.round(r), 0, 255)
+      outData.data[idx + 1] = clamp(Math.round(g), 0, 255)
+      outData.data[idx + 2] = clamp(Math.round(b), 0, 255)
+      outData.data[idx + 3] = 255
+    }
+  }
+
+  ctx.putImageData(outData, minX, minY)
+}
+
+// Watch pill position changes during snap animation
+watch([isDragging, isSnapping], () => {
+  if (!isDragging.value && !isSnapping.value) {
+    // Animation settled — ensure refraction is at final position
+    nextTick(() => {
+      const rect = currentPillRect()
+      if (rect) {
+        rebuildScene()
+      }
+    })
+  }
+})
 </script>
 
 <style scoped>
+/* ============================================================
+   Sidebar
+   ============================================================ */
+
 .sidebar {
   width: 180px;
-
   position: fixed;
   left: 24px;
   top: 24px;
   z-index: 100;
-
   height: calc(100vh - 48px);
-  min-height: auto;
-
   padding: 28px 10px;
-
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-
   display: flex;
   flex-direction: column;
   align-items: center;
+  touch-action: none;
+  overflow: hidden;
 }
 
 .sidebar ul {
@@ -201,10 +907,11 @@ watch(() => props.modelValue, (key) => {
   list-style: none;
   padding: 0;
   margin: 0;
-
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
+  position: relative;
+  z-index: 3;
 }
 
 .sidebar li {
@@ -213,19 +920,23 @@ watch(() => props.modelValue, (key) => {
   align-items: center;
   gap: 12px;
   width: 90%;
-  margin: 8px auto;
+  margin: 6px auto;
   padding: 11px 16px;
-  border-radius: 8px;
+  border-radius: 999px;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s, transform 0.2s;
-  color: #333;
+  transition: color 0.2s ease;
+  color: #475569;
   user-select: none;
 }
 
-.sidebar li.active,
+.sidebar li.active {
+  color: #1d4ed8;
+  font-weight: 650;
+  cursor: grab;
+}
+
 .sidebar li:hover {
-  background: rgba(64, 158, 255, 0.12);
-  color: var(--primary);
+  color: #2563eb;
 }
 
 .sidebar-icon {
@@ -235,12 +946,8 @@ watch(() => props.modelValue, (key) => {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 0.65;
   transition: opacity 0.2s, transform 0.2s;
-}
-
-.sidebar li:hover .sidebar-icon {
-  opacity: 0.9;
 }
 
 .sidebar li.active .sidebar-icon {
@@ -253,64 +960,98 @@ watch(() => props.modelValue, (key) => {
   line-height: 1;
 }
 
-.indicator {
+/* ============================================================
+   Canvas refraction layer
+   ============================================================ */
+
+.refraction-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  pointer-events: none;
+  border-radius: 14px;
+}
+
+/* ============================================================
+   Glass pill
+   ============================================================ */
+
+.pill-indicator {
   position: absolute;
   z-index: 5;
-  background: var(--primary, #2563eb);
-  pointer-events: none;
+  border-radius: 999px;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  transform-origin: center;
+  will-change: left, top, width, height, transform;
+
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: saturate(145%) contrast(1.04);
+  -webkit-backdrop-filter: saturate(145%) contrast(1.04);
+
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    inset 0 1px 2px rgba(255, 255, 255, 0.52),
+    inset 0 -10px 22px rgba(0, 0, 0, 0.12),
+    inset 0 0 10px rgba(255, 255, 255, 0.06);
 }
 
-.phase-idle {
-  transition:
-    top 0.15s cubic-bezier(0.25, 0.1, 0.25, 1),
-    left 0.15s cubic-bezier(0.25, 0.1, 0.25, 1),
-    height 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-    border-radius 0.2s ease;
+.pill-indicator:active {
+  cursor: grabbing;
 }
 
-.phase-collapse {
-  transition:
-    height 0.15s cubic-bezier(0.55, 0, 1, 0.45),
-    border-radius 0.12s ease,
-    width 0.15s cubic-bezier(0.55, 0, 1, 0.45);
+.sidebar:has(.pill-dragging) li.active {
+  cursor: grabbing;
 }
 
-.phase-slide {
-  transition:
-    top 0.38s cubic-bezier(0.34, 1.56, 0.64, 1.0),
-    left 0.38s cubic-bezier(0.34, 1.56, 0.64, 1.0);
+.pill-snapping {
+  transform: scaleX(1) scaleY(1);
+  animation: pillTensionRelease 0.48s cubic-bezier(0.2, 0.82, 0.24, 1) both;
 }
 
-.phase-expand {
-  transition:
-    height 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-    border-radius 0.15s ease,
-    width 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+.pill-dragging {
+  transform: scaleX(var(--pill-drag-scale-x, 0.94)) scaleY(var(--pill-drag-scale-y, 1.08));
+  animation: pillTensionPress 0.28s cubic-bezier(0.2, 0.82, 0.2, 1) both;
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+    inset 0 1px 2px rgba(255, 255, 255, 0.6),
+    inset 0 -12px 26px rgba(0, 0, 0, 0.16),
+    inset 0 0 12px rgba(255, 255, 255, 0.08);
+  z-index: 6;
 }
 
-.sidebar li:hover {
-  transform: translateX(2px);
+@keyframes pillTensionPress {
+  0% { transform: scaleX(1) scaleY(1); }
+  58% { transform: scaleX(0.915) scaleY(1.12); }
+  100% { transform: scaleX(var(--pill-drag-scale-x, 0.94)) scaleY(var(--pill-drag-scale-y, 1.08)); }
 }
 
-.sidebar li:active {
-  transform: translateX(2px) scale(0.98);
+@keyframes pillTensionRelease {
+  0% { transform: scaleX(0.94) scaleY(1.08); }
+  56% { transform: scaleX(1.025) scaleY(0.985); }
+  100% { transform: scaleX(1) scaleY(1); }
 }
 
-/* ---- per-tab icon click animations ---- */
+/* ============================================================
+   Icon click animations
+   ============================================================ */
 
-/* main: sun burst — core subtle pulse, rays expand from center */
 .anim-main :deep(.icon-sun-core) {
   animation: navSunBurst 0.3s cubic-bezier(.2,.8,.2,1) both;
   transform-box: fill-box;
   transform-origin: center;
 }
-
 .anim-main :deep(.icon-sun-ray) {
   animation: navSunRays 0.34s cubic-bezier(.2,.8,.2,1) both;
   transform-box: view-box;
   transform-origin: 12px 12px;
 }
-
 .anim-main :deep(.ray-1) { animation-delay: 0s; }
 .anim-main :deep(.ray-2) { animation-delay: 0.025s; }
 .anim-main :deep(.ray-3) { animation-delay: 0.05s; }
@@ -320,18 +1061,15 @@ watch(() => props.modelValue, (key) => {
 .anim-main :deep(.ray-7) { animation-delay: 0.15s; }
 .anim-main :deep(.ray-8) { animation-delay: 0.175s; }
 
-/* flow: bar pulse — bars bounce up from bottom with stagger */
 .anim-flow :deep(.icon-bar) {
   animation: navBarPulse 0.34s cubic-bezier(.2,.8,.2,1) both;
   transform-box: fill-box;
   transform-origin: bottom;
 }
-
 .anim-flow :deep(.icon-bar-1) { animation-delay: 0s; }
 .anim-flow :deep(.icon-bar-2) { animation-delay: 0.08s; }
 .anim-flow :deep(.icon-bar-3) { animation-delay: 0.16s; }
 
-/* settings: gear turn 90deg — 8-tooth symmetry, no visible snap-back */
 .anim-settings :deep(.icon-gear-center),
 .anim-settings :deep(.icon-gear-tooth) {
   animation: navGearTurn 0.42s cubic-bezier(.2,.7,.15,1) both;
@@ -339,13 +1077,11 @@ watch(() => props.modelValue, (key) => {
   transform-origin: center;
 }
 
-/* firmware: top line grows from left, then dot flashes */
 .anim-firmware :deep(.icon-device-top-line) {
   animation: firmwareTopLineGrow 0.4s cubic-bezier(.34,.6,.15,1) both;
   transform-box: fill-box;
   transform-origin: left center;
 }
-
 .anim-firmware :deep(.icon-device-dot) {
   animation: firmwareDotConfirm 0.28s cubic-bezier(.2,.8,.2,1) 0.22s both;
   transform-box: fill-box;
@@ -357,37 +1093,36 @@ watch(() => props.modelValue, (key) => {
   55% { transform: scale(1.08); }
   100% { transform: scale(1); }
 }
-
 @keyframes navSunRays {
   0% { transform: scale(0.35); opacity: 0.25; }
   65% { transform: scale(1.15); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
-
 @keyframes navBarPulse {
   0% { transform: scaleY(0.3); }
   55% { transform: scaleY(1.12); }
   100% { transform: scaleY(1); }
 }
-
 @keyframes navGearTurn {
   0% { transform: rotate(0deg); }
   85% { transform: rotate(140deg); }
   100% { transform: rotate(135deg); }
 }
-
 @keyframes firmwareTopLineGrow {
   0% { transform: scaleX(0.18); opacity: 0.45; }
   16% { opacity: 1; }
   80% { transform: scaleX(1.08); opacity: 1; }
   100% { transform: scaleX(1); opacity: 1; }
 }
-
 @keyframes firmwareDotConfirm {
   0% { transform: scale(0.75); opacity: 0.45; }
   45% { transform: scale(1.7); opacity: 1; }
   100% { transform: scale(1); opacity: 0.9; }
 }
+
+/* ============================================================
+   Night mode
+   ============================================================ */
 
 :global(.night-mode) .sidebar {
   background: rgba(15, 23, 42, 0.72);
@@ -398,23 +1133,40 @@ watch(() => props.modelValue, (key) => {
 }
 
 :global(.night-mode) .sidebar li {
-  color: rgba(226, 232, 240, 0.82);
-  opacity: 1;
-}
-
-:global(.night-mode) .sidebar li:hover {
-  background: rgba(59, 130, 246, 0.12);
-  color: rgba(248, 250, 252, 0.96);
+  color: rgba(226, 232, 240, 0.72);
 }
 
 :global(.night-mode) .sidebar li.active {
-  background: rgba(64, 158, 255, 0.2);
-  color: #eaf2ff;
+  color: #93c5fd;
 }
 
-:global(.night-mode) .indicator {
-  background: #60a5fa;
+:global(.night-mode) .sidebar li:hover {
+  color: #bfdbfe;
 }
+
+:global(.night-mode) .pill-indicator {
+  background: rgba(255, 255, 255, 0.015);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4),
+    inset 0 -10px 22px rgba(0, 0, 0, 0.18),
+    inset 0 0 10px rgba(255, 255, 255, 0.04);
+}
+
+:global(.night-mode) .pill-dragging {
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5),
+    inset 0 -12px 26px rgba(0, 0, 0, 0.24),
+    inset 0 0 12px rgba(255, 255, 255, 0.06);
+}
+
+/* ============================================================
+   Mobile
+   ============================================================ */
 
 @media (max-width: 768px) {
   .sidebar {
@@ -424,21 +1176,15 @@ watch(() => props.modelValue, (key) => {
     z-index: auto;
     width: calc(100% - 24px);
     height: auto;
-    min-height: 0;
     margin: 12px;
-    padding: 10px 10px;
+    padding: 10px 6px;
     border-radius: 14px;
-
     display: block;
   }
 
   .sidebar ul {
-    width: 100%;
-    display: flex;
     flex-direction: row;
-    gap: 8px;
-    padding: 0;
-    margin: 0;
+    gap: 4px;
   }
 
   .sidebar li {
@@ -447,28 +1193,14 @@ watch(() => props.modelValue, (key) => {
     gap: 3px;
     width: auto;
     margin: 0;
-    padding: 8px 6px;
+    padding: 8px 4px;
     border-radius: 14px;
     text-align: center;
     font-size: 12px;
   }
 
-  .sidebar li:hover {
-    transform: none;
-  }
+  .sidebar-icon { width: 18px; height: 18px; }
 
-  .sidebar li:active {
-    transform: scale(0.96);
-  }
-
-  .sidebar-icon {
-    width: 18px;
-    height: 18px;
-  }
-
-  .indicator {
-    position: absolute;
-    background: var(--primary, #2563eb);
-  }
+  .pill-indicator { border-radius: 999px; }
 }
 </style>
