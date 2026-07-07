@@ -38,6 +38,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { DashboardTab } from '../../types/device'
+import { formatRgbColor, getRefractionSceneBaseColor } from '../../utils/sidebarRefraction'
 
 const props = defineProps<{
   modelValue: DashboardTab
@@ -178,6 +179,8 @@ let refractionRaf: number | undefined
 let dragPaintRaf: number | undefined
 let refractionStopAt = 0
 let lastRefractionRect: PillRect | null = null
+let refractionRunId = 0
+let refractionQueueId = 0
 let suppressNextClick = false
 
 function onSidebarPointerDown(e: PointerEvent) {
@@ -241,8 +244,8 @@ function onPillDown(e: PointerEvent) {
   window.addEventListener('pointerup', onPillUp)
   window.addEventListener('pointercancel', onPillUp)
 
-  // Restore old refraction before drag visuals start
-  if (oldRect && !lastRefractionRect) restoreRefractionRegion(oldRect)
+  // Clear old refraction before drag visuals start.
+  if (oldRect && !lastRefractionRect) clearRefractionCanvas()
   scheduleDragRefractionPaint(dragRect.value)
 }
 
@@ -258,10 +261,9 @@ function onPillMove(e: PointerEvent) {
   nx = Math.max(pad, Math.min(nx, sr.width - dragPillW - pad))
   ny = Math.max(pad, Math.min(ny, sr.height - dragPillH - pad))
 
-  const oldRect = { ...dragRect.value! }
   dragRect.value = { x: nx, y: ny, w: dragPillW, h: dragPillH }
 
-  if (!lastRefractionRect) restoreRefractionRegion(oldRect)
+  if (!lastRefractionRect) clearRefractionCanvas()
   scheduleDragRefractionPaint(dragRect.value)
 }
 
@@ -306,7 +308,7 @@ function onPillUp(_e: PointerEvent) {
   }
 
   if (snapRect) {
-    nextTick(() => startRefractionTracking(500, oldDragRect))
+    queueRefractionTracking(500, oldDragRect)
   }
 
   window.setTimeout(() => { suppressNextClick = false }, 120)
@@ -402,19 +404,54 @@ function stopDragRefractionPaint() {
   }
 }
 
+function clearRefractionCanvas() {
+  const vis = refractionCanvas.value
+  if (!vis) return
+  const ctx = vis.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, SW, SH)
+}
+
 function paintRefractionRect(rect: PillRect, mode: RefractionMode = 'static') {
-  if (lastRefractionRect) restoreRefractionRegion(lastRefractionRect)
+  clearRefractionCanvas()
   renderRefractionAtRect(rect, mode)
   lastRefractionRect = { ...rect }
 }
 
-function startRefractionTracking(duration = 420, fallbackRestore?: PillRect, mode: RefractionMode = 'static') {
+function clearTrackedRefraction() {
+  clearRefractionCanvas()
+  lastRefractionRect = null
+}
+
+function queueRefractionTracking(duration = 420, _fallbackRestore?: PillRect, mode: RefractionMode = 'static') {
+  const queueId = ++refractionQueueId
+  nextTick(() => {
+    if (queueId !== refractionQueueId) return
+    startRefractionTracking(duration, mode)
+  })
+}
+
+function queueStaticRefractionPaint() {
+  const queueId = refractionQueueId
+  nextTick(() => {
+    if (queueId !== refractionQueueId || isDragging.value) return
+    if (refractionRaf) return
+    refreshRefractionSources()
+    const rect = currentPillRect()
+    if (rect) paintRefractionRect(rect)
+  })
+}
+
+function startRefractionTracking(duration = 420, mode: RefractionMode = 'static') {
   stopRefractionTracking()
+  const runId = ++refractionRunId
+  clearTrackedRefraction()
   refreshRefractionSources()
-  if (!lastRefractionRect && fallbackRestore) lastRefractionRect = { ...fallbackRestore }
   refractionStopAt = performance.now() + duration
 
   const tick = () => {
+    if (runId !== refractionRunId) return
+
     const rect = getRenderedPillRect() || currentPillRect()
     if (rect) paintRefractionRect(rect, mode)
 
@@ -425,13 +462,14 @@ function startRefractionTracking(duration = 420, fallbackRestore?: PillRect, mod
 
     const finalRect = currentPillRect()
     if (finalRect) paintRefractionRect(finalRect)
-    refractionRaf = undefined
+    if (runId === refractionRunId) refractionRaf = undefined
   }
 
   tick()
 }
 
 function stopRefractionTracking() {
+  refractionRunId++
   if (refractionRaf) {
     cancelAnimationFrame(refractionRaf)
     refractionRaf = undefined
@@ -460,9 +498,7 @@ function handleTabClick(key: DashboardTab, e?: MouseEvent) {
   if (key !== props.modelValue) {
     triggerTabAnimation(key)
   }
-  nextTick(() => {
-    startRefractionTracking(420, oldRect || undefined)
-  })
+  queueRefractionTracking(420, oldRect || undefined)
 }
 
 watch(() => props.modelValue, (key) => {
@@ -470,15 +506,9 @@ watch(() => props.modelValue, (key) => {
     const oldRect = currentPillRect()
     targetKey.value = key
     triggerTabAnimation(key)
-    nextTick(() => {
-      startRefractionTracking(420, oldRect || undefined)
-    })
+    queueRefractionTracking(420, oldRect || undefined)
   } else {
-    nextTick(() => {
-      refreshRefractionSources()
-      const rect = currentPillRect()
-      if (rect && !isDragging.value) paintRefractionRect(rect)
-    })
+    queueStaticRefractionPaint()
   }
 })
 
@@ -500,9 +530,8 @@ const REFRACTION_PAD = 12
 const MAX_BEND = 38
 const CHROMA = 1.15
 const EDGE_BAND = 8
-const DRAG_DEPTH_RATIO = 0.36
-const DRAG_OUTER_RATIO = 0.071
-const DRAG_BEND_RATIO = 0.38
+const DRAG_DEPTH_RATIO = 0.42
+const DRAG_BEND_RATIO = 0.5
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v))
@@ -643,20 +672,11 @@ function drawRefractionScene(ctx: CanvasRenderingContext2D, includeNavContent: b
   ctx.clearRect(0, 0, SW, SH)
 
   const night = isNightScene()
-  const bgGrad = ctx.createLinearGradient(0, 0, SW, SH)
-  if (night) {
-    bgGrad.addColorStop(0, '#0f172a')
-    bgGrad.addColorStop(0.55, '#111827')
-    bgGrad.addColorStop(1, '#172033')
-  } else {
-    bgGrad.addColorStop(0, '#ffffff')
-    bgGrad.addColorStop(0.5, '#ffffff')
-    bgGrad.addColorStop(1, '#ffffff')
-  }
-  ctx.fillStyle = bgGrad
+  const sceneMode = includeIcons ? 'drag' : 'static'
+  ctx.fillStyle = formatRgbColor(getRefractionSceneBaseColor(night, 0, sceneMode))
   ctx.fillRect(0, 0, SW, SH)
 
-  ctx.fillStyle = night ? 'rgba(148,163,184,0.05)' : 'rgba(148,163,184,0.06)'
+  ctx.fillStyle = night ? 'rgba(148,163,184,0.05)' : 'rgba(148,163,184,0.025)'
   for (let i = 0; i < 280; i++) {
     const dx = ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 * SW
     const dy = ((Math.sin(i * 78.233) * 24634.6345) % 1 + 1) % 1 * SH
@@ -674,14 +694,16 @@ function drawRefractionScene(ctx: CanvasRenderingContext2D, includeNavContent: b
 
   for (const tab of tabs) {
     const item = tabRefs.value[tab.key]
-    if (includeIcons) drawIconToRefractionScene(ctx, item, sidebarRect)
+    const isActive = tab.key === targetKey.value
+    const navColor = getStableNavColor(night, isActive)
+    if (includeIcons) drawIconToRefractionScene(ctx, item, sidebarRect, navColor)
 
     const textEl = item?.querySelector<HTMLElement>('.sidebar-nav-text')
     if (!textEl) continue
 
     const textRect = textEl.getBoundingClientRect()
     const textStyle = window.getComputedStyle(textEl)
-    ctx.fillStyle = textStyle.color || (night ? 'rgba(226,232,240,0.7)' : '#64748b')
+    ctx.fillStyle = navColor
     ctx.font = `${textStyle.fontWeight} ${textStyle.fontSize} ${textStyle.fontFamily}`
     ctx.fillText(
       tab.label,
@@ -693,10 +715,16 @@ function drawRefractionScene(ctx: CanvasRenderingContext2D, includeNavContent: b
   ctx.textAlign = 'start'
 }
 
+function getStableNavColor(night: boolean, active: boolean) {
+  if (active) return night ? '#93c5fd' : '#1d4ed8'
+  return night ? 'rgba(226, 232, 240, 0.72)' : '#475569'
+}
+
 function drawIconToRefractionScene(
   ctx: CanvasRenderingContext2D,
   item: HTMLElement | null | undefined,
   sidebarRect: DOMRect,
+  colorOverride?: string,
 ) {
   const iconEl = item?.querySelector<HTMLElement>('.sidebar-icon')
   const svgEl = iconEl?.querySelector<SVGSVGElement>('svg')
@@ -705,7 +733,7 @@ function drawIconToRefractionScene(
   const iconRect = iconEl.getBoundingClientRect()
   const iconStyle = window.getComputedStyle(iconEl)
   const itemStyle = item ? window.getComputedStyle(item) : iconStyle
-  const color = iconStyle.color || itemStyle.color || '#64748b'
+  const color = colorOverride || iconStyle.color || itemStyle.color || '#64748b'
   const opacity = Number.parseFloat(iconStyle.opacity || '1')
   const svgText = prepareSvgForCanvas(svgEl.outerHTML, color)
   const cacheKey = `${color}|${svgText}`
@@ -748,20 +776,50 @@ function escapeSvgAttr(value: string): string {
     .replace(/>/g, '&gt;')
 }
 
-function restoreRefractionRegion(rect: { x: number; y: number; w: number; h: number }) {
-  const vis = refractionCanvas.value
-  if (!vis) return
-  const ctx = vis.getContext('2d')
-  if (!ctx) return
+function getAdjacentReflectionTargets(rect: PillRect) {
+  const sidebarRect = sidebarRef.value?.getBoundingClientRect()
+  if (!sidebarRect) return null
 
-  const pad = REFRACTION_PAD
-  const sx = Math.floor(clamp(rect.x - pad, 0, SW))
-  const sy = Math.floor(clamp(rect.y - pad, 0, SH))
-  const sw = Math.ceil(clamp(rect.w + pad * 2, 0, SW - sx))
-  const sh = Math.ceil(clamp(rect.h + pad * 2, 0, SH - sy))
-  if (sw <= 0 || sh <= 0) return
+  let topY: number | undefined
+  let topDistance = Infinity
+  let bottomY: number | undefined
+  let bottomDistance = Infinity
+  const rectTop = rect.y
+  const rectBottom = rect.y + rect.h
 
-  ctx.clearRect(sx, sy, sw, sh)
+  for (const tab of tabs) {
+    const item = tabRefs.value[tab.key]
+    if (!item) continue
+
+    const itemRect = item.getBoundingClientRect()
+    const textRect = item.querySelector<HTMLElement>('.sidebar-nav-text')?.getBoundingClientRect()
+    const iconRect = item.querySelector<HTMLElement>('.sidebar-icon')?.getBoundingClientRect()
+    const contentTop = Math.min(
+      textRect?.top ?? itemRect.top,
+      iconRect?.top ?? itemRect.top,
+    ) - sidebarRect.top
+    const contentBottom = Math.max(
+      textRect?.bottom ?? itemRect.bottom,
+      iconRect?.bottom ?? itemRect.bottom,
+    ) - sidebarRect.top
+
+    if (contentBottom < rectTop - 2) {
+      const distance = rectTop - contentBottom
+      if (distance < topDistance) {
+        topDistance = distance
+        topY = contentBottom
+      }
+    }
+    if (contentTop > rectBottom + 2) {
+      const distance = contentTop - rectBottom
+      if (distance < bottomDistance) {
+        bottomDistance = distance
+        bottomY = contentTop
+      }
+    }
+  }
+
+  return { topY, topDistance, bottomY, bottomDistance }
 }
 
 function renderRefractionAtRect(rect: PillRect, mode: RefractionMode = 'static') {
@@ -773,10 +831,9 @@ function renderRefractionAtRect(rect: PillRect, mode: RefractionMode = 'static')
   const sourceCtx = mode === 'drag' ? dragBgCtx : bgCtx
   if (!sourceCtx) return
   const bgImage = sourceCtx.getImageData(0, 0, SW, SH)
-  const dragDepth = clamp(rect.h * DRAG_DEPTH_RATIO, 12, 20)
-  const dragOuterBand = clamp(rect.h * DRAG_OUTER_RATIO, 1, 3)
-  const dragMaxBend = clamp(rect.h * DRAG_BEND_RATIO, 14, 22)
-  const dragFoldDepth = dragDepth * 0.58
+  const dragDepth = clamp(rect.h * DRAG_DEPTH_RATIO, 14, 24)
+  const dragMaxBend = clamp(rect.h * DRAG_BEND_RATIO, 18, 30)
+  const dragFoldDepth = dragDepth * 0.56
   const maxDepth = mode === 'drag' ? dragFoldDepth : EDGE_BAND
 
   const pad = REFRACTION_PAD
@@ -789,6 +846,7 @@ function renderRefractionAtRect(rect: PillRect, mode: RefractionMode = 'static')
   const outW = maxX - minX
   const outH = maxY - minY
   const outData = ctx.createImageData(outW, outH)
+  const reflectionTargets = mode === 'drag' ? getAdjacentReflectionTargets(rect) : null
 
   for (let y = minY; y < maxY; y++) {
     for (let x = minX; x < maxX; x++) {
@@ -799,19 +857,11 @@ function renderRefractionAtRect(rect: PillRect, mode: RefractionMode = 'static')
 
       const insideDepth = Math.max(0, -d)
 
-      const outerBand = mode === 'drag'
-        ? 1 - smoothstepR(0, dragOuterBand, insideDepth)
-        : 0
-      const darkGroove = mode === 'drag'
-        ? smoothstepR(dragDepth * 0.08, dragDepth * 0.25, insideDepth) *
-          (1 - smoothstepR(dragDepth * 0.25, dragDepth * 0.5, insideDepth))
-        : 0
       const lens = mode === 'drag'
-        ? outerBand
+        ? 1 - smoothstepR(0, dragFoldDepth, insideDepth)
         : 1 - smoothstepR(0, EDGE_BAND, insideDepth)
       const bend = mode === 'drag'
-        ? outerBand * dragMaxBend -
-          darkGroove * (dragMaxBend * 0.47)
+        ? -(lens * dragMaxBend)
         : lens * MAX_BEND
 
       const capSqueezeRelief = mode === 'drag'
@@ -834,10 +884,10 @@ function renderRefractionAtRect(rect: PillRect, mode: RefractionMode = 'static')
       const bendLimit = mode === 'drag' ? dragMaxBend : MAX_BEND
       const distortionStrength = clamp(Math.abs(bend) / bendLimit, 0, 1)
       const overDistort = mode === 'drag'
-        ? smoothstepR(0.58, 1, distortionStrength) * outerBand
+        ? smoothstepR(0.58, 1, distortionStrength) * lens
         : 0
       const chroma = mode === 'drag'
-        ? outerBand * CHROMA + overDistort * 1.65
+        ? lens * CHROMA + overDistort * 1.65
         : lens * CHROMA
       const tangentChroma = mode === 'drag'
         ? overDistort * 0.32
@@ -850,12 +900,77 @@ function renderRefractionAtRect(rect: PillRect, mode: RefractionMode = 'static')
       const b = mode === 'drag'
         ? sampleChannelBilinear(bgImage, baseX - nx * chroma - tx * tangentChroma, baseY - ny * chroma - ty * tangentChroma, 2)
         : sampleChannelBilinear(bgImage, baseX + nx * chroma - tx * tangentChroma, baseY + ny * chroma - ty * tangentChroma, 2)
+      const edgeReflection = mode === 'drag'
+        ? (1 - smoothstepR(0, 2.4, insideDepth)) * 0.68
+        : 0
+      const fallbackReflectionDistance = mode === 'drag' ? clamp(rect.h * 0.22, 7, 13) : 4.8
+      const adjacentReflectionReach = mode === 'drag' ? clamp(rect.h * 0.46, 18, 26) : 0
+      const verticalReflection = mode === 'drag' && Math.abs(sdf.ny) >= Math.abs(sdf.nx)
+      let reflectedX = x + sdf.nx * fallbackReflectionDistance
+      let reflectedY = y + sdf.ny * fallbackReflectionDistance
+      let reflectionProximity = 0
+
+      if (
+        verticalReflection &&
+        sdf.ny < -0.2 &&
+        reflectionTargets?.topY != null &&
+        reflectionTargets.topDistance <= adjacentReflectionReach
+      ) {
+        reflectedX = x
+        reflectionProximity = 1 - smoothstepR(4, adjacentReflectionReach, reflectionTargets.topDistance)
+        const sampleInset = 2.5 + Math.pow(reflectionProximity, 0.65) * 4.5
+        reflectedY = reflectionTargets.topY - sampleInset
+      } else if (
+        verticalReflection &&
+        sdf.ny > 0.2 &&
+        reflectionTargets?.bottomY != null &&
+        reflectionTargets.bottomDistance <= adjacentReflectionReach
+      ) {
+        reflectedX = x
+        reflectionProximity = 1 - smoothstepR(4, adjacentReflectionReach, reflectionTargets.bottomDistance)
+        const sampleInset = 2.5 + Math.pow(reflectionProximity, 0.65) * 4.5
+        reflectedY = reflectionTargets.bottomY + sampleInset
+      }
+
+      const reflectionCurve = Math.pow(reflectionProximity, 0.58)
+      const reflectionDistanceStrength = mode === 'drag'
+        ? clamp(0.24 + reflectionCurve * 0.92, 0, 1.16)
+        : 0
+      const outerReflection = edgeReflection * reflectionDistanceStrength
+      const reflectionSpread = mode === 'drag'
+        ? 3.2 + reflectionCurve * 2.4
+        : 0
+      const reflectedNearX = reflectedX - sdf.nx * reflectionSpread
+      const reflectedNearY = reflectedY - sdf.ny * reflectionSpread
+      const reflectedFarX = reflectedX + sdf.nx * reflectionSpread
+      const reflectedFarY = reflectedY + sdf.ny * reflectionSpread
+      const reflectedR = Math.min(
+        sampleChannelBilinear(bgImage, reflectedNearX, reflectedNearY, 0),
+        sampleChannelBilinear(bgImage, reflectedX, reflectedY, 0),
+        sampleChannelBilinear(bgImage, reflectedFarX, reflectedFarY, 0),
+      )
+      const reflectedG = Math.min(
+        sampleChannelBilinear(bgImage, reflectedNearX, reflectedNearY, 1),
+        sampleChannelBilinear(bgImage, reflectedX, reflectedY, 1),
+        sampleChannelBilinear(bgImage, reflectedFarX, reflectedFarY, 1),
+      )
+      const reflectedB = Math.min(
+        sampleChannelBilinear(bgImage, reflectedNearX, reflectedNearY, 2),
+        sampleChannelBilinear(bgImage, reflectedX, reflectedY, 2),
+        sampleChannelBilinear(bgImage, reflectedFarX, reflectedFarY, 2),
+      )
+      const finalR = r * (1 - outerReflection) + reflectedR * outerReflection
+      const finalG = g * (1 - outerReflection) + reflectedG * outerReflection
+      const finalB = b * (1 - outerReflection) + reflectedB * outerReflection
+      const refractionAlpha = mode === 'drag'
+        ? 255
+        : Math.round(clamp(lens * 210, 0, 210))
 
       const idx = ((y - minY) * outW + (x - minX)) * 4
-      outData.data[idx]     = clamp(Math.round(r), 0, 255)
-      outData.data[idx + 1] = clamp(Math.round(g), 0, 255)
-      outData.data[idx + 2] = clamp(Math.round(b), 0, 255)
-      outData.data[idx + 3] = 255
+      outData.data[idx]     = clamp(Math.round(finalR), 0, 255)
+      outData.data[idx + 1] = clamp(Math.round(finalG), 0, 255)
+      outData.data[idx + 2] = clamp(Math.round(finalB), 0, 255)
+      outData.data[idx + 3] = refractionAlpha
     }
   }
 
@@ -988,17 +1103,15 @@ watch([isDragging, isSnapping], () => {
   transform-origin: center;
   will-change: left, top, width, height, transform;
 
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: saturate(145%) contrast(1.04);
-  -webkit-backdrop-filter: saturate(145%) contrast(1.04);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 
   box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.28),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
-    inset 0 1px 2px rgba(255, 255, 255, 0.52),
-    inset 0 -10px 22px rgba(0, 0, 0, 0.12),
-    inset 0 0 10px rgba(255, 255, 255, 0.06);
+    0 18px 42px rgba(15, 23, 42, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.38),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
 .pill-indicator:active {
@@ -1018,11 +1131,9 @@ watch([isDragging, isSnapping], () => {
   transform: scaleX(var(--pill-drag-scale-x, 0.94)) scaleY(var(--pill-drag-scale-y, 1.08));
   animation: pillTensionPress 0.28s cubic-bezier(0.2, 0.82, 0.2, 1) both;
   box-shadow:
-    0 32px 80px rgba(0, 0, 0, 0.35),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
-    inset 0 1px 2px rgba(255, 255, 255, 0.6),
-    inset 0 -12px 26px rgba(0, 0, 0, 0.16),
-    inset 0 0 12px rgba(255, 255, 255, 0.08);
+    0 24px 58px rgba(15, 23, 42, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.44),
+    inset 0 1px 2px rgba(255, 255, 255, 0.58);
   z-index: 6;
 }
 
@@ -1145,23 +1256,19 @@ watch([isDragging, isSnapping], () => {
 }
 
 :global(.night-mode) .pill-indicator {
-  background: rgba(255, 255, 255, 0.015);
+  background: transparent;
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.45),
+    0 18px 42px rgba(0, 0, 0, 0.28),
     inset 0 0 0 1px rgba(255, 255, 255, 0.28),
-    inset 0 1px 2px rgba(255, 255, 255, 0.4),
-    inset 0 -10px 22px rgba(0, 0, 0, 0.18),
-    inset 0 0 10px rgba(255, 255, 255, 0.04);
+    inset 0 1px 2px rgba(255, 255, 255, 0.36);
 }
 
 :global(.night-mode) .pill-dragging {
   box-shadow:
-    0 32px 80px rgba(0, 0, 0, 0.55),
+    0 24px 58px rgba(0, 0, 0, 0.34),
     inset 0 0 0 1px rgba(255, 255, 255, 0.34),
-    inset 0 1px 2px rgba(255, 255, 255, 0.5),
-    inset 0 -12px 26px rgba(0, 0, 0, 0.24),
-    inset 0 0 12px rgba(255, 255, 255, 0.06);
+    inset 0 1px 2px rgba(255, 255, 255, 0.42);
 }
 
 /* ============================================================
