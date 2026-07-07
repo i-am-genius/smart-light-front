@@ -7,6 +7,9 @@
         class="page-switcher"
         :class="{ 'is-switching': pageSwitching }"
         :style="pageSwitcherStyle"
+        @touchstart="onSwipeTouchStart"
+        @touchmove="onSwipeTouchMove"
+        @touchend="onSwipeTouchEnd"
       >
       <Transition
         :name="pageTransitionName"
@@ -17,47 +20,14 @@
         @leave-cancelled="endPageSwitch"
       >
       <section v-if="activeTab === 'main'" key="main" class="page-section">
-        <div class="dashboard-top-status">
-          <div class="current-time">{{ currentTime }}</div>
-          <div class="weather-status-row">
-            <span>{{ weatherText }}</span>
-            <span class="weather-svg-icon" :class="`weather-${weatherIconType}`" aria-hidden="true">
-              <svg viewBox="0 0 36 36" focusable="false">
-                <g v-if="weatherIconType === 'sunny'" class="weather-sunny">
-                  <circle class="sun-core" cx="18" cy="18" r="6.4" />
-                  <path class="sun-rays" d="M18 4.5v4M18 27.5v4M4.5 18h4M27.5 18h4M8.4 8.4l2.8 2.8M24.8 24.8l2.8 2.8M27.6 8.4l-2.8 2.8M11.2 24.8l-2.8 2.8" />
-                </g>
-
-                <g v-else>
-                  <g v-if="weatherIconType === 'partly-cloudy'" class="weather-sun-small">
-                    <circle class="sun-core" cx="13" cy="13" r="4.4" />
-                    <path class="sun-rays" d="M13 5.5v2.4M13 18.1v2.4M5.5 13h2.4M18.1 13h2.4M7.7 7.7l1.7 1.7M16.6 16.6l1.7 1.7M18.3 7.7l-1.7 1.7M9.4 16.6l-1.7 1.7" />
-                  </g>
-
-                  <path class="cloud-shape" d="M10.9 25.7h15.2a5.4 5.4 0 0 0 .4-10.8 8 8 0 0 0-15.3-1.8 6.4 6.4 0 0 0-.3 12.6Z" />
-
-                  <g v-if="weatherIconType === 'rain'" class="rain-lines">
-                    <path d="M14 28.2l-1.7 3.1M21 28.2l-1.7 3.1M27 28l-1.5 2.8" />
-                  </g>
-
-                  <g v-if="weatherIconType === 'snow'" class="snow-marks">
-                    <path d="M14 29.5v3M12.7 31h2.6M22 29.5v3M20.7 31h2.6" />
-                  </g>
-
-                  <g v-if="weatherIconType === 'fog'" class="fog-lines">
-                    <path d="M8.5 28.6h19M10.8 32h14.4" />
-                  </g>
-
-                  <g v-if="weatherIconType === 'thunder'" class="thunder-bolt">
-                    <path d="M19.2 27.4l-3 5h3l-1.1 3.1 4.3-5.2h-3.2l.3-2.9Z" />
-                  </g>
-                </g>
-              </svg>
-            </span>
-            <span>{{ weekInfo }}</span>
-            <span>{{ dateInfo }}</span>
-          </div>
-        </div>
+        <TopStatusBar
+          :current-time="currentTime"
+          :week-info="weekInfo"
+          :date-info="dateInfo"
+          :weather-text="weatherText"
+          :weather-icon-type="topBarWeatherIcon"
+          :weather-intensity="topBarWeatherIntensity"
+        />
 
         <div class="env-layout card-section section-space-top">
           <div class="env-card">
@@ -163,7 +133,7 @@
           </label>
           <div id="scanStatus" class="ws-status-pill" :class="connectionStatusClass">
             <span class="ws-status-dot" aria-hidden="true"></span>
-            <span>{{ connected ? `WS 已连接 · ${scanStatus}` : `WS 未连接 · ${scanStatus}` }}</span>
+            <span>{{ connectionStatusText }}</span>
           </div>
         </div>
 
@@ -232,11 +202,16 @@
             :server-state="lightEffectState"
           />
 
-          <StoreLightLayout
-            class="store-layout-main"
-            :devices="devices"
-            @saved="loadDevices"
-          />
+          <div class="layout-card store-layout-main">
+            <div class="layout-header">
+              <div>
+                <h2>店铺灯具布局</h2>
+              </div>
+            </div>
+            <div class="three-layout-mvp-panel">
+              <ThreeLightingLayout :devices="devices" :active="activeTab === 'main'" />
+            </div>
+          </div>
         </div>
 
         <DeviceGrid
@@ -320,7 +295,7 @@ import DeviceGrid from '../components/device/DeviceGrid.vue'
 import DeviceAddModal from '../components/device/DeviceAddModal.vue'
 import FlowMonitorPanel from '../components/settings/FlowMonitorPanel.vue'
 import SmartConfigPanel from '../components/settings/SmartConfigPanel.vue'
-import StoreLightLayout from '../components/device/StoreLightLayout.vue'
+import ThreeLightingLayout from '../components/device/ThreeLightingLayout.vue'
 import LightEffectMiniPanel from '../components/device/LightEffectMiniPanel.vue'
 import { useClock } from '../composables/useClock'
 import { useWebSocket } from '../composables/useWebSocket'
@@ -351,6 +326,7 @@ import type { StoreSettingsValue } from '../components/settings/StoreSettingsPan
 import FlowOverview from '../components/flow/FlowOverview.vue'
 import FirmwareManagePanel from '../components/firmware/FirmwareManagePanel.vue'
 import OdometerRoll from '../components/common/OdometerRoll.vue'
+import TopStatusBar from '../components/layout/TopStatusBar.vue'
 import { regions } from '../constants/china-region'
 import { STORE_STYLE_MAP } from '../constants/store'
 import { getErrorMessage } from '../utils/error'
@@ -381,6 +357,8 @@ const pageSwitching = ref(false)
 const pageNumberMotionReady = ref(true)
 const pagePushDistance = ref(0)
 const pageSwitchHeight = ref(0)
+const tabScrollPositions = new Map<DashboardTab, number>()
+let pendingTabScrollTop = 0
 const devices = ref<DeviceItem[]>([])
 const lightEffectState = ref<LightEffectState | null>(null)
 const loading = ref(false)
@@ -715,6 +693,25 @@ const holidayValue = computed(() => extractInfoValue(holidayInfo.value))
 const workdayValue = computed(() => extractInfoValue(workdayInfo.value))
 const weatherIconType = computed(() => mapOpenMeteoCodeToWeatherIcon(envInfo.value.weatherCode))
 
+const topBarWeatherIcon = computed<'clear' | 'partly' | 'cloudy' | 'rain' | 'snow' | 'fog' | 'thunder' | undefined>(() => {
+  const map: Record<WeatherIconType, 'clear' | 'partly' | 'cloudy' | 'rain' | 'snow' | 'fog' | 'thunder'> = {
+    'sunny': 'clear',
+    'partly-cloudy': 'partly',
+    'cloudy': 'cloudy',
+    'rain': 'rain',
+    'snow': 'snow',
+    'fog': 'fog',
+    'thunder': 'thunder',
+  }
+  // return 'thunder'
+  return map[weatherIconType.value]
+})
+
+const topBarWeatherIntensity = computed<'light' | 'normal' | 'heavy'>(() => {
+  // return 'normal'
+  return mapOpenMeteoCodeToIntensity(envInfo.value.weatherCode)
+})
+
 function extractInfoValue(value: string) {
   const parts = value.split(/[：:]/)
   return (parts.length > 1 ? parts[parts.length - 1] : value).trim() || '--'
@@ -735,6 +732,22 @@ function mapOpenMeteoCodeToWeatherIcon(weatherCode?: number | null): WeatherIcon
   if ([71, 73, 75, 77].includes(Number(weatherCode))) return 'snow'
   if ([95, 96, 99].includes(Number(weatherCode))) return 'thunder'
   return 'cloudy'
+}
+
+function mapOpenMeteoCodeToIntensity(weatherCode?: number | null): 'light' | 'normal' | 'heavy' {
+  const c = Number(weatherCode)
+  // Drizzle / slight showers → light; moderate → normal; dense / heavy → heavy
+  if ([51, 61, 80].includes(c)) return 'light'
+  if ([55, 65, 82].includes(c)) return 'heavy'
+  if ([53, 63, 81].includes(c)) return 'normal'
+  // Snow: 71 light, 73 normal, 75 heavy, 77 (grains) normal
+  if (c === 71) return 'light'
+  if (c === 75) return 'heavy'
+  if ([73, 77].includes(c)) return 'normal'
+  // Thunder: 95 normal, 96/99 with hail → heavy
+  if (c === 95) return 'normal'
+  if ([96, 99].includes(c)) return 'heavy'
+  return 'normal'
 }
 
 async function loadWeather(storeId?: string) {
@@ -852,6 +865,8 @@ watch(activeTab, (tab, oldTab) => {
   const oldIndex = dashboardTabOrder.indexOf(oldTab)
   pageTransitionName.value = oldIndex >= 0 && nextIndex < oldIndex ? 'tab-page-prev' : 'tab-page-next'
   if (oldTab && tab !== oldTab) {
+    tabScrollPositions.set(oldTab, window.scrollY)
+    pendingTabScrollTop = tabScrollPositions.get(tab) ?? 0
     pageNumberMotionReady.value = false
   }
 
@@ -860,8 +875,9 @@ watch(activeTab, (tab, oldTab) => {
   }
 })
 
-function beginPageSwitch() {
+function beginPageSwitch(el: Element) {
   pageNumberMotionReady.value = false
+  applyPendingTabScroll(el)
   if (pagePushDistance.value <= 0) {
     const viewportDistance = getViewportPagePushDistance()
     pageSwitchHeight.value = viewportDistance
@@ -877,6 +893,55 @@ function endPageSwitch() {
   pageNumberMotionReady.value = true
 }
 
+// ── Mobile swipe to switch tabs ──
+let swipeStartX = 0
+let swipeStartY = 0
+let swipeStartTime = 0
+let swipeTracking = false
+
+function onSwipeTouchStart(e: TouchEvent) {
+  if (pageSwitching.value) return
+  const touch = e.touches[0]
+  swipeStartX = touch.clientX
+  swipeStartY = touch.clientY
+  swipeStartTime = Date.now()
+  swipeTracking = true
+}
+
+function onSwipeTouchMove(e: TouchEvent) {
+  if (!swipeTracking) return
+  const touch = e.touches[0]
+  const dx = Math.abs(touch.clientX - swipeStartX)
+  const dy = Math.abs(touch.clientY - swipeStartY)
+  // If vertical movement dominates, cancel swipe tracking (allow scroll)
+  if (dy > dx * 1.2) {
+    swipeTracking = false
+  }
+}
+
+function onSwipeTouchEnd(e: TouchEvent) {
+  if (!swipeTracking) return
+  swipeTracking = false
+  const touch = e.changedTouches[0]
+  const dx = touch.clientX - swipeStartX
+  const dy = Math.abs(touch.clientY - swipeStartY)
+  const elapsed = Date.now() - swipeStartTime
+
+  // Require minimum distance, prefer horizontal, and be quick enough
+  const SWIPE_THRESHOLD = 50
+  const SWIPE_MAX_TIME = 400
+  if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < dy || elapsed > SWIPE_MAX_TIME) return
+
+  const currentIndex = dashboardTabOrder.indexOf(activeTab.value)
+  if (dx < 0 && currentIndex < dashboardTabOrder.length - 1) {
+    // Swipe left → next tab
+    activeTab.value = dashboardTabOrder[currentIndex + 1]
+  } else if (dx > 0 && currentIndex > 0) {
+    // Swipe right → previous tab
+    activeTab.value = dashboardTabOrder[currentIndex - 1]
+  }
+}
+
 function getViewportPagePushDistance() {
   const mainContent = document.querySelector('.main-content')
   const rect = mainContent?.getBoundingClientRect()
@@ -884,25 +949,33 @@ function getViewportPagePushDistance() {
   return Math.max(window.innerHeight - top, 1)
 }
 
+function getPageMaxScroll(el: Element) {
+  const section = el as HTMLElement
+  const mainContent = document.querySelector<HTMLElement>('.main-content')
+  const mainRect = mainContent?.getBoundingClientRect()
+  const mainTop = Math.max(mainRect?.top ?? 0, 0)
+  const mainStyle = mainContent ? window.getComputedStyle(mainContent) : null
+  const paddingBottom = mainStyle ? Number.parseFloat(mainStyle.paddingBottom || '0') || 0 : 0
+  const pageBottom = mainTop + section.scrollHeight + paddingBottom
+
+  return Math.max(pageBottom - window.innerHeight, 0)
+}
+
+function applyPendingTabScroll(el: Element) {
+  const targetTop = Math.min(Math.max(pendingTabScrollTop, 0), getPageMaxScroll(el))
+  window.scrollTo(0, targetTop)
+}
+
 function measurePagePushDistance(el: Element) {
   const section = el as HTMLElement
   const sectionRect = section.getBoundingClientRect()
   const baseDistance = getViewportPagePushDistance()
-  const viewportBottom = window.innerHeight
-  let distance = baseDistance
   pageSwitchHeight.value = baseDistance
 
-  const visibleElements = Array.from(section.querySelectorAll<HTMLElement>(
-    '.env-card, #controls, .scan-panel, .store-layout-row, .device-grid, .settings-layout, .settings-full-card, .flow-page, .firmware-section, .firmware-page, .flow-card, .chart-card',
-  ))
-
-  for (const item of visibleElements) {
-    const rect = item.getBoundingClientRect()
-    const intersectsViewportBottom = rect.top < viewportBottom && rect.bottom > viewportBottom
-    if (!intersectsViewportBottom) continue
-
-    distance = Math.max(distance, rect.bottom - sectionRect.top)
-  }
+  // Use section bottom relative to viewport — avoids per-element getBoundingClientRect
+  const sectionBottom = sectionRect.bottom
+  const viewportBottom = window.innerHeight
+  const distance = Math.max(baseDistance, sectionBottom > viewportBottom ? viewportBottom - sectionRect.top : baseDistance)
 
   pagePushDistance.value = Math.ceil(distance + PAGE_PUSH_GAP_PX)
 }
@@ -1265,6 +1338,14 @@ function handleRealtimeUpdate({
   payload: DeviceCreatePayload
   lightControl?: boolean
 }) {
+  const deviceIndex = devices.value.findIndex(item => String(item.id) === String(id))
+  if (deviceIndex >= 0) {
+    devices.value[deviceIndex] = {
+      ...devices.value[deviceIndex],
+      ...payload,
+    }
+  }
+
   let state = updateTimerMap.get(id)
   if (!state) {
     state = {
@@ -1920,6 +2001,11 @@ const connectionStatusClass = computed(() => ({
   'ws-offline': !connected.value,
 }))
 
+const connectionStatusText = computed(() => {
+  const prefix = connected.value ? 'WS 已连接' : 'WS 未连接'
+  return scanning.value || scanFinished.value ? `${prefix} · ${scanStatus.value}` : prefix
+})
+
 watch(connected, (val) => {
   if (scanning.value || scanFinished.value) return
 
@@ -2021,13 +2107,32 @@ onBeforeUnmount(() => {
 .page-section {
   position: relative;
   width: 100%;
-  will-change: transform;
 }
 
 .page-switcher.is-switching .page-section {
+  will-change: transform, opacity;
   height: 100%;
   min-height: 100%;
   overflow: hidden;
+}
+
+/* Performance: disable heavy effects during page transition */
+.page-switcher.is-switching :deep(.env-card),
+.page-switcher.is-switching :deep(.scan-panel),
+.page-switcher.is-switching :deep(.settings-group-card),
+.page-switcher.is-switching :deep(#controls),
+.page-switcher.is-switching :deep(.store-layout-main) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.page-switcher.is-switching :deep(.env-card),
+.page-switcher.is-switching :deep(.scan-panel),
+.page-switcher.is-switching :deep(.settings-group-card),
+.page-switcher.is-switching :deep(#controls),
+.page-switcher.is-switching :deep(.store-layout-main),
+.page-switcher.is-switching :deep(.settings-full-card) {
+  transition-property: opacity, transform !important;
 }
 
 .odometer-motion-pending {
@@ -2063,91 +2168,6 @@ onBeforeUnmount(() => {
 
 .tab-page-prev-leave-to {
   transform: translateY(var(--page-push-distance));
-}
-
-.dashboard-top-status {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  margin-bottom: 14px;
-}
-
-.current-time {
-  color: #111827;
-  font-size: 2rem;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.weather-status-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 7px;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.weather-svg-icon {
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: #64748b;
-}
-
-.weather-svg-icon svg {
-  width: 36px;
-  height: 36px;
-  display: block;
-}
-
-.weather-svg-icon path,
-.weather-svg-icon circle {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.weather-svg-icon .sun-core {
-  fill: rgba(245, 158, 11, 0.18);
-  stroke: #f59e0b;
-}
-
-.weather-svg-icon .sun-rays,
-.weather-svg-icon.weather-sunny {
-  color: #f59e0b;
-}
-
-.weather-svg-icon .weather-sun-small {
-  color: #f59e0b;
-}
-
-.weather-svg-icon .cloud-shape {
-  color: #64748b;
-  fill: rgba(148, 163, 184, 0.14);
-}
-
-.weather-svg-icon .rain-lines {
-  color: #3b82f6;
-}
-
-.weather-svg-icon .snow-marks {
-  color: #60a5fa;
-}
-
-.weather-svg-icon .fog-lines {
-  color: #94a3b8;
-}
-
-.weather-svg-icon .thunder-bolt path {
-  color: #facc15;
-  fill: rgba(250, 204, 21, 0.24);
 }
 
 .section-space-top {
@@ -2975,46 +2995,6 @@ onBeforeUnmount(() => {
   color: rgba(248, 250, 252, 0.96);
 }
 
-.app-container.night-mode .weather-status-row {
-  color: rgba(226, 232, 240, 0.82);
-}
-
-.app-container.night-mode .weather-svg-icon {
-  color: rgba(226, 232, 240, 0.85);
-}
-
-.app-container.night-mode .weather-svg-icon .sun-core,
-.app-container.night-mode .weather-svg-icon .sun-rays,
-.app-container.night-mode .weather-svg-icon .weather-sun-small {
-  color: #fbbf24;
-  stroke: #fbbf24;
-}
-
-.app-container.night-mode .weather-svg-icon .sun-core {
-  fill: rgba(251, 191, 36, 0.2);
-}
-
-.app-container.night-mode .weather-svg-icon .cloud-shape {
-  color: rgba(226, 232, 240, 0.85);
-  fill: rgba(226, 232, 240, 0.1);
-}
-
-.app-container.night-mode .weather-svg-icon .rain-lines {
-  color: #60a5fa;
-}
-
-.app-container.night-mode .weather-svg-icon .snow-marks {
-  color: #bfdbfe;
-}
-
-.app-container.night-mode .weather-svg-icon .fog-lines {
-  color: rgba(203, 213, 225, 0.78);
-}
-
-.app-container.night-mode .weather-svg-icon .thunder-bolt path {
-  color: #fde047;
-  fill: rgba(253, 224, 71, 0.22);
-}
 .scan-panel-title {
   font-size: 22px;
   font-weight: 700;
@@ -3410,41 +3390,35 @@ onBeforeUnmount(() => {
 .ios-panel-enter-active {
   transition:
     opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 420ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity, transform, filter;
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
 }
 
 .ios-panel-leave-active {
   transition:
     opacity 260ms cubic-bezier(0.4, 0, 1, 1),
-    transform 260ms cubic-bezier(0.4, 0, 1, 1),
-    filter 260ms cubic-bezier(0.4, 0, 1, 1);
-  will-change: opacity, transform, filter;
+    transform 260ms cubic-bezier(0.4, 0, 1, 1);
+  will-change: opacity, transform;
 }
 
 .ios-panel-enter-from {
   opacity: 0;
   transform: translateY(18px) scale(0.965);
-  filter: blur(8px);
 }
 
 .ios-panel-enter-to {
   opacity: 1;
   transform: translateY(0) scale(1);
-  filter: blur(0);
 }
 
 .ios-panel-leave-from {
   opacity: 1;
   transform: translateY(0) scale(1);
-  filter: blur(0);
 }
 
 .ios-panel-leave-to {
   opacity: 0;
   transform: translateY(10px) scale(0.985);
-  filter: blur(6px);
 }
 
 .text-input {
@@ -3473,6 +3447,53 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   padding: 24px 24px 48px 0;
   overflow-x: hidden;
+}
+
+/* ---- 3D layout card chrome (migrated from StoreLightLayout) ---- */
+.layout-card {
+  margin: 0;
+  padding: 18px;
+  border-radius: 24px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.14);
+}
+
+.layout-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.layout-header > div:first-child {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.layout-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.three-layout-mvp-panel {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .store-layout-row {
@@ -3545,30 +3566,6 @@ onBeforeUnmount(() => {
 
   .tab-page-prev-leave-to {
     transform: translateX(100vw);
-  }
-
-  .dashboard-top-status {
-    margin-bottom: 6px;
-  }
-
-  .current-time {
-    font-size: 1.4rem;
-  }
-
-  .weather-status-row {
-    margin-top: 4px;
-    gap: 6px;
-    font-size: 12px;
-  }
-
-  .weather-svg-icon {
-    width: 28px;
-    height: 28px;
-  }
-
-  .weather-svg-icon svg {
-    width: 28px;
-    height: 28px;
   }
 
   .section-space-top {
@@ -3755,6 +3752,27 @@ onBeforeUnmount(() => {
     margin: 10px 0 16px;
   }
 
+  .layout-card {
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+
+  .layout-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .layout-header > div:first-child {
+    flex: none;
+  }
+
+  .layout-header h2 {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
   .scan-panel {
     margin: 12px 0 16px;
     padding: 14px 16px;
@@ -3877,4 +3895,5 @@ onBeforeUnmount(() => {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
 </style>

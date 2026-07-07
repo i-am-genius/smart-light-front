@@ -1,130 +1,79 @@
 <template>
-  <div class="setup-page">
-    <div class="setup-shell">
-      <div class="setup-side">
-        <div>
-          <div class="brand-badge">STORE SETUP</div>
-          <h1>完善你的门店信息</h1>
-          <p class="side-desc">
-            为了生成更适合你店铺风格与展示场景的智能照明方案，
-            请先完成门店基础信息配置。
-          </p>
-        </div>
+  <div :class="{ shake: shakingFormCard }">
+    <AuthShell title="完善店铺信息" subtitle="用于系统展示、区域天气与照明推荐计算。">
+      <form class="form-body" @submit.prevent="handleSave">
+        <div class="form-grid">
+          <div class="form-item">
+            <label>店铺名称</label>
+            <input
+              v-model.trim="form.storeName"
+              type="text"
+              placeholder="请输入店铺名称"
+              :class="{ shake: shakingStoreName }"
+            />
+          </div>
 
-        <div class="feature-list">
-          <div class="feature-card">
-            <h3>店铺基础档案</h3>
-            <p>设置门店名称、面积、城市，便于后续统一管理</p>
-          </div>
-          <div class="feature-card">
-            <h3>风格智能适配</h3>
-            <p>根据门店风格与经营场景，推荐更合适的灯光策略</p>
-          </div>
-          <div class="feature-card">
-            <h3>后续设备联动</h3>
-            <p>完成初始化后，可继续接入灯具、传感器与摄像头设备</p>
-          </div>
-          <div class="feature-card">
-            <h3>支持稍后完善</h3>
-            <p>你也可以先进入系统，之后再到设置页补充信息</p>
+          <div class="form-item">
+            <label>店铺面积（㎡）</label>
+            <input
+              v-model.number="form.storeArea"
+              type="number"
+              min="1"
+              step="0.1"
+              placeholder="请输入店铺面积，如 80"
+              :class="{ shake: shakingStoreArea }"
+            />
           </div>
         </div>
 
-        <div class="tag-group">
-          <span>门店配置</span>
-          <span>风格适配</span>
-          <span>场景推荐</span>
-          <span>策略定制</span>
-        </div>
-      </div>
-
-      <div class="setup-main">
-        <div class="form-card" :class="{ shake: shakingFormCard }">
-          <div class="form-header">
-            <h2>完善店铺信息</h2>
-            <p>填写完成后即可进入系统首页</p>
+        <div class="form-grid">
+          <div class="form-item" :class="{ shake: shakingProvince }">
+            <label>省份</label>
+            <BaseSelect
+              v-model="regionValue.province"
+              :options="provinceOptions"
+              placeholder="请选择省份"
+              @change="handleProvinceChange"
+            />
           </div>
 
-          <form class="form-body" @submit.prevent="handleSave">
-            <div class="form-grid">
-              <div class="form-item">
-                <label>店铺名称</label>
-                <input
-                  v-model.trim="form.storeName"
-                  type="text"
-                  placeholder="请输入店铺名称"
-                  :class="{ shake: shakingStoreName }"
-                />
-              </div>
-
-              <div class="form-item">
-                <label>店铺面积（㎡）</label>
-                <input
-                  v-model.number="form.storeArea"
-                  type="number"
-                  min="1"
-                  step="0.1"
-                  placeholder="请输入店铺面积，如 80"
-                  :class="{ shake: shakingStoreArea }"
-                />
-              </div>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-item" :class="{ shake: shakingProvince }">
-                <label>省份</label>
-                  <BaseSelect
-                    v-model="regionValue.province"
-                    :options="provinceOptions"
-                    placeholder="请选择省份"
-                    @change="handleProvinceChange"
-                  />
-              </div>
-
-              <div class="form-item" :class="{ shake: shakingCity }">
-                <label>城市</label>
-                  <BaseSelect
-                    v-model="regionValue.city"
-                    :options="citySelectOptions"
-                    placeholder="请选择城市"
-                    :disabled="!citySelectOptions.length"
-                    @change="handleCityChange"
-                  />
-              </div>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-item" :class="{ shake: shakingStoreStyle }">
-                <label>店铺风格</label>
-                  <BaseSelect
-                    v-model="form.storeStyle"
-                    :options="storeStyleOptions"
-                    placeholder="请选择店铺风格"
-                  />
-              </div>
-
-              <div class="form-item">
-                <label>经营场景</label>
-                  <BaseSelect
-                    v-model="form.businessScene"
-                    :options="businessSceneOptions"
-                    placeholder="请选择经营场景"
-                  />
-              </div>
-            </div>
-
-            <div class="form-actions">
-              <button class="secondary-btn" type="button" @click="handleSkip">
-                稍后完善
-              </button>
-              <button class="primary-btn" type="submit" :disabled="loading">
-                {{ loading ? '保存中...' : '保存并进入系统' }}
-              </button>
-            </div>
-          </form>
+          <div class="form-item" :class="{ shake: shakingCity }">
+            <label>城市</label>
+            <BaseSelect
+              v-model="regionValue.city"
+              :options="citySelectOptions"
+              placeholder="请选择城市"
+              :disabled="!citySelectOptions.length"
+              @change="handleCityChange"
+            />
+          </div>
         </div>
-      </div>
-    </div>
+
+        <div class="form-grid single-row">
+          <div class="form-item" :class="{ shake: shakingStoreStyle }">
+            <label>店铺风格</label>
+            <BaseSelect
+              v-model="form.storeStyle"
+              :options="storeStyleOptions"
+              placeholder="请选择店铺风格"
+            />
+          </div>
+        </div>
+
+        <p class="setup-note">
+          店铺地区会用于天气关联，店铺风格会影响推荐照明策略。
+        </p>
+
+        <div class="form-actions">
+          <button class="secondary-btn" type="button" @click="handleSkip">
+            稍后完善
+          </button>
+          <button class="primary-btn" type="submit" :disabled="loading">
+            {{ loading ? '保存中...' : '保存并进入系统' }}
+          </button>
+        </div>
+      </form>
+    </AuthShell>
   </div>
 </template>
 
@@ -136,6 +85,7 @@ import type { RegionCity, RegionProvince, RegionValue } from '../constants/china
 import { regions } from '../constants/china-region'
 import { STORE_STYLE_OPTIONS, STORE_STYLE_MAP } from '../constants/store'
 import BaseSelect from '../components/common/BaseSelect.vue'
+import AuthShell from '../components/auth/AuthShell.vue'
 import { useToast } from '../composables/useToast'
 import { useShake } from '../composables/useShake'
 
@@ -171,17 +121,10 @@ const storeStyleOptions = computed(() => {
   }))
 })
 
-const businessSceneOptions = [
-  { label: '日常营业', value: 'daily' },
-  { label: '橱窗展示', value: 'window' },
-  { label: '主题陈列', value: 'display' },
-  { label: '直播展示', value: 'live' },
-]
 const form = reactive({
   storeName: '',
   storeArea: '' as number | string,
   storeStyle: '',
-  businessScene: '',
 })
 
 const regionValue = reactive<RegionValue>({
@@ -333,329 +276,224 @@ function handleSkip() {
 </script>
 
 <style scoped>
-.setup-page {
-  min-height: 100vh;
-  padding: 24px;
-  background:
-    radial-gradient(circle at top left, rgba(79, 70, 229, 0.16), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.14), transparent 28%),
-    linear-gradient(135deg, #f5f7fb 0%, #eef2ff 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
+/* Override auth-shell width for the wider setup form */
+:deep(.auth-shell) {
+  width: min(100%, 720px);
 }
 
-.setup-shell {
-  width: 1180px;
-  min-height: 720px;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.7);
-  border-radius: 28px;
-  overflow: hidden;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
-  display: grid;
-  grid-template-columns: 1.02fr 0.98fr;
+/* Override form-header: add border-bottom, adjust margin */
+:deep(.form-header) {
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.45);
 }
 
-.setup-side {
-  padding: 56px 48px;
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.95), rgba(79, 70, 229, 0.92));
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.brand-badge {
-  display: inline-block;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.14);
-  border: 1px solid rgba(255,255,255,0.2);
-  font-size: 12px;
-  letter-spacing: 1px;
-  margin-bottom: 18px;
-}
-
-.setup-side h1 {
-  margin: 0 0 14px;
-  font-size: 34px;
-  line-height: 1.25;
-}
-
-.side-desc {
+:deep(.form-header p) {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.8;
-  color: rgba(255,255,255,0.9);
 }
 
-.feature-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin: 36px 0;
-}
-
-.feature-card {
-  padding: 18px 16px;
-  border-radius: 18px;
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.14);
-}
-
-.feature-card h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-}
-
-.feature-card p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: rgba(255,255,255,0.88);
-}
-
-.tag-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.tag-group span {
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  background: rgba(255,255,255,0.14);
-  border: 1px solid rgba(255,255,255,0.18);
-}
-
-.setup-main {
-  padding: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.form-card {
-  width: 100%;
-  max-width: 520px;
-  padding: 36px 34px;
-  border-radius: 24px;
-  background: rgba(255,255,255,0.92);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-}
-
-.form-header h2 {
-  margin: 0 0 8px;
-  font-size: 28px;
-  color: #111827;
-}
-
-.form-header p {
-  margin: 0 0 28px;
-  color: #6b7280;
-  font-size: 14px;
-}
-
+/* ===== Form grid layout ===== */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
-.form-item {
-  margin-bottom: 18px;
+.single-row {
+  grid-template-columns: 1fr;
 }
 
-.form-item label {
-  display: block;
-  margin-bottom: 8px;
-  color: #374151;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.form-item input,
-.form-item select {
+/* ===== BaseSelect styles — match the new input design ===== */
+.form-item :deep(.base-select) {
   width: 100%;
-  height: 46px;
-  border-radius: 14px;
-  border: 1px solid #dbe3f0;
-  padding: 0 14px;
+}
+
+.form-item :deep(.select-trigger) {
+  min-height: 46px;
+  border-radius: 13px;
+  border: 1.5px solid rgba(203, 213, 225, 0.85);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: none;
   font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
+  color: #0f172a;
+}
+
+.form-item :deep(.select-trigger:hover) {
+  border-color: #93c5fd;
+}
+
+.form-item :deep(.open .select-trigger) {
+  border-color: #60a5fa;
   background: #fff;
-  transition: all 0.2s ease;
+  box-shadow:
+    0 0 0 3px rgba(96, 165, 250, 0.15),
+    0 0 0 1px rgba(37, 99, 235, 0.08);
 }
 
-.form-item input:focus,
-.form-item select:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.08);
+.form-item :deep(.select-text.placeholder) {
+  color: #94a3b8;
 }
 
-.form-item select:disabled {
-  background: #f3f4f6;
-  color: #9ca3af;
-  cursor: not-allowed;
+.form-item :deep(.select-option.active) {
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  color: #fff;
 }
 
+/* ===== Setup note ===== */
+.setup-note {
+  margin: 0 0 18px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ===== Form actions & buttons ===== */
 .form-actions {
-  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(203, 213, 225, 0.45);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
 }
 
-.primary-btn,
+/* Use higher specificity to override AuthShell's :deep(.primary-btn) */
+.form-actions .primary-btn,
+.form-actions .secondary-btn,
 .secondary-btn {
-  height: 46px;
-  padding: 0 22px;
-  border-radius: 14px;
-  font-size: 14px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 13px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  border: none;
+  box-sizing: border-box;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
 }
 
-.primary-btn {
-  background: linear-gradient(135deg, #4f46e5, #2563eb);
+.form-actions .primary-btn {
+  width: auto;
+  border: 1px solid #2563eb;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   color: #fff;
-  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.22);
+  box-shadow:
+    0 8px 22px rgba(37, 99, 235, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
 
-.primary-btn:disabled {
-  opacity: 0.7;
+.form-actions .primary-btn:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  box-shadow:
+    0 10px 26px rgba(37, 99, 235, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  transform: translateY(-1px);
+}
+
+.form-actions .primary-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.form-actions .primary-btn:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
+.form-actions .secondary-btn,
 .secondary-btn {
-  background: #eef2ff;
-  color: #4f46e5;
-  border: 1px solid #dbe3f0;
+  border: 1.5px solid rgba(203, 213, 225, 0.85);
+  background: rgba(255, 255, 255, 0.66);
+  color: #475569;
 }
 
-@media (max-width: 960px) {
-  .setup-shell {
-    grid-template-columns: 1fr;
-  }
+.form-actions .secondary-btn:hover,
+.secondary-btn:hover {
+  border-color: #94a3b8;
+  background: #fff;
+  color: #334155;
+  transform: translateY(-1px);
+}
 
-  .feature-list {
-    grid-template-columns: 1fr;
-  }
+.form-actions .secondary-btn:active,
+.secondary-btn:active {
+  transform: translateY(0);
+}
 
-  .setup-side {
-    padding: 36px 28px;
-  }
+/* ===== Night mode overrides ===== */
+:global(.app-container.night-mode) :deep(.form-header),
+:global(body:has(.app-container.night-mode)) :deep(.form-header) {
+  border-bottom-color: rgba(71, 85, 105, 0.35);
+}
 
-  .setup-main {
-    padding: 24px;
-  }
+:global(.app-container.night-mode) :deep(.select-trigger),
+:global(body:has(.app-container.night-mode)) :deep(.select-trigger) {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(71, 85, 105, 0.45);
+  color: #e2e8f0;
+}
 
+:global(.app-container.night-mode) :deep(.select-trigger:hover),
+:global(body:has(.app-container.night-mode)) :deep(.select-trigger:hover) {
+  border-color: rgba(96, 165, 250, 0.45);
+}
+
+:global(.app-container.night-mode) :deep(.open .select-trigger),
+:global(body:has(.app-container.night-mode)) :deep(.open .select-trigger) {
+  border-color: #60a5fa;
+  background: rgba(30, 41, 59, 0.9);
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.2),
+    0 0 0 1px rgba(96, 165, 250, 0.12);
+}
+
+:global(.app-container.night-mode) :deep(.select-text.placeholder),
+:global(body:has(.app-container.night-mode)) :deep(.select-text.placeholder) {
+  color: #64748b;
+}
+
+:global(.app-container.night-mode) .setup-note,
+:global(body:has(.app-container.night-mode)) .setup-note {
+  color: #94a3b8;
+}
+
+:global(.app-container.night-mode) .form-actions,
+:global(body:has(.app-container.night-mode)) .form-actions {
+  border-top-color: rgba(71, 85, 105, 0.35);
+}
+
+:global(.app-container.night-mode) .form-actions .secondary-btn,
+:global(body:has(.app-container.night-mode)) .form-actions .secondary-btn,
+:global(.app-container.night-mode) .secondary-btn,
+:global(body:has(.app-container.night-mode)) .secondary-btn {
+  background: rgba(30, 41, 59, 0.55);
+  border-color: rgba(71, 85, 105, 0.4);
+  color: #cbd5e1;
+}
+
+:global(.app-container.night-mode) .form-actions .secondary-btn:hover,
+:global(body:has(.app-container.night-mode)) .form-actions .secondary-btn:hover,
+:global(.app-container.night-mode) .secondary-btn:hover,
+:global(body:has(.app-container.night-mode)) .secondary-btn:hover {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #e2e8f0;
+}
+
+/* ===== Responsive: 760px ===== */
+@media (max-width: 760px) {
   .form-grid {
     grid-template-columns: 1fr;
     gap: 0;
   }
 
   .form-actions {
-    flex-direction: column;
+    flex-direction: column-reverse;
   }
 
-  .primary-btn,
+  .form-actions .primary-btn,
+  .form-actions .secondary-btn,
   .secondary-btn {
     width: 100%;
-  }
-}
-
-@media (max-width: 640px) {
-  .setup-side {
-    padding: 28px 20px;
-  }
-
-  .brand-badge {
-    font-size: 10px;
-    padding: 4px 10px;
-    margin-bottom: 12px;
-  }
-
-  .setup-side h1 {
-    font-size: 20px;
-  }
-
-  .side-desc {
-    font-size: 11px;
-    line-height: 1.4;
-  }
-
-  .feature-list {
-    gap: 10px;
-    margin: 20px 0;
-  }
-
-  .feature-card {
-    padding: 14px;
-  }
-
-  .feature-card h3 {
-    font-size: 13px;
-  }
-
-  .feature-card p {
-    font-size: 11px;
-  }
-
-  .tag-group {
-    gap: 6px;
-  }
-
-  .tag-group span {
-    font-size: 10px;
-    padding: 4px 8px;
-  }
-
-  .setup-main {
-    padding: 16px;
-  }
-
-  .form-card {
-    padding: 24px 20px;
-  }
-
-  .form-header h2 {
-    font-size: 20px;
-  }
-
-  .form-header p {
-    font-size: 12px;
-    margin-bottom: 20px;
-  }
-
-  .form-item {
-    margin-bottom: 14px;
-  }
-
-  .form-item label {
-    font-size: 11px;
-    margin-bottom: 4px;
-  }
-
-  .form-item input,
-  .form-item select {
-    height: 40px;
-    font-size: 13px;
-    border-radius: 10px;
-    padding: 0 10px;
-  }
-
-  .primary-btn,
-  .secondary-btn {
-    height: 42px;
-    font-size: 13px;
-    border-radius: 10px;
+    height: 43px;
   }
 }
 </style>

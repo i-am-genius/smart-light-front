@@ -1,98 +1,47 @@
 <template>
-  <div class="auth-page">
-    <div class="auth-shell">
-      <div class="auth-side">
-        <div class="brand">
-          <div class="brand-badge">SMART LIGHT</div>
-          <h1>智能服装照明管理平台</h1>
-          <p>
-            面向服装门店的智能灯光控制与设备管理系统，
-            支持设备接入、智能调光、风格匹配和实时状态监控。
-          </p>
+  <div :class="{ shake: shakingFormCard }">
+    <AuthShell title="登录账号" subtitle="进入门店灯光、设备与数据看板">
+      <form class="form-body" @submit.prevent="handleLogin">
+        <div class="form-item">
+          <label>账号</label>
+          <input
+            v-model.trim="form.username"
+            type="text"
+            placeholder="请输入用户名"
+            :class="{ shake: shakingUsername }"
+          />
         </div>
 
-        <div class="feature-list">
-          <div class="feature-item">
-            <span class="dot"></span>
-            <div>
-              <h3>智能调光</h3>
-              <p>结合环境光、人流与推荐策略动态调节亮度与色温</p>
-            </div>
-          </div>
-
-          <div class="feature-item">
-            <span class="dot"></span>
-            <div>
-              <h3>设备联动</h3>
-              <p>支持灯具、传感器与摄像头设备统一接入和状态同步</p>
-            </div>
-          </div>
-
-          <div class="feature-item">
-            <span class="dot"></span>
-            <div>
-              <h3>场景适配</h3>
-              <p>根据门店陈列与服装展示需求生成更合适的灯光方案</p>
-            </div>
-          </div>
+        <div class="form-item">
+          <label>密码</label>
+          <input
+            v-model="form.password"
+            type="password"
+            placeholder="请输入密码"
+            :class="{ shake: shakingPassword }"
+          />
         </div>
 
-        <div class="tag-group">
-          <span>服装门店</span>
-          <span>分区管理</span>
-          <span>色温调节</span>
-          <span>智能联动</span>
+        <div class="form-extra">
+          <label class="remember">
+            <input v-model="rememberMe" type="checkbox" />
+            <span>记住我</span>
+          </label>
+          <a href="javascript:void(0)">忘记密码？</a>
         </div>
-      </div>
 
-      <div class="auth-main">
-        <div class="form-card" :class="{ shake: shakingFormCard }">
-          <div class="form-header">
-            <h2>欢迎登录</h2>
-            <p>请输入账号信息进入系统</p>
-          </div>
+        <button class="primary-btn" type="submit" :disabled="loading">
+          {{ loading ? '登录中...' : '登录' }}
+        </button>
+      </form>
 
-          <form class="form-body" @submit.prevent="handleLogin">
-            <div class="form-item">
-              <label>账号</label>
-              <input
-                v-model.trim="form.username"
-                type="text"
-                placeholder="请输入用户名"
-                :class="{ shake: shakingUsername }"
-              />
-            </div>
-
-            <div class="form-item">
-              <label>密码</label>
-              <input
-                v-model="form.password"
-                type="password"
-                placeholder="请输入密码"
-                :class="{ shake: shakingPassword }"
-              />
-            </div>
-
-            <div class="form-extra">
-              <label class="remember">
-                <input v-model="rememberMe" type="checkbox" />
-                <span>记住我</span>
-              </label>
-              <a href="javascript:void(0)">忘记密码？</a>
-            </div>
-
-            <button class="primary-btn" type="submit" :disabled="loading">
-              {{ loading ? '登录中...' : '登 录' }}
-            </button>
-
-            <div class="form-footer">
-              还没有账号？
-              <router-link to="/register">立即注册</router-link>
-            </div>
-          </form>
+      <template #footer>
+        <div class="form-footer">
+          还没有账号？
+          <router-link to="/register">立即注册</router-link>
         </div>
-      </div>
-    </div>
+      </template>
+    </AuthShell>
   </div>
 </template>
 
@@ -102,6 +51,7 @@ import { useRouter } from 'vue-router'
 import { loginApi } from '../api/auth'
 import { useToast } from '../composables/useToast'
 import { useShake } from '../composables/useShake'
+import AuthShell from '../components/auth/AuthShell.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -147,14 +97,10 @@ async function handleLogin() {
     }
 
 
-    localStorage.removeItem('TOKEN')
-    localStorage.removeItem('USER_INFO')
-    localStorage.removeItem('storeSetup')
-    sessionStorage.removeItem('TOKEN')
-    sessionStorage.removeItem('USER_INFO')
-    sessionStorage.removeItem('storeSetup')
-
+    // Only clear storeSetup from the storage type we're NOT writing to
     const storage = rememberMe.value ? localStorage : sessionStorage
+    const otherStorage = rememberMe.value ? sessionStorage : localStorage
+    otherStorage.removeItem('storeSetup')
 
     storage.setItem('TOKEN', data.token)
     storage.setItem('USER_INFO', JSON.stringify(data))
@@ -198,139 +144,115 @@ onMounted(() => {
 <style scoped>
 .auth-page {
   min-height: 100vh;
-  padding: 24px;
-  background:
-    radial-gradient(circle at top left, rgba(79, 70, 229, 0.16), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.14), transparent 28%),
-    linear-gradient(135deg, #f5f7fb 0%, #eef2ff 100%);
+  position: relative;
+  isolation: isolate;
+  padding: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  background: #eef4fb;
+  overflow: hidden;
+}
+
+.auth-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image: url('/backgrounds/bg-day.png');
+  background-size: cover;
+  background-position: center right;
+  background-repeat: no-repeat;
+  opacity: 0.95;
+  filter: blur(8px);
+  transform: scale(1.02);
+}
+
+.auth-page::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(245, 248, 252, 0.28) 0%, rgba(245, 248, 252, 0.14) 48%, rgba(245, 248, 252, 0.04) 100%);
+  pointer-events: none;
 }
 
 .auth-shell {
-  width: 1120px;
-  min-height: 680px;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.7);
-  border-radius: 28px;
-  overflow: hidden;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  width: min(100%, 460px);
 }
 
-.auth-side {
-  padding: 56px 48px;
+.auth-card {
+  width: 100%;
+  padding: 30px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.10);
+  backdrop-filter: blur(16px);
+  box-sizing: border-box;
+}
+
+.auth-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
   background:
-    linear-gradient(180deg, rgba(37, 99, 235, 0.95), rgba(79, 70, 229, 0.92));
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.brand-badge {
-  display: inline-block;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.14);
-  border: 1px solid rgba(255,255,255,0.2);
-  font-size: 12px;
-  letter-spacing: 1px;
-  margin-bottom: 18px;
-}
-
-.brand h1 {
-  margin: 0 0 16px;
-  font-size: 34px;
-  line-height: 1.25;
-  font-weight: 700;
-}
-
-.brand p {
-  margin: 0;
-  line-height: 1.8;
-  color: rgba(255,255,255,0.9);
-  font-size: 15px;
-}
-
-.feature-list {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  margin: 42px 0;
-}
-
-.feature-item {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  margin-top: 9px;
-  border-radius: 50%;
-  background: #fff;
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(219, 234, 254, 0.72));
+  border: 1px solid rgba(191, 219, 254, 0.82);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
   flex-shrink: 0;
-  box-shadow: 0 0 0 6px rgba(255,255,255,0.12);
-}
-
-.feature-item h3 {
-  margin: 0 0 6px;
-  font-size: 17px;
-}
-
-.feature-item p {
-  margin: 0;
-  color: rgba(255,255,255,0.86);
-  line-height: 1.7;
-  font-size: 14px;
-}
-
-.tag-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.tag-group span {
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  background: rgba(255,255,255,0.14);
-  border: 1px solid rgba(255,255,255,0.18);
-}
-
-.auth-main {
-  padding: 40px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.form-card {
-  width: 100%;
-  max-width: 420px;
-  padding: 36px 34px;
-  border-radius: 24px;
-  background: rgba(255,255,255,0.92);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+.brand-mark svg {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+.bulb-glow {
+  fill: rgba(96, 165, 250, 0.2);
+  stroke: #2563eb;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bulb-line {
+  fill: none;
+  stroke: #1d4ed8;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.auth-brand-row strong {
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .form-header h2 {
   margin: 0 0 8px;
-  font-size: 28px;
+  font-size: 26px;
   color: #111827;
 }
 
 .form-header p {
-  margin: 0 0 28px;
-  color: #6b7280;
+  margin: 0 0 24px;
+  color: #64748b;
   font-size: 14px;
 }
 
@@ -341,26 +263,28 @@ onMounted(() => {
 .form-item label {
   display: block;
   margin-bottom: 8px;
-  color: #374151;
-  font-size: 14px;
-  font-weight: 600;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .form-item input {
   width: 100%;
-  height: 46px;
-  border-radius: 14px;
-  border: 1px solid #dbe3f0;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(203, 213, 225, 0.92);
   padding: 0 14px;
   font-size: 14px;
   outline: none;
   box-sizing: border-box;
-  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.88);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-item input:focus {
-  border-color: #4f46e5;
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.08);
+  border-color: #60a5fa;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
 }
 
 .form-extra {
@@ -375,27 +299,33 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #6b7280;
+  color: #64748b;
 }
 
 .form-extra a,
 .form-footer a {
-  color: #4f46e5;
+  color: #2563eb;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .primary-btn {
   width: 100%;
-  height: 48px;
-  border: none;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  height: 44px;
+  border: 1px solid #2563eb;
+  border-radius: 12px;
+  background: #2563eb;
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.22);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.primary-btn:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
 }
 
 .primary-btn:disabled {
@@ -406,71 +336,16 @@ onMounted(() => {
 .form-footer {
   margin-top: 18px;
   text-align: center;
-  color: #6b7280;
+  color: #64748b;
   font-size: 14px;
 }
 
-@media (max-width: 960px) {
-  .auth-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .auth-side {
-    padding: 36px 28px;
-  }
-
-  .auth-main {
-    padding: 24px;
-  }
-}
-
 @media (max-width: 640px) {
-  .auth-side {
-    padding: 28px 20px;
-  }
-
-  .brand-badge {
-    font-size: 10px;
-    padding: 4px 10px;
-    margin-bottom: 12px;
-  }
-
-  .brand h1 {
-    font-size: 20px;
-  }
-
-  .brand p {
-    font-size: 11px;
-    line-height: 1.4;
-  }
-
-  .feature-item h3 {
-    font-size: 13px;
-  }
-
-  .feature-item p {
-    font-size: 11px;
-  }
-
-  .feature-list {
-    gap: 14px;
-    margin: 24px 0;
-  }
-
-  .tag-group {
-    gap: 6px;
-  }
-
-  .tag-group span {
-    font-size: 10px;
-    padding: 4px 8px;
-  }
-
-  .auth-main {
+  .auth-page {
     padding: 16px;
   }
 
-  .form-card {
+  .auth-card {
     padding: 24px 20px;
   }
 
@@ -488,15 +363,14 @@ onMounted(() => {
   }
 
   .form-item label {
-    font-size: 11px;
-    margin-bottom: 4px;
+    font-size: 12px;
+    margin-bottom: 6px;
   }
 
   .form-item input {
-    height: 40px;
+    height: 42px;
     font-size: 13px;
-    border-radius: 10px;
-    padding: 0 10px;
+    border-radius: 11px;
   }
 
   .form-extra {
@@ -507,7 +381,7 @@ onMounted(() => {
   .primary-btn {
     height: 42px;
     font-size: 14px;
-    border-radius: 10px;
+    border-radius: 11px;
   }
 
   .form-footer {

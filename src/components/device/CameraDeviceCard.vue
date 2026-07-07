@@ -313,7 +313,7 @@
                           </label>
                           <label>
                             <span>垂直轴</span>
-                            <input v-model.number="roiDraft.centerPreset.pitch" type="number" min="0" max="180" step="1" />
+                            <input v-model.number="roiDraft.centerPreset.pitch" type="number" min="-90" max="90" step="1" />
                           </label>
                           <label>
                             <span>旋转轴</span>
@@ -336,6 +336,7 @@
                             v-model="roi.targetChipId"
                             :options="targetSelectOptions"
                             placeholder="选择射灯设备"
+                            @change="handleRoiTargetChange(roi, $event)"
                           />
                         </label>
                         <label>
@@ -375,7 +376,7 @@
                             </label>
                             <label>
                               <span>垂直轴</span>
-                              <input v-model.number="roiDraft.capturePresets[roi.targetIndex].pitch" type="number" min="0" max="180" step="1" />
+                              <input v-model.number="roiDraft.capturePresets[roi.targetIndex].pitch" type="number" min="-90" max="90" step="1" />
                             </label>
                             <label>
                               <span>旋转轴</span>
@@ -392,7 +393,7 @@
                             </label>
                             <label>
                               <span>垂直轴</span>
-                              <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].pitch" type="number" min="0" max="180" step="1" />
+                              <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].pitch" type="number" min="-90" max="90" step="1" />
                             </label>
                             <label>
                               <span>旋转轴</span>
@@ -483,7 +484,9 @@ import {
   startOtaUpdate,
 } from '../../api/device'
 import { getPersonFlowImageObjectUrl } from '../../api/personFlow'
+import { applyTargetDeviceToRoi, getTargetDeviceLabel } from '../../utils/cameraRoi'
 import { getErrorMessage } from '../../utils/error'
+import { resolveFiniteNumber } from '../../utils/helpers'
 
 const props = defineProps<{
   device: DeviceItem
@@ -891,21 +894,6 @@ const cameraSelfTestRows = computed(() => {
   ]
 })
 
-function getTargetDeviceLabel(target: DeviceItem, fallbackIndex: number) {
-  const anyTarget = target as DeviceItem & {
-    name?: string
-    areaName?: string
-    zoneName?: string
-  }
-  const explicitName = anyTarget.name?.trim() || target.displayName?.trim()
-  const areaName = anyTarget.areaName?.trim() || anyTarget.zoneName?.trim()
-
-  if (areaName && explicitName) return `${areaName} · ${explicitName}`
-  if (explicitName) return explicitName
-  if (target.chipId) return target.chipId
-  return `灯具-${fallbackIndex}`
-}
-
 function getPresenceLabel(areaLabel: string, targetChipId: string | undefined, fallbackIndex: number) {
   const targetLabel = targetChipId ? getTargetLabelByChipId(targetChipId, fallbackIndex) : ''
   return targetLabel ? `${areaLabel} · ${targetLabel}` : areaLabel
@@ -924,6 +912,11 @@ function findTargetDevice(chipId?: string) {
   const normalizedChipId = normalizeChipId(chipId)
   if (!normalizedChipId) return undefined
   return (props.targetDevices || []).find(item => normalizeChipId(item.chipId) === normalizedChipId)
+}
+
+function handleRoiTargetChange(roi: CamRoiItem, value: string | number) {
+  const target = findTargetDevice(String(value))
+  applyTargetDeviceToRoi(roi, target, roiDraft.value.udpPort)
 }
 
 function isLampClothTaken(target?: DeviceItem) {
@@ -999,7 +992,7 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
 function createDefaultPreset(): CamPtzPreset {
   return {
     yaw: 90,
-    pitch: 90,
+    pitch: 0,
     roll: 90,
   }
 }
@@ -1041,8 +1034,8 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
     centerPreset: normalizePreset(value?.centerPreset),
     capturePresets: normalizePresetMap(value?.capturePresets),
     trackingPresets: normalizePresetMap(value?.trackingPresets),
-    trackingLostTimeoutSeconds: clampNumber(value?.trackingLostTimeoutSeconds, 5, 1),
-    udpPort: clampNumber(value?.udpPort, 4211, 1, 65535),
+    trackingLostTimeoutSeconds: clamp(resolveFiniteNumber(value?.trackingLostTimeoutSeconds, 5), 1, Number.MAX_SAFE_INTEGER),
+    udpPort: clamp(resolveFiniteNumber(value?.udpPort, 4211), 1, 65535),
     rois,
   }
 }
@@ -1050,9 +1043,9 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
 function normalizePreset(value: unknown): CamPtzPreset {
   const source = isPlainObject(value) ? value : {}
   return {
-    yaw: clampNumber(source.yaw, 90, 0, 180),
-    pitch: clampNumber(source.pitch, 90, 0, 180),
-    roll: clampNumber(source.roll, 90, 0, 180),
+    yaw: clamp(resolveFiniteNumber(source.yaw, 90), 0, 180),
+    pitch: clamp(resolveFiniteNumber(source.pitch, 0), -90, 90),
+    roll: clamp(resolveFiniteNumber(source.roll, 90), 0, 180),
     configured: Boolean(source.configured),
   }
 }
@@ -1075,15 +1068,15 @@ function normalizeRoi(value: Partial<CamRoiItem> | undefined, targetIndex: numbe
     targetIndex,
     targetChipId: value?.targetChipId || '',
     areaName: value?.areaName || fallback.areaName,
-    x: clampUnit(value?.x ?? fallback.x),
-    y: clampUnit(value?.y ?? fallback.y),
-    w: clampUnit(value?.w ?? fallback.w, 0.03, 1),
-    h: clampUnit(value?.h ?? fallback.h, 0.03, 1),
+    x: clamp(value?.x ?? fallback.x),
+    y: clamp(value?.y ?? fallback.y),
+    w: clamp(value?.w ?? fallback.w, 0.03, 1),
+    h: clamp(value?.h ?? fallback.h, 0.03, 1),
     dwellSeconds: Number(value?.dwellSeconds ?? fallback.dwellSeconds),
     leaveDelaySeconds: Number(value?.leaveDelaySeconds ?? fallback.leaveDelaySeconds),
-    confidenceThreshold: clampUnit(value?.confidenceThreshold ?? fallback.confidenceThreshold, 0, 1),
+    confidenceThreshold: clamp(value?.confidenceThreshold ?? fallback.confidenceThreshold, 0, 1),
     udpIp: value?.udpIp || fallback.udpIp,
-    udpPort: clampNumber(value?.udpPort, fallback.udpPort || 4211, 1, 65535),
+    udpPort: clamp(resolveFiniteNumber(value?.udpPort, fallback.udpPort || 4211), 1, 65535),
   }
 }
 
@@ -1095,27 +1088,21 @@ function isRoiReady(roi: CamRoiItem) {
   return Boolean(roi.targetChipId && roi.w >= 0.03 && roi.h >= 0.03)
 }
 
-function clampUnit(value: unknown, min = 0, max = 1) {
+function clamp(value: unknown, min = 0, max = 1) {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return min
   return Math.max(min, Math.min(max, numeric))
 }
 
-function clampNumber(value: unknown, fallback: number, min: number, max = Number.MAX_SAFE_INTEGER) {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) return fallback
-  return Math.max(min, Math.min(max, numeric))
-}
-
 function clampRoiToBounds(roi: CamRoiItem): CamRoiItem {
-  const w = clampUnit(roi.w, 0.03, 1)
-  const h = clampUnit(roi.h, 0.03, 1)
+  const w = clamp(roi.w, 0.03, 1)
+  const h = clamp(roi.h, 0.03, 1)
   return {
     ...roi,
     w,
     h,
-    x: clampUnit(roi.x, 0, 1 - w),
-    y: clampUnit(roi.y, 0, 1 - h),
+    x: clamp(roi.x, 0, 1 - w),
+    y: clamp(roi.y, 0, 1 - h),
   }
 }
 
@@ -1350,8 +1337,8 @@ function handleRoiCanvasPointerDown(event: PointerEvent) {
   if (!rect) return
 
   const index = activeRoiIndex.value || 1
-  const x = clampUnit((event.clientX - rect.left) / rect.width, 0, 0.97)
-  const y = clampUnit((event.clientY - rect.top) / rect.height, 0, 0.97)
+  const x = clamp((event.clientX - rect.left) / rect.width, 0, 0.97)
+  const y = clamp((event.clientY - rect.top) / rect.height, 0, 0.97)
   const roi = roiDraft.value.rois.find(item => item.targetIndex === index)
   if (!roi) return
 
@@ -1421,6 +1408,7 @@ function statusText(value: SelfTestValue) {
   if (value === false) return '异常'
   if (value === 'triggered') return '触发'
   if (value === 'clear') return '未触发'
+  if (value === 'disabled') return '已禁用'
   if (value === 'unknown' || value == null || value === '') return '未知'
   return String(value)
 }
