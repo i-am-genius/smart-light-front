@@ -249,10 +249,10 @@ const knobStyle = computed(() => ({
   `
 }))
 
-const PAN_MIN = -90
-const PAN_MAX = 90
-const TILT_MIN = -45
-const TILT_MAX = 45
+const PAN_MIN = -45
+const PAN_MAX = 45
+const TILT_MIN = -90
+const TILT_MAX = 90
 const SLIDER_MIN = 0
 const SLIDER_MAX_LAMP = 1200
 const SLIDER_MAX_CAM = 500
@@ -324,6 +324,7 @@ function parseSelfTestJson(value?: string | null): SelfTestResult | null {
 function hallText(value?: string) {
   if (value === 'triggered') return '触发'
   if (value === 'clear') return '未触发'
+  if (value === 'disabled') return '已禁用'
   return '未知'
 }
 

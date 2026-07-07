@@ -1067,6 +1067,7 @@ function statusText(value: SelfTestValue) {
   if (value === false) return '异常'
   if (value === 'triggered') return '触发'
   if (value === 'clear') return '未触发'
+  if (value === 'disabled') return '已禁用'
   if (value === 'unknown' || value == null || value === '') return '未知'
   return String(value)
 }
