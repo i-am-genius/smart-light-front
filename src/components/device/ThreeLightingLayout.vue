@@ -1,27 +1,148 @@
 ﻿<template>
   <div class="three-layout-shell">
-    <button class="view-toggle-btn" type="button" @click.stop="toggleCameraView">
-      {{ cameraViewMode === 'display' ? '调节射灯视角' : '展示视角' }}
-    </button>
-    <div ref="viewportRef" class="three-layout-viewport"></div>
+    <div class="three-controls-panel" @pointerdown.stop>
+      <div class="zone-switcher">
+        <button
+          class="zone-arrow-btn"
+          type="button"
+          :disabled="zoneCount <= 1"
+          @click.stop="switchZone(-1)"
+        >
+          ‹
+        </button>
+        <div class="zone-current-label">
+          <strong>{{ activeZone.zoneName }}</strong>
+          <span>{{ activeZoneIndex + 1 }} / {{ zoneCount }}</span>
+        </div>
+        <button
+          class="zone-arrow-btn"
+          type="button"
+          :disabled="zoneCount <= 1"
+          @click.stop="switchZone(1)"
+        >
+          ›
+        </button>
+      </div>
+      <div class="slot-toolbar">
+        <span class="selected-slot-label">
+          {{ selectedSlotLabel }}
+        </span>
+        <button type="button" @click.stop="addManualSlot">+ 灯位</button>
+        <button type="button" :disabled="!canMoveSelectedLeft" @click.stop="moveSelectedSlot(-1)">
+          左移
+        </button>
+        <button
+          type="button"
+          :disabled="!canMoveSelectedRight"
+          @click.stop="moveSelectedSlot(1)"
+        >
+          右移
+        </button>
+        <button type="button" :disabled="!canDeleteSelectedSlot" :title="deleteSlotTitle" @click.stop="deleteSelectedSlot">
+          删除灯位
+        </button>
+        <button type="button" :disabled="layoutState.lamps.length <= 1" @click.stop="handleArrangeSlotsEvenly">均匀排列</button>
+      </div>
+    </div>
+    <div class="three-viewport-wrap">
+      <button class="view-toggle-btn" type="button" @click.stop="toggleCameraView">
+        {{ cameraViewMode === 'display' ? '调节射灯视角' : '展示视角' }}
+      </button>
+      <div ref="viewportRef" class="three-layout-viewport"></div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import type { DeviceItem } from '../../types/device'
+import { normalizeDeviceType } from '../../utils/device'
+import { clamp, colorTemperatureToHex, resolveFiniteNumber } from '../../utils/helpers'
+import { locateDevice } from '../../api/device'
 
-type LampTemperature = 3000 | 4000 | 6000
+type LampTemperature = number
 
 type LampLayout = {
-  id: string
+  slotId: string
+  order: number
+  lampX: number
+  targetX: number
+  boundLampDeviceId?: string | number | ''
+  sourceDeviceId?: string | number
+  isManual?: boolean
+  deviceId?: string | number
+  chipId?: string
   name: string
-  x: number
   brightness: number
   temperature: LampTemperature
   clothingColor: string
+  online?: boolean
+}
+
+type ZoneSlot = {
+  slotId: string
+  order: number
+  lampX: number
   targetX: number
+  boundLampDeviceId?: string | number | ''
+  sourceDeviceId?: string | number
+  isManual?: boolean
+}
+
+type CameraLayout = {
+  x: number
+  y: number
+  z: number
+  deviceId?: string | number
+  chipId?: string
+  name: string
+  online?: boolean
+}
+
+type SelectionInfo = {
+  selected: boolean
+  label: string
+  slotId?: string
+  isManual?: boolean
+  canDelete: boolean
+  deleteDisabledReason?: string
+}
+
+type DeviceLike = Partial<DeviceItem> & {
+  name?: string
+  type?: string
+  mainColorRGB?: unknown
+  mainColor?: unknown
+}
+
+type StoreZoneLike = {
+  id?: string | number
+  name?: string
+}
+
+type TrackLayout = {
+  startX: number
+  endX: number
+  y: number
+  z: number
+}
+
+type ThreeZoneOption = {
+  zoneId: string
+  zoneName: string
+}
+
+type StoredZoneLayout = {
+  track?: Partial<TrackLayout>
+  slots?: Array<Partial<ZoneSlot>>
+  lamps?: Array<{
+    slotId?: string
+    x?: number
+    targetX?: number
+    boundLampDeviceId?: string | number | ''
+  }>
 }
 
 type TrackHandle = 'left' | 'right'
@@ -40,33 +161,90 @@ type LampObjects = {
   group: THREE.Group
   body: THREE.Group
   head: THREE.Group
+  yawGroup: THREE.Group
+  yokeFrame: THREE.Group
+  pitchBody: THREE.Group
   spot: THREE.SpotLight
   spotTarget: THREE.Object3D
   beam: THREE.Mesh
   aperture: THREE.Mesh
+  selectionRing: THREE.Mesh
+  selectionMarker: THREE.Mesh
   shirt: THREE.Group
 }
 
+const props = withDefaults(defineProps<{
+  devices?: DeviceLike[]
+  zones?: StoreZoneLike[]
+  active?: boolean
+}>(), {
+  devices: () => [],
+  zones: () => [],
+  active: true,
+})
+
+const emit = defineEmits<{
+  (event: 'selection-change', value: SelectionInfo): void
+}>()
+
 const viewportRef = ref<HTMLDivElement | null>(null)
 const cameraViewMode = ref<CameraViewMode>('display')
+const activeZoneIndex = ref(0)
+const selectedSlotId = ref('')
+const locatingSlotId = ref('')
 
-const layoutState = reactive({
+const zoneOptions = computed(() => normalizeZones(props.zones))
+const zoneCount = computed(() => zoneOptions.value.length)
+const activeZone = computed(() => zoneOptions.value[activeZoneIndex.value] || createDefaultZoneOption())
+const selectedSlot = computed(() => layoutState.lamps.find(lamp => lamp.slotId === selectedSlotId.value) || null)
+const selectedSlotIndex = computed(() => selectedSlot.value ? layoutState.lamps.findIndex(lamp => lamp.slotId === selectedSlot.value?.slotId) : -1)
+const canMoveSelectedLeft = computed(() => selectedSlotId.value !== '' && selectedSlotIndex.value > 0)
+const canMoveSelectedRight = computed(() =>
+  selectedSlotId.value !== '' &&
+  selectedSlotIndex.value >= 0 &&
+  selectedSlotIndex.value < layoutState.lamps.length - 1,
+)
+const selectedSlotLabel = computed(() => {
+  if (!selectedSlotId.value || !selectedSlot.value) return '请先点击选择一盏灯'
+  return `已选中：${selectedSlot.value.name || `灯位 ${selectedSlotIndex.value + 1}`}`
+})
+const canDeleteSelectedSlot = computed(() =>
+  selectedSlotId.value !== '' &&
+  Boolean(selectedSlot.value) &&
+  isDeletableSlot(selectedSlot.value),
+)
+const deleteSlotTitle = computed(() => {
+  if (!selectedSlotId.value || !selectedSlot.value) return '请先点击选择未绑定灯位'
+  if (!isDeletableSlot(selectedSlot.value)) return '真实设备灯位暂不能删除'
+  return '删除当前未绑定灯位'
+})
+
+const mockLampLayouts: LampLayout[] = [
+  { slotId: 'mock-1', order: 0, name: '新品展示区', lampX: -2.15, targetX: -2.15, brightness: 72, temperature: 3000, clothingColor: '#d45a48' },
+  { slotId: 'mock-2', order: 1, name: '主通道区', lampX: 0, targetX: 0, brightness: 88, temperature: 4000, clothingColor: '#8fb95a' },
+  { slotId: 'mock-3', order: 2, name: '橱窗区', lampX: 2.05, targetX: 2.05, brightness: 56, temperature: 6000, clothingColor: '#4d86d9' },
+]
+
+const mockCameraLayout: CameraLayout = {
+  x: 4.05,
+  y: 2.05,
+  z: -1.88,
+  name: '模拟摄像头',
+}
+
+const layoutState = reactive<{
+  track: TrackLayout
+  lamps: LampLayout[]
+  camera: CameraLayout
+}>({
   track: {
     startX: -3.2,
     endX: 3.2,
     y: 3.35,
     z: -1.05,
   },
-  lamps: [
-    { id: 'lamp-1', name: '新品展示区', x: -2.15, targetX: -2.25, brightness: 72, temperature: 3000, clothingColor: '#d45a48' },
-    { id: 'lamp-2', name: '主通道区', x: 0, targetX: 0, brightness: 88, temperature: 4000, clothingColor: '#8fb95a' },
-    { id: 'lamp-3', name: '橱窗区', x: 2.05, targetX: 2.25, brightness: 56, temperature: 6000, clothingColor: '#4d86d9' },
-  ] as LampLayout[],
-  camera: {
-    x: 4.05,
-    y: 2.05,
-    z: -1.88,
-  },
+  lamps: mockLampLayouts.map(item => ({ ...item })),
+  camera: { ...mockCameraLayout },
 })
 
 let scene: THREE.Scene | null = null
@@ -82,6 +260,8 @@ const railSupportMeshes: THREE.Mesh[] = []
 let leftHandleMesh: THREE.Mesh | null = null
 let rightHandleMesh: THREE.Mesh | null = null
 let dragState: DragState | null = null
+let hasRestoredActiveZone = false
+let cachedStoredLayouts: { version: number; activeZoneId: string; zoneLayouts: Record<string, StoredZoneLayout> } | null = null
 
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
@@ -92,6 +272,52 @@ const displayWallZ = -2.42
 const shirtBaseY = 0.72
 const shirtAimY = 1.26
 const wallLightSpotZ = displayWallZ + 0.065
+const ZONE_LAYOUT_STORAGE_KEY = 'SMART_LIGHT_THREE_ZONE_LAYOUTS_V1'
+const ZONE_DEFINITION_STORAGE_KEY = 'SMART_LIGHT_LAYOUT_ZONES'
+const MIN_VISIBLE_SLOTS = 3
+
+/** A slot is "visible" (renders a lamp model) unless it's a pure placeholder (no device link, not manual). */
+function isSlotVisible(slot: { boundLampDeviceId?: string | number | ''; sourceDeviceId?: string | number; isManual?: boolean }) {
+  if (slot.isManual) return true
+  if (slot.boundLampDeviceId) return true
+  if (slot.sourceDeviceId) return true
+  return false
+}
+
+/** Pad layoutState.lamps with invisible placeholders to reach MIN_VISIBLE_SLOTS total. */
+function ensureMinVisibleSlots(zoneId: string) {
+  while (layoutState.lamps.length < MIN_VISIBLE_SLOTS) {
+    const idx = layoutState.lamps.length
+    const placeholder: LampLayout = {
+      slotId: `placeholder-${zoneId}-${idx}`,
+      order: idx,
+      lampX: getDefaultSlotX(idx, MIN_VISIBLE_SLOTS),
+      targetX: getDefaultSlotX(idx, MIN_VISIBLE_SLOTS),
+      boundLampDeviceId: '',
+      isManual: false,
+      name: '',
+      brightness: 72,
+      temperature: 4000,
+      clothingColor: '#8fb95a',
+    }
+    layoutState.lamps.push(placeholder)
+  }
+}
+
+function loadStoredZoneDefinitions(): StoreZoneLike[] {
+  try {
+    const raw = localStorage.getItem(ZONE_DEFINITION_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+  } catch (error) {
+    console.warn('3D 分区布局读取失败', error)
+  }
+  return []
+}
 const pickableObjects: THREE.Object3D[] = []
 const lampObjects = new Map<string, LampObjects>()
 const cameraViewPresets: Record<CameraViewMode, CameraViewPreset> = {
@@ -112,6 +338,573 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cleanupThreeScene()
 })
+
+// Stop render loop immediately when parent tab switches away
+watch(() => props.active, (isActive) => {
+  if (isActive && !document.hidden) {
+    startRenderLoop()
+  } else if (!isActive) {
+    stopRenderLoop()
+  }
+})
+
+watch(
+  () => props.devices,
+  () => {
+    syncActiveZoneIndex()
+    syncActiveZoneLampCount()
+    syncDevicesToLayout()
+  },
+  { deep: true, immediate: true },
+)
+
+watch(
+  () => props.zones,
+  () => {
+    syncActiveZoneIndex()
+    rebuildActiveZoneLayout()
+  },
+  { deep: true, immediate: true },
+)
+
+const selectedSlotInfo = computed<SelectionInfo>(() => {
+  if (!selectedSlotId.value || !selectedSlot.value) {
+    return {
+      selected: false,
+      label: '未选中灯位，点击 3D 射灯后可排序或删除',
+      canDelete: false,
+      deleteDisabledReason: '请先点击选择未绑定灯位',
+    }
+  }
+
+  const canDelete = isDeletableSlot(selectedSlot.value)
+  return {
+    selected: true,
+    label: selectedSlotLabel.value,
+    slotId: selectedSlot.value.slotId,
+    isManual: selectedSlot.value.isManual,
+    canDelete,
+    deleteDisabledReason: canDelete ? '' : '真实设备灯位暂不能删除，可在设备列表中解绑或移动分区',
+  }
+})
+
+watch(
+  () => selectedSlotInfo.value,
+  value => emit('selection-change', value),
+  { immediate: true },
+)
+
+function normalizeZones(inputZones: StoreZoneLike[] | undefined): ThreeZoneOption[] {
+  const source = (inputZones && inputZones.length > 0)
+    ? inputZones
+    : loadStoredZoneDefinitions()
+  const deviceZones = createDeviceZoneDefinitions()
+  const normalizedSource = source.length > 0
+    ? source
+    : deviceZones
+
+  const zones = normalizedSource
+    .map((zone, index) => ({
+      zoneId: String(zone.id || `zone-${index + 1}`),
+      zoneName: String(zone.name || '').trim() || '未命名分区',
+    }))
+    .filter(zone => zone.zoneId)
+
+  return zones.length > 0 ? zones : [createDefaultZoneOption()]
+}
+
+function createDeviceZoneDefinitions(): StoreZoneLike[] {
+  const zoneNames: string[] = []
+  const seen = new Set<string>()
+
+  for (const device of props.devices || []) {
+    if (!isLayoutLampDevice(device)) continue
+
+    const zoneName = normalizeZoneText(device.displayName)
+    if (!zoneName || zoneName === '未分区' || zoneName === '-') continue
+    if (seen.has(zoneName)) continue
+
+    seen.add(zoneName)
+    zoneNames.push(zoneName)
+  }
+
+  return zoneNames.map(zoneName => ({
+    id: `device-zone-${zoneName}`,
+    name: zoneName,
+  }))
+}
+
+function createDefaultZoneOption(): ThreeZoneOption {
+  return {
+    zoneId: 'default-zone',
+    zoneName: '默认展示区',
+  }
+}
+
+function syncActiveZoneIndex() {
+  const previousZoneId = activeZone.value.zoneId
+  const count = zoneCount.value
+  if (count <= 0) {
+    activeZoneIndex.value = 0
+    return
+  }
+
+  if (!hasRestoredActiveZone) {
+    const storedActiveZoneId = getStoredLayouts().activeZoneId
+    const storedIndex = zoneOptions.value.findIndex(zone => zone.zoneId === storedActiveZoneId)
+    if (storedIndex >= 0) {
+      activeZoneIndex.value = storedIndex
+    }
+    hasRestoredActiveZone = true
+  }
+
+  activeZoneIndex.value = clamp(Math.floor(activeZoneIndex.value), 0, count - 1)
+  if (activeZone.value.zoneId !== previousZoneId) {
+    clearSelectedSlot()
+  }
+}
+
+function switchZone(direction: -1 | 1) {
+  if (zoneCount.value <= 1 || dragState) return
+
+  saveActiveZoneLayout()
+  activeZoneIndex.value = (activeZoneIndex.value + direction + zoneCount.value) % zoneCount.value
+  clearSelectedSlot()
+  rebuildActiveZoneLayout()
+  animateCameraTo(cameraViewPresets.display)
+}
+
+function rebuildActiveZoneLayout() {
+  const zone = activeZone.value
+  const stored = getStoredZoneLayout(zone.zoneId)
+  const zoneLampDevices = getLampDevicesForZone(zone.zoneName)
+  const slots = buildZoneSlots(stored, zoneLampDevices)
+  const defaultTrack = getDefaultTrackLayout()
+
+  layoutState.track = {
+    startX: resolveFiniteNumber(stored?.track?.startX, defaultTrack.startX),
+    endX: resolveFiniteNumber(stored?.track?.endX, defaultTrack.endX),
+    y: resolveFiniteNumber(stored?.track?.y, defaultTrack.y),
+    z: resolveFiniteNumber(stored?.track?.z, defaultTrack.z),
+  }
+
+  layoutState.lamps = slots.map((slot, index) => {
+    const mock = mockLampLayouts[index % mockLampLayouts.length]
+
+    return {
+      ...mock,
+      ...slot,
+      name: slot.isManual ? `${zone.zoneName} · 未绑定灯位` : `${zone.zoneName} · 灯具-${index + 1}`,
+    }
+  })
+
+  ensureMinVisibleSlots(zone.zoneId)
+
+  if (!layoutState.lamps.some(lamp => lamp.slotId === selectedSlotId.value)) {
+    clearSelectedSlot()
+  }
+
+  saveActiveZoneLayout()
+  syncLampObjectsWithState()
+  syncDevicesToLayout()
+  updateLayoutVisuals()
+}
+
+function buildZoneSlots(stored: StoredZoneLayout | undefined, zoneLampDevices: DeviceLike[]) {
+  const currentDeviceIds = getDeviceIdSet(zoneLampDevices)
+  const storedSlots = normalizeStoredSlots(stored, zoneLampDevices)
+    .filter(slot => shouldKeepStoredSlot(slot, currentDeviceIds))
+  const manualSlots = storedSlots.filter(slot => slot.isManual)
+  const deviceSlots: ZoneSlot[] = []
+
+  zoneLampDevices.forEach((device, index) => {
+    const sourceDeviceId = getDeviceId(device)
+    const slotId = `device-${sourceDeviceId || index + 1}`
+    const existing = findStoredSlotForDevice(storedSlots, device, slotId)
+    const order = existing?.order ?? index
+    const fallbackX = getDefaultSlotX(index, Math.max(zoneLampDevices.length, 1))
+
+    deviceSlots.push({
+      slotId,
+      order,
+      lampX: existing?.lampX ?? fallbackX,
+      targetX: existing?.targetX ?? fallbackX,
+      boundLampDeviceId: existing?.boundLampDeviceId || '',
+      sourceDeviceId,
+      isManual: false,
+    })
+  })
+
+  if (zoneLampDevices.length === 0 && deviceSlots.length === 0) {
+    const slotId = 'mock-fallback'
+    deviceSlots.push({
+      slotId,
+      order: 0,
+      lampX: 0,
+      targetX: 0,
+      boundLampDeviceId: '',
+      isManual: false,
+    })
+  }
+
+  return [...deviceSlots, ...manualSlots]
+    .sort((a, b) => a.order - b.order)
+    .map((slot, index, list) => ({
+      ...slot,
+      order: index,
+      lampX: resolveFiniteNumber(slot.lampX, getDefaultSlotX(index, list.length)),
+      targetX: resolveFiniteNumber(slot.targetX, getDefaultSlotX(index, list.length)),
+    }))
+}
+
+function normalizeStoredSlots(stored: StoredZoneLayout | undefined, zoneLampDevices: DeviceLike[]): ZoneSlot[] {
+  if (Array.isArray(stored?.slots) && stored.slots.length > 0) {
+    return stored.slots.map((slot, index, list) => {
+      const fallbackX = getDefaultSlotX(index, list.length)
+      return {
+        slotId: String(slot.slotId || `manual-${index + 1}`),
+        order: resolveFiniteNumber(slot.order, index),
+        lampX: resolveFiniteNumber(slot.lampX, fallbackX),
+        targetX: resolveFiniteNumber(slot.targetX, fallbackX),
+        boundLampDeviceId: slot.boundLampDeviceId || '',
+        sourceDeviceId: slot.sourceDeviceId,
+        isManual: Boolean(slot.isManual),
+      }
+    })
+  }
+
+  if (Array.isArray(stored?.lamps) && stored.lamps.length > 0) {
+    return stored.lamps.flatMap((lamp, index, list) => {
+      const sourceDeviceId = getDeviceId(zoneLampDevices[index])
+      if (!sourceDeviceId && !lamp.boundLampDeviceId) return []
+
+      const fallbackX = getDefaultSlotX(index, list.length)
+      return [{
+        slotId: sourceDeviceId ? `device-${sourceDeviceId}` : String(lamp.slotId || `manual-${index + 1}`),
+        order: index,
+        lampX: resolveFiniteNumber(lamp.x, fallbackX),
+        targetX: resolveFiniteNumber(lamp.targetX, fallbackX),
+        boundLampDeviceId: lamp.boundLampDeviceId || '',
+        sourceDeviceId,
+        isManual: false,
+      }]
+    })
+  }
+
+  return []
+}
+
+function getDeviceIdSet(devices: DeviceLike[]) {
+  const ids = new Set<string>()
+  devices.forEach((device) => {
+    addDeviceId(ids, device.id)
+    addDeviceId(ids, device.chipId)
+    addDeviceId(ids, getDeviceId(device))
+  })
+  return ids
+}
+
+function addDeviceId(ids: Set<string>, value: unknown) {
+  if (value === undefined || value === null || value === '') return
+  ids.add(String(value))
+}
+
+function shouldKeepStoredSlot(slot: ZoneSlot, currentDeviceIds: Set<string>) {
+  if (slot.isManual) return true
+  if (hasStoredDeviceMatch(slot.sourceDeviceId, currentDeviceIds)) return true
+  if (hasStoredDeviceMatch(slot.boundLampDeviceId, currentDeviceIds)) return true
+  return false
+}
+
+function hasStoredDeviceMatch(value: string | number | undefined, currentDeviceIds: Set<string>) {
+  if (value === undefined || value === null || value === '') return false
+  return currentDeviceIds.has(String(value))
+}
+
+function findStoredSlotForDevice(storedSlots: ZoneSlot[], device: DeviceLike, slotId: string) {
+  return storedSlots.find(slot =>
+    slot.slotId === slotId ||
+    isStoredSlotLinkedToDevice(slot, device),
+  )
+}
+
+function isStoredSlotLinkedToDevice(slot: ZoneSlot, device: DeviceLike) {
+  return Boolean(
+    (slot.sourceDeviceId && isSameDeviceId(device, slot.sourceDeviceId)) ||
+    (slot.boundLampDeviceId && isSameDeviceId(device, slot.boundLampDeviceId)),
+  )
+}
+
+function getDefaultTrackLayout(): TrackLayout {
+  return {
+    startX: -3.2,
+    endX: 3.2,
+    y: 3.35,
+    z: -1.05,
+  }
+}
+
+function getDefaultSlotX(index: number, count: number) {
+  if (count <= 1) return 0
+  const start = -2.2
+  const end = 2.2
+  return start + (end - start) * (index / (count - 1))
+}
+
+function getLampDevicesForZone(zoneName: string) {
+  const normalizedZoneName = normalizeZoneText(zoneName)
+  if (!normalizedZoneName) return []
+
+  const lamps = (props.devices || []).filter(isLayoutLampDevice)
+  return lamps.filter(device => normalizeZoneText(device.displayName) === normalizedZoneName)
+}
+
+function normalizeZoneText(value: unknown) {
+  return String(value || '').trim()
+}
+
+function getStoredLayouts() {
+  if (cachedStoredLayouts) return cachedStoredLayouts
+
+  try {
+    const raw = localStorage.getItem(ZONE_LAYOUT_STORAGE_KEY)
+    const defaultValue = { version: 1, activeZoneId: '', zoneLayouts: {} as Record<string, StoredZoneLayout> }
+    if (!raw) {
+      cachedStoredLayouts = defaultValue
+      return cachedStoredLayouts
+    }
+    const parsed = JSON.parse(raw)
+    if (parsed?.version === 1 && parsed.zoneLayouts && typeof parsed.zoneLayouts === 'object') {
+      cachedStoredLayouts = {
+        version: 1,
+        activeZoneId: String(parsed.activeZoneId || ''),
+        zoneLayouts: parsed.zoneLayouts as Record<string, StoredZoneLayout>,
+      }
+      return cachedStoredLayouts
+    }
+    cachedStoredLayouts = defaultValue
+    return cachedStoredLayouts
+  } catch (error) {
+    console.warn('3D 分区布局读取失败', error)
+  }
+
+  cachedStoredLayouts = { version: 1, activeZoneId: '', zoneLayouts: {} as Record<string, StoredZoneLayout> }
+  return cachedStoredLayouts
+}
+
+function getStoredZoneLayout(zoneId: string) {
+  return getStoredLayouts().zoneLayouts[zoneId]
+}
+
+function saveActiveZoneLayout() {
+  const zone = activeZone.value
+  const stored = getStoredLayouts()
+  stored.activeZoneId = zone.zoneId
+  stored.zoneLayouts[zone.zoneId] = {
+    track: { ...layoutState.track },
+    slots: layoutState.lamps
+      .filter(isSlotVisible)
+      .map(lamp => ({
+        slotId: lamp.slotId,
+        order: lamp.order,
+        lampX: round(lamp.lampX),
+        targetX: round(lamp.targetX),
+        boundLampDeviceId: lamp.boundLampDeviceId || '',
+        sourceDeviceId: lamp.sourceDeviceId,
+        isManual: lamp.isManual || false,
+      })),
+  }
+  localStorage.setItem(ZONE_LAYOUT_STORAGE_KEY, JSON.stringify(stored))
+  cachedStoredLayouts = stored
+}
+
+function syncLampObjectsWithState() {
+  if (!scene) return
+
+  for (const objects of lampObjects.values()) {
+    scene.remove(objects.group, objects.spot, objects.spotTarget, objects.shirt, objects.beam)
+    disposeObject(objects.group)
+    disposeObject(objects.shirt)
+    objects.beam.geometry.dispose()
+    disposeMaterial(objects.beam.material)
+  }
+  lampObjects.clear()
+  removeLampPickables()
+
+  for (const lamp of layoutState.lamps) {
+    if (!isSlotVisible(lamp)) continue
+    const objects = createLampObjects(lamp)
+    lampObjects.set(lamp.slotId, objects)
+    scene.add(objects.group, objects.spot, objects.spotTarget, objects.shirt)
+  }
+}
+
+function syncActiveZoneLampCount() {
+  const zoneLampDevices = getLampDevicesForZone(activeZone.value.zoneName)
+  const deviceSlotIds = zoneLampDevices
+    .map(device => `device-${getDeviceId(device)}`)
+    .filter(slotId => slotId !== 'device-')
+  const expectedSlotIds = new Set(deviceSlotIds)
+  const existingSlotIds = new Set(layoutState.lamps.map(lamp => lamp.slotId))
+  const existingDeviceSlotIds = layoutState.lamps
+    .filter(lamp => !lamp.isManual)
+    .map(lamp => lamp.slotId)
+  const hasNewDeviceSlot = deviceSlotIds.some(slotId => !existingSlotIds.has(slotId))
+  const hasStaleDeviceSlot = existingDeviceSlotIds.some((slotId) => {
+    if (zoneLampDevices.length === 0) return slotId !== 'mock-fallback'
+    return !expectedSlotIds.has(slotId)
+  })
+
+  if (!hasNewDeviceSlot && !hasStaleDeviceSlot) return
+
+  saveActiveZoneLayout()
+  rebuildActiveZoneLayout()
+}
+
+function addManualSlot() {
+  if (dragState) return
+
+  const index = layoutState.lamps.length
+  const mock = mockLampLayouts[index % mockLampLayouts.length]
+  const slotId = `manual-${Date.now()}`
+  const x = getDefaultSlotX(index, index + 1)
+
+  layoutState.lamps.push({
+    ...mock,
+    slotId,
+    order: index,
+    lampX: x,
+    targetX: x,
+    boundLampDeviceId: '',
+    sourceDeviceId: '',
+    isManual: true,
+    deviceId: undefined,
+    chipId: undefined,
+    name: `${activeZone.value.zoneName} · 未绑定灯位`,
+  })
+
+  ensureMinVisibleSlots(activeZone.value.zoneId)
+  arrangeSlotsEvenly()
+  selectSlot(slotId)
+  syncLampObjectsWithState()
+  updateLayoutVisuals()
+  saveActiveZoneLayout()
+}
+
+function selectSlot(slotId: string) {
+  selectedSlotId.value = slotId
+  updateLayoutVisuals()
+  silentLocateSlot(slotId)
+}
+
+async function silentLocateSlot(slotId: string) {
+  const lamp = layoutState.lamps.find(l => l.slotId === slotId)
+  if (!lamp || !lamp.chipId) return
+  if (locatingSlotId.value === lamp.chipId) return
+  locatingSlotId.value = lamp.chipId
+  try {
+    await locateDevice(String(lamp.chipId))
+  } catch {
+    // silent
+  } finally {
+    locatingSlotId.value = ''
+  }
+}
+
+function clearSelectedSlot() {
+  selectedSlotId.value = ''
+  updateLayoutVisuals()
+}
+
+function isDeletableSlot(slot: LampLayout | null) {
+  if (!slot) return false
+  return Boolean(slot.isManual || (!slot.sourceDeviceId && !slot.deviceId && !slot.chipId))
+}
+
+function deleteSelectedSlot() {
+  if (!canDeleteSelectedSlot.value || !selectedSlot.value) return
+
+  const slotId = selectedSlot.value.slotId
+  layoutState.lamps = layoutState.lamps.filter(slot => slot.slotId !== slotId)
+  clearSelectedSlot()
+
+  if (layoutState.lamps.length === 0) {
+    const mock = mockLampLayouts[0]
+    layoutState.lamps = [{
+      ...mock,
+      slotId: 'mock-fallback',
+      order: 0,
+      lampX: 0,
+      targetX: 0,
+      boundLampDeviceId: '',
+      sourceDeviceId: '',
+      isManual: false,
+      deviceId: undefined,
+      chipId: undefined,
+      name: `${activeZone.value.zoneName} · 未绑定灯位`,
+    }]
+  } else {
+    applySlotOrderLayout()
+  }
+
+  ensureMinVisibleSlots(activeZone.value.zoneId)
+  syncLampObjectsWithState()
+  updateLayoutVisuals()
+  saveActiveZoneLayout()
+}
+
+function moveSelectedSlot(direction: -1 | 1) {
+  if (!selectedSlotId.value || !selectedSlot.value) return
+
+  const next = [...layoutState.lamps].sort((a, b) => a.order - b.order)
+  const index = next.findIndex(slot => slot.slotId === selectedSlotId.value)
+  const targetIndex = index + direction
+  if (index < 0 || targetIndex < 0 || targetIndex >= layoutState.lamps.length) return
+
+  const current = next[index]
+  next[index] = next[targetIndex]
+  next[targetIndex] = current
+  layoutState.lamps = next
+  applySlotOrderLayout()
+}
+
+function applySlotOrderLayout() {
+  const count = layoutState.lamps.length
+  layoutState.lamps.forEach((slot, index) => {
+    const x = getDefaultSlotX(index, count)
+    slot.order = index
+    slot.lampX = x
+    slot.targetX = x
+  })
+  updateLayoutVisuals()
+  saveActiveZoneLayout()
+}
+
+function arrangeSlotsEvenly() {
+  layoutState.lamps = [...layoutState.lamps].sort((a, b) => a.order - b.order)
+  applySlotOrderLayout()
+}
+
+function handleArrangeSlotsEvenly() {
+  arrangeSlotsEvenly()
+}
+
+function removeLampPickables() {
+  for (let index = pickableObjects.length - 1; index >= 0; index -= 1) {
+    if (pickableObjects[index].userData.dragType === 'lamp') {
+      pickableObjects.splice(index, 1)
+    }
+  }
+}
+
+function disposeObject(object: THREE.Object3D) {
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      child.geometry?.dispose()
+      disposeMaterial(child.material)
+    }
+  })
+}
 
 function initThreeScene() {
   const host = viewportRef.value
@@ -153,8 +946,9 @@ function initThreeScene() {
   window.addEventListener('pointermove', handlePointerMove)
   window.addEventListener('pointerup', handlePointerUp)
   window.addEventListener('resize', handleResize)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
-  animate()
+  if (props.active && !document.hidden) startRenderLoop()
 }
 
 function createStoreSpace() {
@@ -388,17 +1182,26 @@ function createMockLamps() {
   if (!scene) return
   for (const lamp of layoutState.lamps) {
     const objects = createLampObjects(lamp)
-    lampObjects.set(lamp.id, objects)
+    lampObjects.set(lamp.slotId, objects)
     scene.add(objects.group, objects.spot, objects.spotTarget, objects.shirt)
   }
 }
 
+const sharedMountMaterial = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.38, metalness: 0.34 })
+const sharedHingeMaterial = new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.42, metalness: 0.42 })
+const sharedDarkMetalMaterial = new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.55, metalness: 0.48 })
+const sharedRimMaterial = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.3, metalness: 0.55 })
+
 function createLampObjects(lamp: LampLayout): LampObjects {
   const group = new THREE.Group()
   group.userData.dragType = 'lamp'
-  group.userData.lampId = lamp.id
+  group.userData.lampId = lamp.slotId
 
-  const mountMaterial = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.38, metalness: 0.34 })
+  const mountMaterial = sharedMountMaterial
+  const hingeMaterial = sharedHingeMaterial
+  const darkMetalMaterial = sharedDarkMetalMaterial
+  const rimMaterial = sharedRimMaterial
+
   const mount = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.15, 0.36), mountMaterial)
   mount.position.set(0, -0.11, 0)
 
@@ -408,50 +1211,148 @@ function createLampObjects(lamp: LampLayout): LampObjects {
   )
   mountInset.position.set(0, -0.028, 0.02)
 
-  const rod = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.035, 0.035, 0.44, 16),
-    new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.42, metalness: 0.42 }),
-  )
-  rod.position.set(0, -0.42, 0)
+  const yawGroup = new THREE.Group()
+  yawGroup.position.set(0, -0.22, 0)
 
-  const yoke = new THREE.Mesh(
-    new THREE.TorusGeometry(0.2, 0.018, 10, 28, Math.PI),
-    new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.42, metalness: 0.38 }),
+  const yawDisk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2, 0.2, 0.055, 40),
+    new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.34, metalness: 0.38 }),
   )
-  yoke.position.set(0, -0.68, 0.03)
-  yoke.rotation.z = Math.PI
+  yawDisk.position.set(0, 0, 0)
 
-  const head = new THREE.Group()
-  head.position.set(0, -0.98, 0.05)
+  const yawDiskLower = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15, 0.17, 0.045, 40),
+    mountMaterial,
+  )
+  yawDiskLower.position.set(0, -0.055, 0)
+
+  const yawIndicator = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 0.018, 0.16),
+    new THREE.MeshBasicMaterial({ color: '#9fb3c8', transparent: true, opacity: 0.34 }),
+  )
+  yawIndicator.position.set(0, 0.036, -0.125)
+
+  const shortNeck = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.045, 0.14, 18),
+    hingeMaterial,
+  )
+  shortNeck.position.set(0, -0.13, 0)
+
+  const yokeFrame = new THREE.Group()
+  yokeFrame.position.set(0, -0.31, 0.04)
+
+  const yokeTopBlock = new THREE.Mesh(
+    new THREE.BoxGeometry(0.48, 0.065, 0.12),
+    hingeMaterial,
+  )
+  yokeTopBlock.position.set(0, 0, 0)
+
+  const neckBlock = new THREE.Mesh(
+    new THREE.BoxGeometry(0.18, 0.055, 0.11),
+    mountMaterial,
+  )
+  neckBlock.position.set(0, 0.078, 0)
+
+  const sideBracketGeometry = new THREE.BoxGeometry(0.042, 0.34, 0.058)
+  const leftArm = new THREE.Mesh(sideBracketGeometry, hingeMaterial)
+  leftArm.position.set(-0.285, -0.19, 0)
+  const rightArm = new THREE.Mesh(sideBracketGeometry.clone(), hingeMaterial.clone())
+  rightArm.position.set(0.285, -0.19, 0)
+
+  const leftArmFoot = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.035, 0.07), hingeMaterial)
+  leftArmFoot.position.set(-0.285, -0.365, 0)
+  const rightArmFoot = leftArmFoot.clone()
+  rightArmFoot.position.set(0.285, -0.365, 0)
+
+  const hingeAxle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.52, 18),
+    new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.36, metalness: 0.5 }),
+  )
+  hingeAxle.rotation.z = Math.PI / 2
+  hingeAxle.position.set(0, -0.365, 0)
+
+  const leftPivot = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.032, 24), rimMaterial)
+  leftPivot.rotation.z = Math.PI / 2
+  leftPivot.position.set(-0.31, -0.365, 0)
+  const rightPivot = leftPivot.clone()
+  rightPivot.position.set(0.31, -0.365, 0)
+
+  const pitchBody = new THREE.Group()
+  pitchBody.position.set(0, -0.365, 0)
 
   const barrel = new THREE.Mesh(
     new THREE.CylinderGeometry(0.2, 0.25, 0.58, 40),
-    new THREE.MeshStandardMaterial({ color: '#182235', roughness: 0.34, metalness: 0.3 }),
+    darkMetalMaterial,
   )
-  barrel.position.set(0, 0.26, 0)
+  barrel.position.set(0, -0.02, 0)
+
+  const rearCap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.19, 0.04, 40),
+    mountMaterial,
+  )
+  rearCap.position.set(0, 0.27, 0)
 
   const barrelRim = new THREE.Mesh(
     new THREE.CylinderGeometry(0.27, 0.27, 0.045, 40),
-    new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.28, metalness: 0.36 }),
+    rimMaterial,
   )
-  barrelRim.position.set(0, -0.035, 0)
+  barrelRim.position.set(0, -0.335, 0)
 
   const aperture = new THREE.Mesh(
     new THREE.CylinderGeometry(0.2, 0.2, 0.018, 40),
     new THREE.MeshStandardMaterial({
-      color: colorTemperatureHex(lamp.temperature),
-      emissive: colorTemperatureHex(lamp.temperature),
+      color: colorTemperatureToHex(lamp.temperature),
+      emissive: colorTemperatureToHex(lamp.temperature),
       emissiveIntensity: 0.9,
     }),
   )
-  aperture.position.set(0, -0.065, 0)
+  aperture.position.set(0, -0.37, 0)
 
-  head.add(barrel, barrelRim, aperture)
-  group.add(mount, mountInset, rod, yoke, head)
-  markLampPickable(group, lamp.id)
+  const selectionRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.32, 0.022, 12, 64),
+    new THREE.MeshBasicMaterial({
+      color: '#2f7cff',
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    }),
+  )
+  selectionRing.rotation.x = Math.PI / 2
+  selectionRing.position.set(0, -0.425, 0)
+  selectionRing.renderOrder = 24
+  selectionRing.userData.ignorePickable = true
+  selectionRing.visible = false
+
+  const selectionMarker = new THREE.Mesh(
+    new THREE.TorusGeometry(0.115, 0.018, 10, 40),
+    new THREE.MeshBasicMaterial({
+      color: '#2f7cff',
+      transparent: true,
+      opacity: 0.86,
+      depthWrite: false,
+      depthTest: false,
+    }),
+  )
+  selectionMarker.rotation.x = Math.PI / 2
+  selectionMarker.position.set(0, -0.58, 0)
+  selectionMarker.renderOrder = 30
+  selectionMarker.userData.ignorePickable = true
+  selectionMarker.visible = false
+
+  const leftBodyPivot = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 24), rimMaterial.clone())
+  leftBodyPivot.rotation.z = Math.PI / 2
+  leftBodyPivot.position.set(-0.255, 0, 0)
+  const rightBodyPivot = leftBodyPivot.clone()
+  rightBodyPivot.position.set(0.255, 0, 0)
+
+  pitchBody.add(barrel, rearCap, barrelRim, aperture, selectionRing, selectionMarker, leftBodyPivot, rightBodyPivot)
+  yokeFrame.add(neckBlock, yokeTopBlock, leftArm, rightArm, leftArmFoot, rightArmFoot, hingeAxle, leftPivot, rightPivot, pitchBody)
+  yawGroup.add(yawDisk, yawDiskLower, yawIndicator, shortNeck, yokeFrame)
+  group.add(mount, mountInset, yawGroup)
+  markLampPickable(group, lamp.slotId)
 
   const target = new THREE.Object3D()
-  const spot = new THREE.SpotLight(colorTemperatureHex(lamp.temperature), 2.2, 6.5, Math.PI / 6, 0.42, 1.2)
+  const spot = new THREE.SpotLight(colorTemperatureToHex(lamp.temperature), 2.2, 6.5, Math.PI / 6, 0.42, 1.2)
   spot.castShadow = true
   spot.shadow.mapSize.set(1024, 1024)
   spot.target = target
@@ -459,7 +1360,7 @@ function createLampObjects(lamp: LampLayout): LampObjects {
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(0.16, 0.48, 1, 48, 1, true),
     new THREE.MeshBasicMaterial({
-      color: colorTemperatureHex(lamp.temperature),
+      color: colorTemperatureToHex(lamp.temperature),
       transparent: true,
       opacity: 0.08,
       depthWrite: false,
@@ -470,13 +1371,14 @@ function createLampObjects(lamp: LampLayout): LampObjects {
 
 
   const shirt = createShirt(lamp.clothingColor)
-  return { group, body: group, head, spot, spotTarget: target, beam, aperture, shirt }
+  return { group, body: group, head: pitchBody, yawGroup, yokeFrame, pitchBody, spot, spotTarget: target, beam, aperture, selectionRing, selectionMarker, shirt }
 }
 
 function createShirt(color: string) {
   const shirt = new THREE.Group()
   const baseColor = new THREE.Color(color)
   const trimColor = baseColor.clone().lerp(new THREE.Color('#f1eadf'), 0.22)
+  shirt.userData.clothingColor = normalizeDeviceColor(color, color)
 
   const bodyMaterial = new THREE.MeshStandardMaterial({
     color: baseColor,
@@ -520,6 +1422,7 @@ function createShirt(color: string) {
 
 
   const body = new THREE.Mesh(geometry, bodyMaterial)
+  body.userData.shirtBody = true
   body.castShadow = true
   body.receiveShadow = true
 
@@ -533,18 +1436,22 @@ function createShirt(color: string) {
     new THREE.TubeGeometry(collarCurve, 24, 0.008, 8, false),
     trimMaterial,
   )
+  collar.userData.shirtTrim = true
 
   const hem = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.014, 0.012), trimMaterial)
   hem.position.set(0.02, 0.055, 0.072)
   hem.rotation.z = 0.025
+  hem.userData.shirtTrim = true
 
   const leftCuff = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.013, 0.012), trimMaterial)
   leftCuff.position.set(-0.62, 0.61, 0.072)
   leftCuff.rotation.z = -0.43
+  leftCuff.userData.shirtTrim = true
 
   const rightCuff = leftCuff.clone()
   rightCuff.position.set(0.62, 0.615, 0.046)
   rightCuff.rotation.z = 0.38
+  rightCuff.userData.shirtTrim = true
 
 
   const hanger = new THREE.Mesh(
@@ -591,8 +1498,209 @@ function createCameraNode() {
   scene.add(camGroup)
 }
 
+function syncDevicesToLayout() {
+  const devices = props.devices || []
+  const lampDevices = getLampDevicesForZone(activeZone.value.zoneName)
+  const cameraDevice = devices.find(isLayoutCameraDevice)
+
+  layoutState.lamps.forEach((lamp, index) => {
+    const mock = mockLampLayouts[index % mockLampLayouts.length]
+    const device = findDeviceForSlot(lamp, lampDevices)
+
+    if (!device) {
+      lamp.deviceId = undefined
+      lamp.chipId = undefined
+      lamp.name = lamp.isManual ? `${activeZone.value.zoneName} · 未绑定灯位` : `${activeZone.value.zoneName} · ${mock.name}`
+      lamp.brightness = mock.brightness
+      lamp.temperature = mock.temperature
+      lamp.clothingColor = mock.clothingColor
+      lamp.online = undefined
+      return
+    }
+
+    lamp.deviceId = device.id ?? device.chipId
+    lamp.chipId = device.chipId
+    lamp.name = resolveDeviceName(device, mock.name)
+    lamp.brightness = resolveDeviceBrightness(device, lamp.brightness || mock.brightness)
+    lamp.temperature = resolveDeviceTemperature(device, lamp.temperature || mock.temperature)
+    lamp.clothingColor = normalizeDeviceColor(resolveDeviceColorValue(device), lamp.clothingColor || mock.clothingColor)
+    lamp.online = device.online
+  })
+
+  if (cameraDevice) {
+    layoutState.camera.deviceId = cameraDevice.id ?? cameraDevice.chipId
+    layoutState.camera.chipId = cameraDevice.chipId
+    layoutState.camera.name = resolveDeviceName(cameraDevice, mockCameraLayout.name)
+    layoutState.camera.online = cameraDevice.online
+  } else {
+    layoutState.camera.deviceId = undefined
+    layoutState.camera.chipId = undefined
+    layoutState.camera.name = mockCameraLayout.name
+    layoutState.camera.online = undefined
+  }
+
+  updateLayoutVisuals()
+}
+
+function findDeviceForSlot(slot: ZoneSlot, devices: DeviceLike[]) {
+  const boundLampDeviceId = slot.boundLampDeviceId || ''
+  if (boundLampDeviceId) {
+    const boundDevice = devices.find(device => isSameDeviceId(device, boundLampDeviceId))
+    if (boundDevice) return boundDevice
+  }
+
+  const sourceDeviceId = slot.sourceDeviceId || ''
+  if (sourceDeviceId) {
+    const sourceDevice = devices.find(device => isSameDeviceId(device, sourceDeviceId))
+    if (sourceDevice) return sourceDevice
+  }
+
+  return undefined
+}
+
+function isLayoutLampDevice(device: DeviceLike) {
+  const type = normalizeLayoutDeviceType(device)
+  if (type) return type === 'lamp'
+
+  const text = getDeviceSearchText(device)
+  return text.includes('lamp')
+    && !text.includes('camlamp')
+    && !text.includes('camera')
+    && !text.includes('cam')
+}
+
+function isLayoutCameraDevice(device: DeviceLike) {
+  const type = normalizeLayoutDeviceType(device)
+  if (type) return type === 'cam' || type === 'camera' || type === 'camlamp'
+
+  const text = getDeviceSearchText(device)
+  return text.includes('camlamp') || text.includes('camera') || text.includes('cam')
+}
+
+function normalizeLayoutDeviceType(device: DeviceLike) {
+  return normalizeDeviceType(String(device.deviceType ?? device.type ?? ''))
+}
+
+function getDeviceSearchText(device: DeviceLike) {
+  return [
+    device.id,
+    device.chipId,
+    device.displayName,
+    device.name,
+    device.deviceType,
+    device.type,
+  ]
+    .filter(value => value != null && String(value).trim() !== '')
+    .join(' ')
+    .toLowerCase()
+}
+
+function getDeviceId(device: DeviceLike | undefined) {
+  if (!device) return ''
+  return device.id ?? device.chipId ?? ''
+}
+
+function isSameDeviceId(device: DeviceLike, value: string | number | '') {
+  if (value === '') return false
+  const text = String(value)
+  return String(device.id ?? '') === text || String(device.chipId ?? '') === text
+}
+
+function resolveDeviceName(device: DeviceLike, fallback: string) {
+  return String(
+    device.displayName ||
+    device.name ||
+    device.id ||
+    device.chipId ||
+    fallback,
+  )
+}
+
+function resolveDeviceBrightness(device: DeviceLike, fallback: number) {
+  const autoMode = isTruthy(device.autoMode)
+  const value = autoMode
+    ? (device.recommendedBrightness ?? device.brightness)
+    : device.brightness
+  return clamp(resolveFiniteNumber(value, fallback || 70), 0, 100)
+}
+
+function resolveDeviceTemperature(device: DeviceLike, fallback: number) {
+  const autoMode = isTruthy(device.autoMode)
+  const value = autoMode
+    ? (device.recommendedTemp ?? device.temp)
+    : device.temp
+  return clamp(resolveFiniteNumber(value, fallback || 4000), 2700, 6500)
+}
+
+function resolveDeviceColorValue(device: DeviceLike) {
+  return device.mainColorRgb ?? device.mainColorRGB ?? device.mainColor
+}
+
+function normalizeDeviceColor(value: unknown, fallback: string) {
+  const fallbackColor = normalizeHexColor(fallback) || '#8fb95a'
+
+  if (Array.isArray(value) && value.length >= 3) {
+    return rgbToHex(value[0], value[1], value[2]) || fallbackColor
+  }
+
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return rgbToHex(record.r ?? record.red, record.g ?? record.green, record.b ?? record.blue) || fallbackColor
+  }
+
+  if (typeof value !== 'string') return fallbackColor
+
+  const text = value.trim()
+  if (!text) return fallbackColor
+
+  const hexColor = normalizeHexColor(text)
+  if (hexColor) return hexColor
+
+  const rgbMatch = text.match(/^rgba?\(([^)]+)\)$/i)
+  if (rgbMatch) {
+    const parts = rgbMatch[1].split(/[,\s/]+/).filter(Boolean)
+    return rgbToHex(parts[0], parts[1], parts[2]) || fallbackColor
+  }
+
+  const csvMatch = text.match(/^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$/)
+  if (csvMatch) {
+    return rgbToHex(csvMatch[1], csvMatch[2], csvMatch[3]) || fallbackColor
+  }
+
+  return fallbackColor
+}
+
+function normalizeHexColor(value: string) {
+  const text = value.trim()
+  const shortHex = text.match(/^#([0-9a-f]{3})$/i)
+  if (shortHex) {
+    return `#${shortHex[1].split('').map(char => `${char}${char}`).join('')}`.toLowerCase()
+  }
+
+  if (/^#[0-9a-f]{6}$/i.test(text)) {
+    return text.toLowerCase()
+  }
+
+  return ''
+}
+
+function rgbToHex(red: unknown, green: unknown, blue: unknown) {
+  const channels = [red, green, blue].map(value => Number(value))
+  if (channels.some(value => !Number.isFinite(value))) return ''
+
+  return `#${channels
+    .map(value => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0'))
+    .join('')}`
+}
+
+
+function isTruthy(value: unknown) {
+  return value === true || value === 1 || String(value).toLowerCase() === 'true'
+}
+
 function markLampPickable(group: THREE.Group, lampId: string) {
   group.traverse((child) => {
+    if (child.userData.ignorePickable) return
     child.userData.dragType = 'lamp'
     child.userData.lampId = lampId
     if (child instanceof THREE.Mesh) {
@@ -607,6 +1715,15 @@ function updateLayoutVisuals() {
   updateTrackVisuals()
   for (const lamp of layoutState.lamps) {
     updateLampVisuals(lamp)
+  }
+  updateSelectedLampVisuals()
+}
+
+function updateSelectedLampVisuals() {
+  for (const [slotId, objects] of lampObjects.entries()) {
+    const selected = selectedSlotId.value === slotId
+    objects.selectionRing.visible = selected
+    objects.selectionMarker.visible = selected
   }
 }
 
@@ -636,31 +1753,34 @@ function updateTrackVisuals() {
   if (rightHandleMesh) rightHandleMesh.position.set(endX, y, z)
 
   for (const lamp of layoutState.lamps) {
-    lamp.x = clamp(lamp.x, startX, endX)
+    lamp.lampX = clamp(lamp.lampX, startX, endX)
   }
 }
 
 function updateLampVisuals(lamp: LampLayout) {
-  const objects = lampObjects.get(lamp.id)
+  const objects = lampObjects.get(lamp.slotId)
   if (!objects || !scene) return
 
   const lampY = layoutState.track.y
   const lampZ = layoutState.track.z
   const shirtX = lamp.targetX
 
-  objects.group.position.set(lamp.x, lampY, lampZ)
+  objects.group.position.set(lamp.lampX, lampY, lampZ)
   objects.shirt.position.set(shirtX, shirtBaseY, wallLightSpotZ)
+  updateShirtColor(objects.shirt, lamp.clothingColor)
 
-  const beamStart = new THREE.Vector3(lamp.x, lampY - 0.98, lampZ + 0.05)
   const beamEnd = new THREE.Vector3(shirtX, shirtAimY, wallLightSpotZ + 0.02)
+  objects.group.updateWorldMatrix(true, true)
+
+  const beamStart = new THREE.Vector3()
+  objects.aperture.getWorldPosition(beamStart)
   const beamDirection = beamEnd.clone().sub(beamStart)
   const normalizedDirection = beamDirection.clone().normalize()
+  applyLampAim(objects, beamDirection)
 
-  const color = new THREE.Color(colorTemperatureHex(lamp.temperature))
+  const color = new THREE.Color(colorTemperatureToHex(lamp.temperature))
   const intensity = 0.45 + lamp.brightness / 100 * 3.4
   const opacity = 0.028 + lamp.brightness / 100 * 0.085
-
-  objects.head.quaternion.setFromUnitVectors(beamAxis, normalizedDirection)
 
   objects.spot.color.copy(color)
   objects.spot.intensity = intensity
@@ -682,11 +1802,48 @@ function updateLampVisuals(lamp: LampLayout) {
 
 
   const apertureMaterial = objects.aperture.material
+  const selected = selectedSlotId.value === lamp.slotId
   if (apertureMaterial instanceof THREE.MeshStandardMaterial) {
-    apertureMaterial.color.copy(color)
-    apertureMaterial.emissive.copy(color)
-    apertureMaterial.emissiveIntensity = 0.45 + lamp.brightness / 100 * 1.2
+    const apertureColor = selected
+      ? color.clone().lerp(new THREE.Color('#60a5fa'), 0.55)
+      : color
+    apertureMaterial.color.copy(apertureColor)
+    apertureMaterial.emissive.copy(apertureColor)
+    apertureMaterial.emissiveIntensity = 0.45 + lamp.brightness / 100 * 1.2 + (selected ? 0.85 : 0)
   }
+}
+
+function applyLampAim(objects: LampObjects, direction: THREE.Vector3) {
+  const horizontalLength = Math.hypot(direction.x, direction.z)
+  const yaw = horizontalLength > 0.001
+    ? Math.atan2(-direction.x / horizontalLength, -direction.z / horizontalLength)
+    : 0
+  const pitch = Math.atan2(horizontalLength, Math.max(0.001, -direction.y))
+
+  objects.yawGroup.rotation.set(0, yaw, 0)
+  objects.pitchBody.rotation.set(pitch, 0, 0)
+}
+
+function updateShirtColor(shirt: THREE.Group, color: string) {
+  const normalizedColor = normalizeDeviceColor(color, '#8fb95a')
+  if (shirt.userData.clothingColor === normalizedColor) return
+
+  const baseColor = new THREE.Color(normalizedColor)
+  const trimColor = baseColor.clone().lerp(new THREE.Color('#f1eadf'), 0.22)
+
+  shirt.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    const material = child.material
+    if (!(material instanceof THREE.MeshStandardMaterial)) return
+
+    if (child.userData.shirtBody) {
+      material.color.copy(baseColor)
+    } else if (child.userData.shirtTrim) {
+      material.color.copy(trimColor)
+    }
+  })
+
+  shirt.userData.clothingColor = normalizedColor
 }
 
 function handlePointerDown(event: PointerEvent) {
@@ -696,14 +1853,20 @@ function handlePointerDown(event: PointerEvent) {
   raycaster.setFromCamera(pointer, camera)
   const hits = raycaster.intersectObjects(pickableObjects, false)
   const hit = hits.find(item => item.object.userData.dragType)
-  if (!hit) return
+  if (!hit) {
+    clearSelectedSlot()
+    return
+  }
 
   const dragType = hit.object.userData.dragType
   if (dragType === 'track-left') {
+    clearSelectedSlot()
     dragState = { type: 'track', handle: 'left' }
   } else if (dragType === 'track-right') {
+    clearSelectedSlot()
     dragState = { type: 'track', handle: 'right' }
   } else if (dragType === 'lamp') {
+    selectSlot(hit.object.userData.lampId)
     dragState = { type: 'lamp', lampId: hit.object.userData.lampId }
   }
 
@@ -735,7 +1898,7 @@ function handlePointerUp(event: PointerEvent) {
   }
   dragState = null
   if (controls) controls.enabled = true
-  logLayoutState()
+  saveActiveZoneLayout()
 }
 
 function updateDraggedTrack(handle: TrackHandle, x: number) {
@@ -750,9 +1913,9 @@ function updateDraggedTrack(handle: TrackHandle, x: number) {
 }
 
 function updateDraggedLamp(lampId: string, x: number) {
-  const lamp = layoutState.lamps.find(item => item.id === lampId)
+  const lamp = layoutState.lamps.find(item => item.slotId === lampId)
   if (!lamp) return
-  lamp.x = clamp(x, layoutState.track.startX, layoutState.track.endX)
+  lamp.lampX = clamp(x, layoutState.track.startX, layoutState.track.endX)
 }
 
 function updatePointer(event: PointerEvent) {
@@ -762,11 +1925,35 @@ function updatePointer(event: PointerEvent) {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
 }
 
-function animate() {
-  if (!renderer || !scene || !camera) return
-  animationFrame = requestAnimationFrame(animate)
+let renderRunning = false
+
+function renderLoop() {
+  if (!renderRunning || !renderer || !scene || !camera) return
+  animationFrame = requestAnimationFrame(renderLoop)
   controls?.update()
   renderer.render(scene, camera)
+}
+
+function startRenderLoop() {
+  if (renderRunning) return
+  renderRunning = true
+  renderLoop()
+}
+
+function stopRenderLoop() {
+  renderRunning = false
+  if (animationFrame) {
+    cancelAnimationFrame(animationFrame)
+    animationFrame = 0
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) {
+    stopRenderLoop()
+  } else if (props.active) {
+    startRenderLoop()
+  }
 }
 
 function handleResize() {
@@ -789,6 +1976,7 @@ function toggleCameraView() {
 function animateCameraTo(preset: CameraViewPreset) {
   if (!camera || !controls) return
   if (cameraAnimationFrame) cancelAnimationFrame(cameraAnimationFrame)
+  startRenderLoop()
 
   const startPosition = camera.position.clone()
   const startTarget = controls.target.clone()
@@ -809,41 +1997,23 @@ function animateCameraTo(preset: CameraViewPreset) {
       cameraAnimationFrame = requestAnimationFrame(step)
     } else {
       cameraAnimationFrame = 0
+      if (!props.active) stopRenderLoop()
     }
   }
 
   cameraAnimationFrame = requestAnimationFrame(step)
 }
-function logLayoutState() {
-  const snapshot = {
-    track: {
-      startX: round(layoutState.track.startX),
-      endX: round(layoutState.track.endX),
-    },
-    lamps: layoutState.lamps.map(lamp => ({
-      id: lamp.id,
-      x: round(lamp.x),
-      brightness: lamp.brightness,
-      temperature: lamp.temperature,
-      clothingColor: lamp.clothingColor,
-      targetX: lamp.targetX,
-    })),
-    camera: {
-      x: layoutState.camera.x,
-      y: layoutState.camera.y,
-      z: layoutState.camera.z,
-    },
-  }
-  console.log('three lighting layout', JSON.stringify(snapshot, null, 2))
-}
-
 function cleanupThreeScene() {
-  if (animationFrame) cancelAnimationFrame(animationFrame)
-  if (cameraAnimationFrame) cancelAnimationFrame(cameraAnimationFrame)
+  stopRenderLoop()
+  if (cameraAnimationFrame) {
+    cancelAnimationFrame(cameraAnimationFrame)
+    cameraAnimationFrame = 0
+  }
   renderer?.domElement.removeEventListener('pointerdown', handlePointerDown)
   window.removeEventListener('pointermove', handlePointerMove)
   window.removeEventListener('pointerup', handlePointerUp)
   window.removeEventListener('resize', handleResize)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   controls?.dispose()
 
   if (scene) {
@@ -885,16 +2055,6 @@ function disposeMaterial(material: THREE.Material | THREE.Material[]) {
   }
 }
 
-function colorTemperatureHex(temp: LampTemperature) {
-  if (temp <= 3000) return '#ffb35f'
-  if (temp >= 6000) return '#cfe2ff'
-  return '#fff2d2'
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value))
-}
-
 function round(value: number) {
   return Math.round(value * 100) / 100
 }
@@ -902,6 +2062,13 @@ function round(value: number) {
 
 <style scoped>
 .three-layout-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.three-viewport-wrap {
   position: relative;
   overflow: hidden;
   min-height: 430px;
@@ -929,6 +2096,121 @@ function round(value: number) {
   backdrop-filter: blur(12px);
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.zone-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(12px);
+}
+
+.slot-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+.three-controls-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.slot-toolbar button {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+}
+
+.selected-slot-label {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.slot-toolbar button:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
+}
+
+.slot-toolbar button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.zone-arrow-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+}
+
+.zone-arrow-btn:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
+}
+
+.zone-arrow-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.zone-current-label {
+  min-width: 112px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1;
+}
+
+.zone-current-label strong {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.zone-current-label span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .view-toggle-btn:hover {
@@ -959,7 +2241,7 @@ function round(value: number) {
 }
 
 
-:global(.app-container.night-mode) .three-layout-shell {
+:global(.app-container.night-mode) .three-viewport-wrap {
   border-color: rgba(148, 163, 184, 0.18);
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
@@ -973,9 +2255,43 @@ function round(value: number) {
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.22);
 }
 
+:global(.app-container.night-mode) .zone-switcher {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.22);
+}
+
+:global(.app-container.night-mode) .slot-toolbar {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(15, 23, 42, 0.76);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.2);
+}
+
+:global(.app-container.night-mode) .slot-toolbar button {
+  background: rgba(96, 165, 250, 0.14);
+  color: #bfdbfe;
+}
+
+:global(.app-container.night-mode) .selected-slot-label {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+:global(.app-container.night-mode) .zone-current-label strong {
+  color: rgba(248, 250, 252, 0.96);
+}
+
+:global(.app-container.night-mode) .zone-current-label span {
+  color: rgba(203, 213, 225, 0.72);
+}
+
+:global(.app-container.night-mode) .zone-arrow-btn {
+  background: rgba(96, 165, 250, 0.14);
+  color: #bfdbfe;
+}
+
 
 @media (max-width: 768px) {
-  .three-layout-shell,
+  .three-viewport-wrap,
   .three-layout-viewport {
     min-height: 360px;
   }
@@ -985,7 +2301,6 @@ function round(value: number) {
   }
 }
 </style>
-
 
 
 
