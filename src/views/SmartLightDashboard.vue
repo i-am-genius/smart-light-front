@@ -7,6 +7,9 @@
         class="page-switcher"
         :class="{ 'is-switching': pageSwitching }"
         :style="pageSwitcherStyle"
+        @touchstart="onSwipeTouchStart"
+        @touchmove="onSwipeTouchMove"
+        @touchend="onSwipeTouchEnd"
       >
       <Transition
         :name="pageTransitionName"
@@ -888,6 +891,55 @@ function endPageSwitch() {
   pagePushDistance.value = 0
   pageSwitchHeight.value = 0
   pageNumberMotionReady.value = true
+}
+
+// ── Mobile swipe to switch tabs ──
+let swipeStartX = 0
+let swipeStartY = 0
+let swipeStartTime = 0
+let swipeTracking = false
+
+function onSwipeTouchStart(e: TouchEvent) {
+  if (pageSwitching.value) return
+  const touch = e.touches[0]
+  swipeStartX = touch.clientX
+  swipeStartY = touch.clientY
+  swipeStartTime = Date.now()
+  swipeTracking = true
+}
+
+function onSwipeTouchMove(e: TouchEvent) {
+  if (!swipeTracking) return
+  const touch = e.touches[0]
+  const dx = Math.abs(touch.clientX - swipeStartX)
+  const dy = Math.abs(touch.clientY - swipeStartY)
+  // If vertical movement dominates, cancel swipe tracking (allow scroll)
+  if (dy > dx * 1.2) {
+    swipeTracking = false
+  }
+}
+
+function onSwipeTouchEnd(e: TouchEvent) {
+  if (!swipeTracking) return
+  swipeTracking = false
+  const touch = e.changedTouches[0]
+  const dx = touch.clientX - swipeStartX
+  const dy = Math.abs(touch.clientY - swipeStartY)
+  const elapsed = Date.now() - swipeStartTime
+
+  // Require minimum distance, prefer horizontal, and be quick enough
+  const SWIPE_THRESHOLD = 50
+  const SWIPE_MAX_TIME = 400
+  if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < dy || elapsed > SWIPE_MAX_TIME) return
+
+  const currentIndex = dashboardTabOrder.indexOf(activeTab.value)
+  if (dx < 0 && currentIndex < dashboardTabOrder.length - 1) {
+    // Swipe left → next tab
+    activeTab.value = dashboardTabOrder[currentIndex + 1]
+  } else if (dx > 0 && currentIndex > 0) {
+    // Swipe right → previous tab
+    activeTab.value = dashboardTabOrder[currentIndex - 1]
+  }
 }
 
 function getViewportPagePushDistance() {
