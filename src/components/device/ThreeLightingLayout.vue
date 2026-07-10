@@ -2528,7 +2528,7 @@ function round(value: number) {
   cursor: grabbing;
 }
 
-:global(.app-container.night-mode) .three-layout-shell {
+:global(.app-container.night-mode .three-layout-shell) {
   --workbench-blue-soft: rgba(96, 165, 250, 0.15);
   --workbench-text: #f8fafc;
   --workbench-muted: #cbd5e1;
@@ -2536,14 +2536,34 @@ function round(value: number) {
   --workbench-border: rgba(148, 163, 184, 0.22);
 }
 
-:global(.app-container.night-mode) .three-viewport-wrap {
+:global(.app-container.night-mode .three-viewport-wrap) {
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
     radial-gradient(circle at 30% 20%, rgba(37, 99, 235, 0.18), transparent 32%);
 }
 
-:global(.app-container.night-mode) .workbench-glass {
+:global(.app-container.night-mode .workbench-glass) {
   box-shadow: 0 14px 32px rgba(2, 6, 23, 0.34);
+}
+
+:global(.app-container.night-mode .zone-arrow-btn) {
+  background: #2563eb;
+  color: #fff;
+}
+
+:global(.app-container.night-mode .layout-action-btn) {
+  background: #2563eb;
+  color: #fff;
+}
+
+:global(.app-container.night-mode .context-action) {
+  background: #2563eb;
+  color: #fff;
+}
+
+:global(.app-container.night-mode .context-action.danger) {
+  background: #dc2626;
+  color: #fff;
 }
 
 @media (max-width: 1180px) {

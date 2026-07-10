@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
+import { compileStyle, parse } from '@vue/compiler-sfc'
 
 const component = readFileSync(
   new URL('../src/components/device/ThreeLightingLayout.vue', import.meta.url),
   'utf8',
 )
+const { descriptor } = parse(component, { filename: 'ThreeLightingLayout.vue' })
+const compiledStyle = compileStyle({
+  filename: 'ThreeLightingLayout.vue',
+  id: 'data-v-three-lighting-workbench-test',
+  scoped: true,
+  source: descriptor.styles[0]?.content ?? '',
+})
 
 describe('ThreeLightingLayout workbench UI contract', () => {
   it('keeps every existing layout command wired to the workbench', () => {
@@ -58,7 +66,6 @@ describe('ThreeLightingLayout workbench UI contract', () => {
   })
 
   it('defines night, tablet, mobile, touch, and reduced-motion states', () => {
-    assert.match(component, /:global\(\.app-container\.night-mode\) \.three-layout-shell\s*\{/)
     assert.match(component, /@media \(max-width: 1180px\)/)
     assert.match(component, /@media \(max-width: 768px\)/)
     assert.match(component, /grid-template-areas:\s*"zone view"\s*"actions actions"/)
@@ -66,5 +73,31 @@ describe('ThreeLightingLayout workbench UI contract', () => {
     assert.match(component, /@media \(max-width: 768px\)[\s\S]*min-height:\s*44px/)
     assert.match(component, /@media \(max-width: 768px\)[\s\S]*\.scene-overlay\s*\{[^}]*display:\s*none/)
     assert.match(component, /@media \(prefers-reduced-motion: reduce\)[\s\S]*transition:\s*none/)
+  })
+
+  it('keeps night mode selectors scoped to workbench descendants', () => {
+    assert.deepEqual(compiledStyle.errors, [])
+    assert.match(compiledStyle.code, /\.app-container\.night-mode \.three-layout-shell\s*\{/)
+    assert.match(compiledStyle.code, /\.app-container\.night-mode \.three-viewport-wrap\s*\{/)
+    assert.match(compiledStyle.code, /\.app-container\.night-mode \.workbench-glass\s*\{/)
+  })
+
+  it('uses solid high-contrast colours for night mode actions', () => {
+    assert.match(
+      compiledStyle.code,
+      /\.app-container\.night-mode \.zone-arrow-btn\s*\{[^}]*background:\s*#2563eb;[^}]*color:\s*#fff;/,
+    )
+    assert.match(
+      compiledStyle.code,
+      /\.app-container\.night-mode \.layout-action-btn\s*\{[^}]*background:\s*#2563eb;[^}]*color:\s*#fff;/,
+    )
+    assert.match(
+      compiledStyle.code,
+      /\.app-container\.night-mode \.context-action\s*\{[^}]*background:\s*#2563eb;[^}]*color:\s*#fff;/,
+    )
+    assert.match(
+      compiledStyle.code,
+      /\.app-container\.night-mode \.context-action\.danger\s*\{[^}]*background:\s*#dc2626;[^}]*color:\s*#fff;/,
+    )
   })
 })
