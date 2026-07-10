@@ -1,54 +1,125 @@
 ﻿<template>
   <div class="three-layout-shell">
-    <div class="three-controls-panel" @pointerdown.stop>
-      <div class="zone-switcher">
-        <button
-          class="zone-arrow-btn"
-          type="button"
-          :disabled="zoneCount <= 1"
-          @click.stop="switchZone(-1)"
-        >
-          ‹
-        </button>
-        <div class="zone-current-label">
-          <strong>{{ activeZone.zoneName }}</strong>
-          <span>{{ activeZoneIndex + 1 }} / {{ zoneCount }}</span>
-        </div>
-        <button
-          class="zone-arrow-btn"
-          type="button"
-          :disabled="zoneCount <= 1"
-          @click.stop="switchZone(1)"
-        >
-          ›
-        </button>
-      </div>
-      <div class="slot-toolbar">
-        <span class="selected-slot-label">
-          {{ selectedSlotLabel }}
-        </span>
-        <button type="button" @click.stop="addManualSlot">+ 灯位</button>
-        <button type="button" :disabled="!canMoveSelectedLeft" @click.stop="moveSelectedSlot(-1)">
-          左移
-        </button>
-        <button
-          type="button"
-          :disabled="!canMoveSelectedRight"
-          @click.stop="moveSelectedSlot(1)"
-        >
-          右移
-        </button>
-        <button type="button" :disabled="!canDeleteSelectedSlot" :title="deleteSlotTitle" @click.stop="deleteSelectedSlot">
-          删除灯位
-        </button>
-        <button type="button" :disabled="layoutState.lamps.length <= 1" @click.stop="handleArrangeSlotsEvenly">均匀排列</button>
-      </div>
-    </div>
     <div class="three-viewport-wrap">
-      <button class="view-toggle-btn" type="button" @click.stop="toggleCameraView">
-        {{ cameraViewMode === 'display' ? '调节射灯视角' : '展示视角' }}
-      </button>
+      <div class="scene-toolbar" @pointerdown.stop>
+        <div class="zone-cluster workbench-glass">
+          <div class="zone-switcher">
+            <button
+              class="zone-arrow-btn"
+              type="button"
+              aria-label="上一个区域"
+              :disabled="zoneCount <= 1"
+              @click.stop="switchZone(-1)"
+            >
+              ‹
+            </button>
+            <div class="zone-current-label">
+              <strong :title="activeZone.zoneName">{{ activeZone.zoneName }}</strong>
+              <span>{{ activeZoneIndex + 1 }} / {{ zoneCount }}</span>
+            </div>
+            <button
+              class="zone-arrow-btn"
+              type="button"
+              aria-label="下一个区域"
+              :disabled="zoneCount <= 1"
+              @click.stop="switchZone(1)"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+
+        <div class="scene-edit-actions slot-toolbar workbench-glass">
+          <span class="scene-slot-count">{{ slotCountLabel }}</span>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <button class="toolbar-action primary-action-btn" type="button" @click.stop="addManualSlot">
+            <span aria-hidden="true">＋</span> 添加灯位
+          </button>
+          <button
+            class="toolbar-action layout-action-btn"
+            type="button"
+            :disabled="layoutState.lamps.length <= 1"
+            @click.stop="handleArrangeSlotsEvenly"
+          >
+            均匀排列
+          </button>
+        </div>
+
+        <div class="view-mode-switch workbench-glass" role="group" aria-label="场景视角">
+          <button
+            class="view-mode-btn view-toggle-btn"
+            :class="{ 'is-active': cameraViewMode === 'display' }"
+            type="button"
+            :aria-pressed="cameraViewMode === 'display'"
+            @click.stop="setCameraViewMode('display')"
+          >
+            展示
+          </button>
+          <button
+            class="view-mode-btn view-toggle-btn"
+            :class="{ 'is-active': cameraViewMode === 'adjust' }"
+            type="button"
+            :aria-pressed="cameraViewMode === 'adjust'"
+            @click.stop="setCameraViewMode('adjust')"
+          >
+            调节
+          </button>
+        </div>
+      </div>
+
+      <div class="scene-overlay" aria-hidden="true">
+        <span>精品服装灯光</span>
+        <small>轨道编排工作台</small>
+      </div>
+
       <div ref="viewportRef" class="three-layout-viewport"></div>
+
+      <div class="scene-context-layer" aria-live="polite" @pointerdown.stop>
+        <div v-if="selectedSlot" class="scene-context-bar workbench-glass">
+          <div class="selected-slot-summary">
+            <span class="selection-dot" aria-hidden="true"></span>
+            <span class="selected-slot-copy">
+              <strong>{{ selectedSlotLabel }}</strong>
+              <small v-if="selectedSlotStatusLabel">{{ selectedSlotStatusLabel }}</small>
+            </span>
+          </div>
+          <div class="context-actions">
+            <button
+              class="context-action"
+              type="button"
+              aria-label="灯位左移"
+              :disabled="!canMoveSelectedLeft"
+              @click.stop="moveSelectedSlot(-1)"
+            >
+              ← 左移
+            </button>
+            <button
+              class="context-action"
+              type="button"
+              aria-label="灯位右移"
+              :disabled="!canMoveSelectedRight"
+              @click.stop="moveSelectedSlot(1)"
+            >
+              右移 →
+            </button>
+            <span class="context-divider" aria-hidden="true"></span>
+            <button
+              class="context-action danger"
+              type="button"
+              :disabled="!canDeleteSelectedSlot"
+              :title="deleteSlotTitle"
+              @click.stop="deleteSelectedSlot"
+            >
+              删除
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="scene-empty-hint workbench-glass">
+          <strong>点击射灯后可编辑位置</strong>
+          <small>拖动射灯调整陈列焦点</small>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -207,6 +278,15 @@ const canMoveSelectedRight = computed(() =>
 const selectedSlotLabel = computed(() => {
   if (!selectedSlotId.value || !selectedSlot.value) return '请先点击选择一盏灯'
   return `已选中：${selectedSlot.value.name || `灯位 ${selectedSlotIndex.value + 1}`}`
+})
+const slotCountLabel = computed(() => `${layoutState.lamps.length} 个灯位`)
+const selectedSlotStatusLabel = computed(() => {
+  const slot = selectedSlot.value
+  if (!slot) return ''
+  if (slot.isManual) return '手动灯位'
+  if (slot.online === true) return '在线'
+  if (slot.online === false) return '离线'
+  return ''
 })
 const canDeleteSelectedSlot = computed(() =>
   selectedSlotId.value !== '' &&
@@ -1966,6 +2046,11 @@ function handleResize() {
   renderer.setSize(width, height)
 }
 
+function setCameraViewMode(mode: CameraViewMode) {
+  if (mode === cameraViewMode.value) return
+  toggleCameraView()
+}
+
 function toggleCameraView() {
   if (dragState || !camera || !controls) return
   const nextMode: CameraViewMode = cameraViewMode.value === 'display' ? 'adjust' : 'display'
@@ -2062,165 +2147,368 @@ function round(value: number) {
 
 <style scoped>
 .three-layout-shell {
+  --workbench-blue: #2563eb;
+  --workbench-blue-soft: rgba(37, 99, 235, 0.1);
+  --workbench-gold: #c8a56c;
+  --workbench-danger: #dc2626;
+  --workbench-text: #0f172a;
+  --workbench-muted: #64748b;
+  --workbench-panel: rgba(255, 255, 255, 0.86);
+  --workbench-border: rgba(148, 163, 184, 0.25);
   display: flex;
-  flex-direction: column;
-  gap: 10px;
   min-height: 0;
+  flex-direction: column;
 }
 
 .three-viewport-wrap {
   position: relative;
-  overflow: hidden;
   min-height: 430px;
+  overflow: hidden;
+  border: 1px solid var(--workbench-border);
   border-radius: 22px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
   background:
     linear-gradient(135deg, rgba(248, 250, 252, 0.96), rgba(239, 246, 255, 0.92)),
     radial-gradient(circle at 30% 20%, rgba(96, 165, 250, 0.18), transparent 32%);
 }
 
-.view-toggle-btn {
+.workbench-glass {
+  border: 1px solid var(--workbench-border);
+  background: var(--workbench-panel);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.13);
+  backdrop-filter: blur(16px) saturate(130%);
+}
+
+.scene-toolbar {
   position: absolute;
+  z-index: 4;
   top: 14px;
   right: 14px;
-  z-index: 3;
-  border: 1px solid rgba(59, 130, 246, 0.22);
+  left: 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.zone-cluster,
+.scene-edit-actions,
+.view-mode-switch {
+  pointer-events: auto;
+}
+
+.zone-cluster {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 5px;
+}
+
+.zone-cluster::after {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 2px;
   border-radius: 999px;
-  padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.84);
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1;
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.14);
-  backdrop-filter: blur(12px);
-  cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  background: linear-gradient(90deg, transparent, var(--workbench-gold), transparent);
+  content: '';
+  opacity: 0.78;
 }
 
 .zone-switcher {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(12px);
-}
-
-.slot-toolbar {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(12px);
-}
-
-.three-controls-panel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.slot-toolbar button {
-  border: none;
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
-}
-
-.selected-slot-label {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 0 6px;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.slot-toolbar button:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.18);
-  transform: translateY(-1px);
-}
-
-.slot-toolbar button:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
+  gap: 7px;
 }
 
 .zone-arrow-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(37, 99, 235, 0.1);
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: var(--workbench-blue-soft);
   color: #2563eb;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 900;
   line-height: 1;
-  display: grid;
-  place-items: center;
   cursor: pointer;
   transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
 }
 
-.zone-arrow-btn:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.18);
-  transform: translateY(-1px);
-}
-
-.zone-arrow-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
 .zone-current-label {
-  min-width: 112px;
   display: flex;
+  min-width: 116px;
+  max-width: 154px;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   line-height: 1;
 }
 
 .zone-current-label strong {
-  max-width: 132px;
+  max-width: 100%;
   overflow: hidden;
+  color: var(--workbench-text);
+  font-size: 13px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #1e293b;
+}
+
+.zone-current-label span {
+  color: var(--workbench-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.scene-edit-actions {
+  display: inline-flex;
+  justify-self: end;
+  align-items: center;
+  gap: 6px;
+  border-radius: 16px;
+  padding: 5px;
+}
+
+.scene-slot-count {
+  padding: 0 6px;
+  color: var(--workbench-muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.toolbar-divider,
+.context-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--workbench-border);
+}
+
+.slot-toolbar button {
+  color: #2563eb;
+}
+
+.toolbar-action {
+  min-height: 32px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 10px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+}
+
+.primary-action-btn {
+  background: var(--workbench-blue);
+  color: #fff;
+  box-shadow: 0 7px 16px rgba(37, 99, 235, 0.22);
+}
+
+.slot-toolbar .primary-action-btn {
+  color: #fff;
+}
+
+.layout-action-btn {
+  background: var(--workbench-blue-soft);
+}
+
+.view-mode-switch {
+  display: inline-flex;
+  gap: 3px;
+  border-radius: 14px;
+  padding: 4px;
+}
+
+.view-toggle-btn {
+  color: #2563eb;
+}
+
+.view-mode-btn {
+  min-width: 48px;
+  min-height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--workbench-muted);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.view-mode-btn.is-active {
+  background: var(--workbench-blue);
+  color: #fff;
+  box-shadow: 0 7px 16px rgba(37, 99, 235, 0.2);
+}
+
+.scene-overlay {
+  position: absolute;
+  z-index: 2;
+  top: 78px;
+  left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  pointer-events: none;
+  color: #fff1d6;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 12px rgba(48, 25, 9, 0.86);
+}
+
+.scene-overlay span {
   font-size: 13px;
   font-weight: 900;
 }
 
-.zone-current-label span {
-  color: #64748b;
+.scene-overlay small {
+  color: rgba(255, 241, 214, 0.78);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.scene-context-layer {
+  position: absolute;
+  z-index: 4;
+  right: 14px;
+  bottom: 14px;
+  left: 14px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.scene-context-bar {
+  display: flex;
+  max-width: min(680px, 100%);
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-radius: 18px;
+  padding: 7px 8px 7px 12px;
+  pointer-events: auto;
+}
+
+.selected-slot-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.selection-dot {
+  width: 8px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--workbench-blue);
+  box-shadow: 0 0 16px rgba(37, 99, 235, 0.48);
+}
+
+.selected-slot-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.selected-slot-copy strong {
+  overflow: hidden;
+  color: var(--workbench-text);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-slot-copy small {
+  color: var(--workbench-muted);
   font-size: 11px;
+  font-weight: 700;
+}
+
+.context-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.context-action {
+  min-height: 34px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 10px;
+  background: var(--workbench-blue-soft);
+  color: var(--workbench-blue);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+}
+
+.context-action.danger {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--workbench-danger);
+}
+
+.scene-empty-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border-radius: 15px;
+  padding: 8px 14px;
+  color: var(--workbench-text);
+}
+
+.scene-empty-hint strong {
+  font-size: 12px;
   font-weight: 800;
 }
 
-.view-toggle-btn:hover {
-  transform: translateY(-1px);
-  background: rgba(239, 246, 255, 0.94);
-  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.18);
+.scene-empty-hint small {
+  color: var(--workbench-muted);
+  font-size: 10px;
+  font-weight: 700;
 }
 
-.view-toggle-btn:active {
-  transform: translateY(0);
+.zone-arrow-btn:hover:not(:disabled),
+.layout-action-btn:hover:not(:disabled),
+.context-action:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
+}
+
+.primary-action-btn:hover:not(:disabled),
+.view-mode-btn.is-active:hover {
+  transform: translateY(-1px);
+}
+
+.context-action.danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.14);
+}
+
+.zone-arrow-btn:disabled,
+.toolbar-action:disabled,
+.context-action:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.zone-arrow-btn:focus-visible,
+.toolbar-action:focus-visible,
+.view-mode-btn:focus-visible,
+.context-action:focus-visible {
+  outline: 2px solid var(--workbench-blue);
+  outline-offset: 2px;
 }
 
 .three-layout-viewport {
@@ -2240,64 +2528,12 @@ function round(value: number) {
   cursor: grabbing;
 }
 
-
-:global(.app-container.night-mode) .three-viewport-wrap {
-  border-color: rgba(148, 163, 184, 0.18);
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
-    radial-gradient(circle at 30% 20%, rgba(37, 99, 235, 0.18), transparent 32%);
-}
-
-:global(.app-container.night-mode) .view-toggle-btn {
-  border-color: rgba(96, 165, 250, 0.28);
-  background: rgba(15, 23, 42, 0.78);
-  color: #bfdbfe;
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.22);
-}
-
-:global(.app-container.night-mode) .zone-switcher {
-  border-color: rgba(96, 165, 250, 0.22);
-  background: rgba(15, 23, 42, 0.78);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.22);
-}
-
-:global(.app-container.night-mode) .slot-toolbar {
-  border-color: rgba(96, 165, 250, 0.2);
-  background: rgba(15, 23, 42, 0.76);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.2);
-}
-
-:global(.app-container.night-mode) .slot-toolbar button {
-  background: rgba(96, 165, 250, 0.14);
-  color: #bfdbfe;
-}
-
-:global(.app-container.night-mode) .selected-slot-label {
-  color: rgba(226, 232, 240, 0.78);
-}
-
-:global(.app-container.night-mode) .zone-current-label strong {
-  color: rgba(248, 250, 252, 0.96);
-}
-
-:global(.app-container.night-mode) .zone-current-label span {
-  color: rgba(203, 213, 225, 0.72);
-}
-
-:global(.app-container.night-mode) .zone-arrow-btn {
-  background: rgba(96, 165, 250, 0.14);
-  color: #bfdbfe;
-}
-
-
-@media (max-width: 768px) {
-  .three-viewport-wrap,
-  .three-layout-viewport {
-    min-height: 360px;
-  }
-
-  .three-layout-viewport {
-    height: 360px;
+@media (prefers-reduced-motion: reduce) {
+  .zone-arrow-btn,
+  .toolbar-action,
+  .view-mode-btn,
+  .context-action {
+    transition: none;
   }
 }
 </style>
