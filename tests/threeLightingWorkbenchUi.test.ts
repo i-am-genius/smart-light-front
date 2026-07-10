@@ -56,4 +56,15 @@ describe('ThreeLightingLayout workbench UI contract', () => {
     assert.match(component, /\.scene-context-bar\s*\{[^}]*pointer-events:\s*auto/)
     assert.match(component, /\.scene-overlay\s*\{[^}]*pointer-events:\s*none/)
   })
+
+  it('defines night, tablet, mobile, touch, and reduced-motion states', () => {
+    assert.match(component, /:global\(\.app-container\.night-mode\) \.three-layout-shell\s*\{/)
+    assert.match(component, /@media \(max-width: 1180px\)/)
+    assert.match(component, /@media \(max-width: 768px\)/)
+    assert.match(component, /grid-template-areas:\s*"zone view"\s*"actions actions"/)
+    assert.match(component, /@media \(max-width: 768px\)[\s\S]*min-width:\s*44px/)
+    assert.match(component, /@media \(max-width: 768px\)[\s\S]*min-height:\s*44px/)
+    assert.match(component, /@media \(max-width: 768px\)[\s\S]*\.scene-overlay\s*\{[^}]*display:\s*none/)
+    assert.match(component, /@media \(prefers-reduced-motion: reduce\)[\s\S]*transition:\s*none/)
+  })
 })

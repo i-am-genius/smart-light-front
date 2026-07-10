@@ -2528,6 +2528,137 @@ function round(value: number) {
   cursor: grabbing;
 }
 
+:global(.app-container.night-mode) .three-layout-shell {
+  --workbench-blue-soft: rgba(96, 165, 250, 0.15);
+  --workbench-text: #f8fafc;
+  --workbench-muted: #cbd5e1;
+  --workbench-panel: rgba(15, 23, 42, 0.82);
+  --workbench-border: rgba(148, 163, 184, 0.22);
+}
+
+:global(.app-container.night-mode) .three-viewport-wrap {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
+    radial-gradient(circle at 30% 20%, rgba(37, 99, 235, 0.18), transparent 32%);
+}
+
+:global(.app-container.night-mode) .workbench-glass {
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.34);
+}
+
+@media (max-width: 1180px) {
+  .scene-toolbar {
+    grid-template-columns: auto minmax(230px, 1fr) auto;
+  }
+
+  .scene-edit-actions {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .scene-context-bar {
+    width: min(620px, 100%);
+  }
+}
+
+@media (max-width: 768px) {
+  .three-viewport-wrap,
+  .three-layout-viewport {
+    min-height: 360px;
+  }
+
+  .three-layout-viewport {
+    height: 360px;
+  }
+
+  .scene-toolbar {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    grid-template-areas:
+      "zone view"
+      "actions actions";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .zone-cluster {
+    grid-area: zone;
+    min-width: 0;
+    justify-self: stretch;
+  }
+
+  .zone-switcher {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .zone-current-label {
+    min-width: 0;
+    max-width: 128px;
+  }
+
+  .view-mode-switch {
+    grid-area: view;
+  }
+
+  .scene-edit-actions {
+    grid-area: actions;
+    width: 100%;
+    box-sizing: border-box;
+    justify-self: stretch;
+    justify-content: flex-end;
+  }
+
+  .scene-slot-count {
+    margin-right: auto;
+  }
+
+  .zone-arrow-btn,
+  .view-mode-btn,
+  .toolbar-action,
+  .context-action {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .view-mode-btn {
+    padding: 0 10px;
+  }
+
+  .scene-overlay {
+    display: none;
+  }
+
+  .scene-context-layer {
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+  }
+
+  .scene-context-bar {
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .selected-slot-summary {
+    flex: 1 1 150px;
+  }
+
+  .context-actions {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .scene-empty-hint {
+    max-width: calc(100% - 20px);
+    box-sizing: border-box;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .zone-arrow-btn,
   .toolbar-action,
