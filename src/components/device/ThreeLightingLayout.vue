@@ -9,6 +9,7 @@
               type="button"
               aria-label="上一个区域"
               :disabled="zoneCount <= 1"
+              :title="zoneCount <= 1 ? '当前仅一个区域' : '上一个区域'"
               @click.stop="switchZone(-1)"
             >
               ‹
@@ -22,6 +23,7 @@
               type="button"
               aria-label="下一个区域"
               :disabled="zoneCount <= 1"
+              :title="zoneCount <= 1 ? '当前仅一个区域' : '下一个区域'"
               @click.stop="switchZone(1)"
             >
               ›
@@ -39,6 +41,7 @@
             class="toolbar-action layout-action-btn"
             type="button"
             :disabled="layoutState.lamps.length <= 1"
+            :title="layoutState.lamps.length <= 1 ? '至少两个灯位' : '均匀排列'"
             @click.stop="handleArrangeSlotsEvenly"
           >
             均匀排列
@@ -89,6 +92,7 @@
               type="button"
               aria-label="灯位左移"
               :disabled="!canMoveSelectedLeft"
+              :title="canMoveSelectedLeft ? '左移' : '已在最左'"
               @click.stop="moveSelectedSlot(-1)"
             >
               ← 左移
@@ -98,6 +102,7 @@
               type="button"
               aria-label="灯位右移"
               :disabled="!canMoveSelectedRight"
+              :title="canMoveSelectedRight ? '右移' : '已在最右'"
               @click.stop="moveSelectedSlot(1)"
             >
               右移 →
@@ -2155,6 +2160,7 @@ function round(value: number) {
   --workbench-muted: #64748b;
   --workbench-panel: rgba(255, 255, 255, 0.86);
   --workbench-border: rgba(148, 163, 184, 0.25);
+  container-type: inline-size;
   display: flex;
   min-height: 0;
   flex-direction: column;
@@ -2194,6 +2200,13 @@ function round(value: number) {
 .zone-cluster,
 .scene-edit-actions,
 .view-mode-switch {
+  pointer-events: none;
+}
+
+.zone-cluster button,
+.scene-edit-actions button,
+.view-mode-switch button,
+.scene-context-bar button {
   pointer-events: auto;
 }
 
@@ -2224,8 +2237,8 @@ function round(value: number) {
 
 .zone-arrow-btn {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border: 0;
   border-radius: 10px;
@@ -2293,7 +2306,7 @@ function round(value: number) {
 }
 
 .toolbar-action {
-  min-height: 32px;
+  min-height: 34px;
   border: 0;
   border-radius: 10px;
   padding: 0 10px;
@@ -2394,7 +2407,7 @@ function round(value: number) {
   gap: 18px;
   border-radius: 18px;
   padding: 7px 8px 7px 12px;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .selected-slot-summary {
@@ -2536,32 +2549,32 @@ function round(value: number) {
   --workbench-border: rgba(148, 163, 184, 0.22);
 }
 
-:global(.app-container.night-mode .three-viewport-wrap) {
+:global(.app-container.night-mode .three-layout-shell .three-viewport-wrap) {
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.9)),
     radial-gradient(circle at 30% 20%, rgba(37, 99, 235, 0.18), transparent 32%);
 }
 
-:global(.app-container.night-mode .workbench-glass) {
+:global(.app-container.night-mode .three-layout-shell .workbench-glass) {
   box-shadow: 0 14px 32px rgba(2, 6, 23, 0.34);
 }
 
-:global(.app-container.night-mode .zone-arrow-btn) {
+:global(.app-container.night-mode .three-layout-shell .zone-arrow-btn) {
   background: #2563eb;
   color: #fff;
 }
 
-:global(.app-container.night-mode .layout-action-btn) {
+:global(.app-container.night-mode .three-layout-shell .layout-action-btn) {
   background: #2563eb;
   color: #fff;
 }
 
-:global(.app-container.night-mode .context-action) {
+:global(.app-container.night-mode .three-layout-shell .context-action) {
   background: #2563eb;
   color: #fff;
 }
 
-:global(.app-container.night-mode .context-action.danger) {
+:global(.app-container.night-mode .three-layout-shell .context-action.danger) {
   background: #dc2626;
   color: #fff;
 }
@@ -2581,16 +2594,7 @@ function round(value: number) {
   }
 }
 
-@media (max-width: 768px) {
-  .three-viewport-wrap,
-  .three-layout-viewport {
-    min-height: 360px;
-  }
-
-  .three-layout-viewport {
-    height: 360px;
-  }
-
+@container (max-width: 590px) {
   .scene-toolbar {
     top: 10px;
     right: 10px;
@@ -2632,6 +2636,17 @@ function round(value: number) {
 
   .scene-slot-count {
     margin-right: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .three-viewport-wrap,
+  .three-layout-viewport {
+    min-height: 360px;
+  }
+
+  .three-layout-viewport {
+    height: 360px;
   }
 
   .zone-arrow-btn,
