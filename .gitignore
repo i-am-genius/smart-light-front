@@ -48,6 +48,9 @@ public/backgrounds/store-layout.png
 test-results/
 playwright-report/
 
+# Local design brainstorming sessions
+.superpowers/
+
 # WeChat / local private config
 project.private.config.json
 
