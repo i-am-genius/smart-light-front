@@ -2594,7 +2594,7 @@ function round(value: number) {
   }
 }
 
-@container (max-width: 590px) {
+@container (max-width: 620px) {
   .scene-toolbar {
     top: 10px;
     right: 10px;

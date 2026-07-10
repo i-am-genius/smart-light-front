@@ -86,7 +86,7 @@ describe('ThreeLightingLayout workbench UI contract', () => {
     assert.match(component, /\.three-layout-shell\s*\{[^}]*container-type:\s*inline-size/)
     assert.match(
       component,
-      /@container\s*\(max-width:\s*590px\)\s*\{[\s\S]*?\.scene-toolbar\s*\{[^}]*grid-template-areas:\s*"zone view"\s*"actions actions"/,
+      /@container\s*\(max-width:\s*620px\)\s*\{[\s\S]*?\.scene-toolbar\s*\{[^}]*grid-template-areas:\s*"zone view"\s*"actions actions"/,
     )
   })
 
