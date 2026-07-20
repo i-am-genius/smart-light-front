@@ -52,6 +52,7 @@ import { loginApi } from '../api/auth'
 import { useToast } from '../composables/useToast'
 import { useShake } from '../composables/useShake'
 import AuthShell from '../components/auth/AuthShell.vue'
+import { persistAuthState } from '../utils/authStorage'
 
 const router = useRouter()
 const loading = ref(false)
@@ -96,21 +97,14 @@ async function handleLogin() {
       throw new Error(result.msg || '登录失败，未返回 token')
     }
 
-
-    // Only clear storeSetup from the storage type we're NOT writing to
-    const storage = rememberMe.value ? localStorage : sessionStorage
-    const otherStorage = rememberMe.value ? sessionStorage : localStorage
-    otherStorage.removeItem('storeSetup')
-
-    storage.setItem('TOKEN', data.token)
-    storage.setItem('USER_INFO', JSON.stringify(data))
-    storage.setItem(
-      'storeSetup',
-      JSON.stringify({
+    persistAuthState(rememberMe.value, localStorage, sessionStorage, {
+      token: data.token,
+      userInfo: JSON.stringify(data),
+      storeSetup: JSON.stringify({
         configured: !!data.storeConfigured,
         skipped: false,
       }),
-    )
+    })
 
     if (rememberMe.value) {
       localStorage.setItem('REMEMBER_USERNAME', form.username)

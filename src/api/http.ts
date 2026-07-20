@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { clearAllAuthState, isUnauthenticatedStatus } from '../utils/authStorage'
 
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
@@ -16,15 +17,7 @@ function isCommonResultLike(value: unknown): value is CommonResultLike {
 }
 
 function clearAuthStorage() {
-  window.localStorage.removeItem('TOKEN')
-  window.localStorage.removeItem('USER_INFO')
-  window.localStorage.removeItem('STORE_NAME')
-  window.localStorage.removeItem('storeSetup')
-
-  window.sessionStorage.removeItem('TOKEN')
-  window.sessionStorage.removeItem('USER_INFO')
-  window.sessionStorage.removeItem('STORE_NAME')
-  window.sessionStorage.removeItem('storeSetup')
+  clearAllAuthState(window.localStorage, window.sessionStorage)
 }
 
 function redirectToLogin() {
@@ -55,7 +48,7 @@ http.interceptors.response.use(
       const code = Number(result.code)
 
       if (code !== 200) {
-        if (code === 401) {
+        if (isUnauthenticatedStatus(code)) {
           clearAuthStorage()
           redirectToLogin()
         }
@@ -69,7 +62,7 @@ http.interceptors.response.use(
   (error) => {
     console.error('API error:', error)
 
-    if (error?.response?.status === 401) {
+    if (isUnauthenticatedStatus(error?.response?.status)) {
       clearAuthStorage()
       redirectToLogin()
     }
