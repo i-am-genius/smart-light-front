@@ -780,6 +780,7 @@
     let headAngle = 0
     let animationFrame = 0
     let lastTime = performance.now()
+    let threeReady = false
     let renderThree = () => {}
     let resizeThree = () => {}
     let setThreePose = () => {}
@@ -788,13 +789,17 @@
     function advanceFollower(state, target, dt) {
       const error = target - state.position
       const direction = Math.sign(error)
+      if (!direction) return { position: target, velocity: 0 }
       const acceleration = direction * Math.min(2600, 90 * Math.pow(Math.abs(error), .72))
       const damping = Math.exp(-8.6 * dt)
-      let velocity = (state.velocity + acceleration * dt) * damping
+      const alignedVelocity = state.velocity * direction < 0 ? 0 : state.velocity
+      let velocity = (alignedVelocity + acceleration * dt) * damping
       const maxSpeed = 540
       velocity = Math.max(-maxSpeed, Math.min(maxSpeed, velocity))
       let position = state.position + velocity * dt
-      if ((direction > 0 && position >= target) || (direction < 0 && position <= target)) {
+      if (direction > 0) position = Math.min(target, Math.max(state.position, position))
+      else position = Math.max(target, Math.min(state.position, position))
+      if (position === target) {
         position = target
         velocity = 0
       }
@@ -875,7 +880,7 @@
     }
 
     function startAnimation() {
-      if (isStaticMode() || animationFrame) return
+      if (!threeReady || isStaticMode() || animationFrame) return
       lastTime = performance.now()
       animationFrame = requestAnimationFrame(animate)
     }
@@ -1116,6 +1121,7 @@
       renderThree = () => renderer.render(scene, camera)
       resizeThree()
       applyStaticState()
+      threeReady = true
       experience.classList.add('three-ready')
     } catch (error) {
       console.error('Three.js light scene failed to initialize.', error)

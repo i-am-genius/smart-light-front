@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import vm from 'node:vm'
@@ -38,9 +39,27 @@ test('motion kernel brakes without overshooting the target', async () => {
   assert.ok(next.position >= 98)
 })
 
+test('motion kernel never moves away after a rapid target reversal', async () => {
+  const advanceFollower = extractMotionKernel(await readPrototype())
+  const next = advanceFollower({ position: 100, velocity: 500 }, 50, 1 / 60)
+  assert.ok(next.position <= 100)
+  assert.ok(next.position >= 50)
+})
+
+test('desktop following starts only after Three.js is ready', async () => {
+  const html = await readPrototype()
+  assert.match(html, /let threeReady = false/)
+  assert.match(html, /if \(!threeReady \|\| isStaticMode\(\) \|\| animationFrame\) return/)
+  assert.match(html, /threeReady = true\s+experience\.classList\.add\('three-ready'\)/)
+})
+
 test('inline module has valid JavaScript syntax', async () => {
   const html = await readPrototype()
   const match = html.match(/<script type="module">([\s\S]*?)<\/script>/)
   assert.ok(match, 'inline module must exist')
-  assert.doesNotThrow(() => new vm.SourceTextModule(match[1]))
+  const result = spawnSync(process.execPath, ['--check', '--input-type=module'], {
+    input: match[1],
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stderr)
 })
