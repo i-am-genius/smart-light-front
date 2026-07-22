@@ -778,8 +778,8 @@
 
     const pointerTarget = { x: innerWidth * .68, y: innerHeight * .5 }
     const lampState = { position: innerWidth * .68, velocity: 0 }
-    const lightState = { x: pointerTarget.x, y: pointerTarget.y }
     let headAngle = 0
+    let lampAnchorScreenY = 170
     let animationFrame = 0
     let lastTime = performance.now()
     let threeReady = false
@@ -792,11 +792,11 @@
       const error = target - state.position
       const direction = Math.sign(error)
       if (!direction) return { position: target, velocity: 0 }
-      const acceleration = direction * Math.min(9200, 240 * Math.pow(Math.abs(error), .78))
+      const acceleration = direction * Math.min(8000, 210 * Math.pow(Math.abs(error), .78))
       const damping = Math.exp(-6 * dt)
       const alignedVelocity = state.velocity * direction < 0 ? 0 : state.velocity
       let velocity = (alignedVelocity + acceleration * dt) * damping
-      const maxSpeed = 1500
+      const maxSpeed = 1100
       velocity = Math.max(-maxSpeed, Math.min(maxSpeed, velocity))
       let position = state.position + velocity * dt
       if (direction > 0) position = Math.min(target, Math.max(state.position, position))
@@ -807,11 +807,15 @@
       }
       return { position, velocity }
     }
-    /* MOTION_KERNEL_END */
 
-    function clamp(value, min, max) {
-      return Math.max(min, Math.min(max, value))
+    function calculateAimAngle(lampX, lampY, targetX, targetY) {
+      return Math.atan2(targetX - lampX, targetY - lampY)
     }
+
+    function clampTrackTarget(targetX, viewportWidth) {
+      return Math.max(viewportWidth * .27, Math.min(viewportWidth * .73, targetX))
+    }
+    /* MOTION_KERNEL_END */
 
     function isStaticMode() {
       return !desktopFollow.matches || reduceMotion.matches
@@ -826,8 +830,8 @@
 
     function applyLighting(screenX, screenY) {
       const rect = pageSurface.getBoundingClientRect()
-      const localX = clamp(screenX - rect.left, rect.width * .08, rect.width * .92)
-      const localY = clamp(screenY - rect.top, rect.height * .16, rect.height * .88)
+      const localX = screenX - rect.left
+      const localY = screenY - rect.top
       pageSurface.style.setProperty('--light-x', `${localX}px`)
       pageSurface.style.setProperty('--light-y', `${localY}px`)
     }
@@ -838,12 +842,10 @@
       pointerTarget.y = target.lightY
       lampState.position = target.lampX
       lampState.velocity = 0
-      lightState.x = target.lightX
-      lightState.y = target.lightY
-      headAngle = 0
+      headAngle = calculateAimAngle(target.lampX, lampAnchorScreenY, target.lightX, target.lightY)
       experience.style.setProperty('--lamp-screen-x', `${target.lampX}px`)
       applyLighting(target.lightX, target.lightY)
-      setThreePose(target.lampX, 0)
+      setThreePose(target.lampX, headAngle)
       renderThree()
     }
 
@@ -856,27 +858,20 @@
 
       const dt = Math.min(.035, Math.max(.001, (time - lastTime) / 1000))
       lastTime = time
-      const trackTarget = clamp(pointerTarget.x, innerWidth * .22, innerWidth * .78)
+      const trackTarget = clampTrackTarget(pointerTarget.x, innerWidth)
       const next = advanceFollower(lampState, trackTarget, dt)
       lampState.position = next.position
       lampState.velocity = next.velocity
 
-      const lightEase = 1 - Math.exp(-6.5 * dt)
-      lightState.x += (pointerTarget.x - lightState.x) * lightEase
-      lightState.y += (pointerTarget.y - lightState.y) * lightEase
-
-      const lampY = Math.min(220, innerHeight * .24)
-      const desiredAngle = clamp(Math.atan2(lightState.x - lampState.position, Math.max(180, lightState.y - lampY)) * .36, -.12, .12)
-      headAngle += (desiredAngle - headAngle) * (1 - Math.exp(-9 * dt))
+      headAngle = calculateAimAngle(lampState.position, lampAnchorScreenY, pointerTarget.x, pointerTarget.y)
 
       experience.style.setProperty('--lamp-screen-x', `${lampState.position}px`)
-      applyLighting(lightState.x, lightState.y)
+      applyLighting(pointerTarget.x, pointerTarget.y)
       setThreePose(lampState.position, headAngle)
       renderThree()
 
       const lampError = Math.abs(trackTarget - lampState.position)
-      const lightError = Math.hypot(pointerTarget.x - lightState.x, pointerTarget.y - lightState.y)
-      if (lampError > .15 || Math.abs(lampState.velocity) > .15 || lightError > .2 || Math.abs(desiredAngle - headAngle) > .0005) {
+      if (lampError > .15 || Math.abs(lampState.velocity) > .15) {
         animationFrame = requestAnimationFrame(animate)
       }
     }
@@ -1068,7 +1063,6 @@
       shadeGroup.add(bulbLight)
 
       let lampY = 0
-      let lampScreenY = 170
 
       resizeThree = () => {
         const width = Math.max(1, innerWidth)
@@ -1083,8 +1077,8 @@
         camera.updateProjectionMatrix()
 
         const mobile = width <= 760
-        lampScreenY = mobile ? Math.min(132, height * .17) : Math.min(180, Math.max(145, height * .19))
-        lampY = height / 2 - lampScreenY
+        lampAnchorScreenY = mobile ? Math.min(132, height * .17) : Math.min(180, Math.max(145, height * .19))
+        lampY = height / 2 - lampAnchorScreenY
         setThreePose(lampState.position, headAngle)
         renderThree()
       }

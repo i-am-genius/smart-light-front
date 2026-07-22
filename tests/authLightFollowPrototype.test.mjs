@@ -10,10 +10,11 @@ async function readPrototype() {
   return readFile(prototypeUrl, 'utf8')
 }
 
-function extractMotionKernel(html) {
+function extractMotionKernel(html, functionName = 'advanceFollower') {
   const match = html.match(/\/\* MOTION_KERNEL_START \*\/([\s\S]*?)\/\* MOTION_KERNEL_END \*\//)
   assert.ok(match, 'motion kernel markers must exist')
-  return vm.runInNewContext(`(() => {${match[1]}; return advanceFollower})()`)
+  assert.match(match[1], new RegExp(`function\\s+${functionName}\\s*\\(`))
+  return vm.runInNewContext(`(() => {${match[1]}; return ${functionName}})()`)
 }
 
 test('prototype keeps the required interaction and readability contracts', async () => {
@@ -46,6 +47,35 @@ test('motion kernel never moves away after a rapid target reversal', async () =>
   assert.ok(next.position >= 50)
 })
 
+test('lamp center axis lands exactly on the pointer target', async () => {
+  const calculateAimAngle = extractMotionKernel(await readPrototype(), 'calculateAimAngle')
+  const lamp = { x: 320, y: 180 }
+  const pointer = { x: 680, y: 540 }
+  const distance = Math.hypot(pointer.x - lamp.x, pointer.y - lamp.y)
+  const angle = calculateAimAngle(lamp.x, lamp.y, pointer.x, pointer.y)
+
+  assert.ok(Math.abs(angle - Math.PI / 4) < 1e-10)
+  assert.ok(Math.abs(lamp.x + Math.sin(angle) * distance - pointer.x) < 1e-8)
+  assert.ok(Math.abs(lamp.y + Math.cos(angle) * distance - pointer.y) < 1e-8)
+})
+
+test('lamp horizontal travel stays within the narrower center track', async () => {
+  const clampTrackTarget = extractMotionKernel(await readPrototype(), 'clampTrackTarget')
+  assert.equal(clampTrackTarget(0, 1000), 270)
+  assert.equal(clampTrackTarget(1000, 1000), 730)
+  assert.equal(clampTrackTarget(540, 1000), 540)
+})
+
+test('lamp eases across the track at the reduced speed', async () => {
+  const advanceFollower = extractMotionKernel(await readPrototype())
+  let state = { position: 0, velocity: 0 }
+  for (let frame = 0; frame < 24; frame += 1) {
+    state = advanceFollower(state, 500, 1 / 60)
+  }
+  assert.ok(state.position >= 300, `expected at least 300px, received ${state.position}`)
+  assert.ok(state.position <= 350, `expected at most 350px, received ${state.position}`)
+})
+
 test('motion kernel covers most of a long move within 550ms', async () => {
   const advanceFollower = extractMotionKernel(await readPrototype())
   let state = { position: 0, velocity: 0 }
@@ -61,6 +91,15 @@ test('prototype uses a stronger readable light without a moving power line', asy
   assert.match(html, /--moving-light-core:\s*\.46/)
   assert.doesNotMatch(html, /const rail|const ceilingCap|const cable/)
   assert.match(html, /\.fallback-lamp\s*\{[^}]*background:\s*transparent/s)
+})
+
+test('desktop lamp pose and visible light use the same pointer target', async () => {
+  const html = await readPrototype()
+  assert.doesNotMatch(html, /const lightState/)
+  assert.match(html, /headAngle = calculateAimAngle\(lampState\.position, lampAnchorScreenY, pointerTarget\.x, pointerTarget\.y\)/)
+  assert.match(html, /applyLighting\(pointerTarget\.x, pointerTarget\.y\)/)
+  assert.match(html, /const localX = screenX - rect\.left/)
+  assert.match(html, /const localY = screenY - rect\.top/)
 })
 
 test('desktop following starts only after Three.js is ready', async () => {
