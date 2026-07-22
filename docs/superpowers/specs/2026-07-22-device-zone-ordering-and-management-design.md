@@ -55,10 +55,10 @@ On a lamp device card, the current information-cell visual remains unchanged at 
 
 ## Ordering and Layout
 
-Bound-device ordering is a derived copy, never an in-place sort of the dashboard's device array. The stable comparison is:
+Bound-device ordering is a derived copy, never an in-place sort of the dashboard's device array. Zone definitions initially follow first appearance in the source device list. Once the user explicitly reorders zones, the persisted zone-definition order drives both the bound-device list and the 3D layout. The stable comparison is:
 
 1. `cam` devices before all other devices;
-2. zone group by first appearance in the source device list;
+2. zone group by the shared ordered zone definitions, falling back to first appearance for a newly discovered zone;
 3. numeric `deviceNo` within the same zone;
 4. original source index as the fallback.
 
