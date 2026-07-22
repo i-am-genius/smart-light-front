@@ -46,6 +46,23 @@ test('motion kernel never moves away after a rapid target reversal', async () =>
   assert.ok(next.position >= 50)
 })
 
+test('motion kernel covers most of a long move within 550ms', async () => {
+  const advanceFollower = extractMotionKernel(await readPrototype())
+  let state = { position: 0, velocity: 0 }
+  for (let frame = 0; frame < 33; frame += 1) {
+    state = advanceFollower(state, 500, 1 / 60)
+  }
+  assert.ok(state.position >= 400, `expected at least 400px, received ${state.position}`)
+})
+
+test('prototype uses a stronger readable light without a moving power line', async () => {
+  const html = await readPrototype()
+  assert.match(html, /--moving-light-opacity:\s*\.72/)
+  assert.match(html, /--moving-light-core:\s*\.46/)
+  assert.doesNotMatch(html, /const rail|const ceilingCap|const cable/)
+  assert.match(html, /\.fallback-lamp\s*\{[^}]*background:\s*transparent/s)
+})
+
 test('desktop following starts only after Three.js is ready', async () => {
   const html = await readPrototype()
   assert.match(html, /let threeReady = false/)

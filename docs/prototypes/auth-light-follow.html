@@ -16,6 +16,8 @@
       --light-y: 48%;
       --lamp-screen-x: 68vw;
       --peripheral-dim: .16;
+      --moving-light-opacity: .72;
+      --moving-light-core: .46;
       --spot-rx: 360px;
       --spot-ry: 285px;
       font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -122,7 +124,7 @@
       z-index: 3;
       background: radial-gradient(
         ellipse 310px 270px at 79% 52%,
-        rgba(255, 179, 107, .105),
+        rgba(255, 179, 107, .14),
         transparent 76%
       );
       mix-blend-mode: screen;
@@ -130,12 +132,12 @@
 
     .surface-light {
       z-index: 4;
-      opacity: .48;
+      opacity: var(--moving-light-opacity);
       background: radial-gradient(
         ellipse var(--spot-rx) var(--spot-ry) at var(--light-x) var(--light-y),
-        rgba(var(--lamp-rgb), .29) 0%,
-        rgba(var(--lamp-rgb), .15) 34%,
-        rgba(var(--lamp-rgb), .045) 70%,
+        rgba(var(--lamp-rgb), var(--moving-light-core)) 0%,
+        rgba(var(--lamp-rgb), .24) 34%,
+        rgba(var(--lamp-rgb), .08) 70%,
         transparent 100%
       );
       mix-blend-mode: screen;
@@ -144,10 +146,10 @@
 
     .surface-bloom {
       z-index: 4;
-      opacity: .17;
+      opacity: .28;
       background: radial-gradient(
-        circle 112px at var(--light-x) var(--light-y),
-        rgba(255, 255, 255, .2),
+        circle 130px at var(--light-x) var(--light-y),
+        rgba(255, 255, 255, .28),
         transparent 100%
       );
       mix-blend-mode: screen;
@@ -566,7 +568,7 @@
       width: 2px;
       height: 180px;
       transform: translateX(-50%);
-      background: #25272d;
+      background: transparent;
       pointer-events: none;
     }
 
@@ -790,11 +792,11 @@
       const error = target - state.position
       const direction = Math.sign(error)
       if (!direction) return { position: target, velocity: 0 }
-      const acceleration = direction * Math.min(2600, 90 * Math.pow(Math.abs(error), .72))
-      const damping = Math.exp(-8.6 * dt)
+      const acceleration = direction * Math.min(9200, 240 * Math.pow(Math.abs(error), .78))
+      const damping = Math.exp(-6 * dt)
       const alignedVelocity = state.velocity * direction < 0 ? 0 : state.velocity
       let velocity = (alignedVelocity + acceleration * dt) * damping
-      const maxSpeed = 540
+      const maxSpeed = 1500
       velocity = Math.max(-maxSpeed, Math.min(maxSpeed, velocity))
       let position = state.position + velocity * dt
       if (direction > 0) position = Math.min(target, Math.max(state.position, position))
@@ -859,13 +861,13 @@
       lampState.position = next.position
       lampState.velocity = next.velocity
 
-      const lightEase = 1 - Math.exp(-4.2 * dt)
+      const lightEase = 1 - Math.exp(-6.5 * dt)
       lightState.x += (pointerTarget.x - lightState.x) * lightEase
       lightState.y += (pointerTarget.y - lightState.y) * lightEase
 
       const lampY = Math.min(220, innerHeight * .24)
-      const desiredAngle = clamp(Math.atan2(lightState.x - lampState.position, Math.max(180, lightState.y - lampY)) * .58, -.32, .32)
-      headAngle += (desiredAngle - headAngle) * (1 - Math.exp(-5.4 * dt))
+      const desiredAngle = clamp(Math.atan2(lightState.x - lampState.position, Math.max(180, lightState.y - lampY)) * .36, -.12, .12)
+      headAngle += (desiredAngle - headAngle) * (1 - Math.exp(-9 * dt))
 
       experience.style.setProperty('--lamp-screen-x', `${lampState.position}px`)
       applyLighting(lightState.x, lightState.y)
@@ -980,25 +982,6 @@
       fill.position.set(-260, 320, 500)
       scene.add(fill)
 
-      const rail = new THREE.Mesh(
-        new THREE.BoxGeometry(230, 7, 12),
-        new THREE.MeshStandardMaterial({ color: 0x111319, roughness: .55, metalness: .78 }),
-      )
-      scene.add(rail)
-
-      const ceilingCap = new THREE.Mesh(
-        new THREE.CylinderGeometry(19, 24, 10, 28),
-        new THREE.MeshStandardMaterial({ color: 0x111319, roughness: .62, metalness: .72 }),
-      )
-      ceilingCap.rotation.x = Math.PI / 2
-      scene.add(ceilingCap)
-
-      const cable = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.25, 1.25, 1, 10),
-        new THREE.MeshStandardMaterial({ color: 0x15161b, roughness: .5, metalness: .58 }),
-      )
-      scene.add(cable)
-
       const lampRoot = new THREE.Group()
       scene.add(lampRoot)
       const shadeGroup = new THREE.Group()
@@ -1085,7 +1068,7 @@
       shadeGroup.add(bulbLight)
 
       let lampY = 0
-      let cableLength = 170
+      let lampScreenY = 170
 
       resizeThree = () => {
         const width = Math.max(1, innerWidth)
@@ -1100,20 +1083,14 @@
         camera.updateProjectionMatrix()
 
         const mobile = width <= 760
-        cableLength = mobile ? Math.min(132, height * .17) : Math.min(190, Math.max(156, height * .21))
-        lampY = height / 2 - cableLength
-        rail.position.set(0, height / 2 - 8, 35)
-        rail.scale.x = Math.max(.8, width / 1100)
+        lampScreenY = mobile ? Math.min(132, height * .17) : Math.min(180, Math.max(145, height * .19))
+        lampY = height / 2 - lampScreenY
         setThreePose(lampState.position, headAngle)
         renderThree()
       }
 
       setThreePose = (screenX, angle) => {
         const worldX = screenX - innerWidth / 2
-        const anchorY = innerHeight / 2 + 2
-        ceilingCap.position.set(worldX, anchorY, 35)
-        cable.position.set(worldX, anchorY - cableLength / 2, 35)
-        cable.scale.set(1, cableLength, 1)
         lampRoot.position.set(worldX, lampY, 0)
         lampRoot.rotation.z = angle
       }
