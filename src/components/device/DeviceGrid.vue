@@ -10,10 +10,11 @@
 
     <TransitionGroup v-else name="card-list" tag="div" id="deviceContainer">
       <DeviceCard
-        v-for="device in devices"
+        v-for="device in sortedDevices"
         :key="device.chipId || (device as any).deviceId || device.id"
         :device="device"
-        :all-devices="devices"
+        :all-devices="sortedDevices"
+        :zones="zones"
         :deleting="deletingId === device.id"
         @update-realtime="$emit('update-realtime', $event)"
         @delete="$emit('delete', $event)"
@@ -23,18 +24,24 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import DeviceCard from './DeviceCard.vue'
-import type { DeviceCreatePayload, DeviceItem } from '../../types/device'
+import type { DeviceItem } from '../../types/device'
+import type { LampRealtimeUpdateEnvelope } from '../../utils/garmentRecognition'
+import { sortBoundDevices, type ZoneDefinition } from '../../utils/deviceZones'
 
-defineProps<{
+const props = defineProps<{
   devices: DeviceItem[]
+  zones: ZoneDefinition[]
   loading: boolean
   deletingId?: number | null
 }>()
 
+const sortedDevices = computed(() => sortBoundDevices(props.devices, props.zones))
+
 defineEmits<{
   (e: 'refresh'): void
-  (e: 'update-realtime', value: { id: number; payload: DeviceCreatePayload; lightControl?: boolean }): void
+  (e: 'update-realtime', value: LampRealtimeUpdateEnvelope): void
   (e: 'delete', id: number): void
 }>()
 </script>

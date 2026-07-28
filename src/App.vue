@@ -1,9 +1,11 @@
 <template>
   <router-view />
+  <LoginBeamTransition />
   <ToastContainer />
 </template>
 
 <script setup lang="ts">
+import LoginBeamTransition from './components/auth/LoginBeamTransition.vue'
 import ToastContainer from './components/common/ToastContainer.vue'
 </script>
 

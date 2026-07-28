@@ -311,38 +311,63 @@ function handleSkip() {
 .form-item :deep(.select-trigger) {
   min-height: 46px;
   border-radius: 13px;
-  border: 1.5px solid rgba(203, 213, 225, 0.85);
-  background: rgba(255, 255, 255, 0.8);
+  border: 1.5px solid #354152;
+  background: rgba(5, 9, 15, 0.72);
   box-shadow: none;
   font-size: 14px;
-  color: #0f172a;
+  color: #e6ecf3;
 }
 
 .form-item :deep(.select-trigger:hover) {
-  border-color: #93c5fd;
+  border-color: #4b5d73;
+  background: rgba(8, 13, 21, 0.84);
 }
 
 .form-item :deep(.open .select-trigger) {
   border-color: #60a5fa;
-  background: #fff;
+  background: #0b111a;
   box-shadow:
     0 0 0 3px rgba(96, 165, 250, 0.15),
     0 0 0 1px rgba(37, 99, 235, 0.08);
 }
 
 .form-item :deep(.select-text.placeholder) {
-  color: #94a3b8;
+  color: #738094;
 }
 
-.form-item :deep(.select-option.active) {
-  background: linear-gradient(135deg, #4f46e5, #2563eb);
+.form-item :deep(.select-arrow) {
+  color: #93a4ba;
+}
+
+:global(body:has(.auth-page) > .select-dropdown) {
+  border-color: #354152;
+  background: #101722;
+  color: #e6ecf3;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.48);
+}
+
+:global(body:has(.auth-page) > .select-dropdown .select-option) {
+  color: #e6ecf3;
+}
+
+:global(body:has(.auth-page) > .select-dropdown .select-option:hover) {
+  background: #1b2634;
+}
+
+:global(body:has(.auth-page) > .select-dropdown .select-option.active) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   color: #fff;
+  font-weight: 600;
+}
+
+:global(body:has(.auth-page) > .select-dropdown .select-option.disabled) {
+  color: #657184;
 }
 
 /* ===== Setup note ===== */
 .setup-note {
   margin: 0 0 18px;
-  color: #64748b;
+  color: #9ba8b8;
   font-size: 13px;
   line-height: 1.55;
 }
@@ -350,7 +375,7 @@ function handleSkip() {
 /* ===== Form actions & buttons ===== */
 .form-actions {
   padding-top: 18px;
-  border-top: 1px solid rgba(203, 213, 225, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -400,16 +425,16 @@ function handleSkip() {
 
 .form-actions .secondary-btn,
 .secondary-btn {
-  border: 1.5px solid rgba(203, 213, 225, 0.85);
-  background: rgba(255, 255, 255, 0.66);
-  color: #475569;
+  border: 1.5px solid #354152;
+  background: rgba(5, 9, 15, 0.72);
+  color: #c9d1dc;
 }
 
 .form-actions .secondary-btn:hover,
 .secondary-btn:hover {
-  border-color: #94a3b8;
-  background: #fff;
-  color: #334155;
+  border-color: #4b5d73;
+  background: #121923;
+  color: #f2f5f9;
   transform: translateY(-1px);
 }
 

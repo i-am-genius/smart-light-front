@@ -390,8 +390,9 @@ onMounted(() => {
   min-height: 100vh;
   padding: 20px 24px 30px;
   background:
-    radial-gradient(circle at 18% 6%, rgba(255, 255, 255, 0.64), transparent 24%),
-    linear-gradient(135deg, #f7f3eb 0%, #f4f7fb 46%, #eef3f7 100%);
+    radial-gradient(circle at 16% 4%, rgba(255, 255, 255, 0.78), transparent 26%),
+    radial-gradient(circle at 88% 96%, rgba(219, 234, 254, 0.5), transparent 34%),
+    linear-gradient(135deg, #f6f2ea 0%, #f3f7fc 48%, #eaf1f8 100%);
   box-sizing: border-box;
 }
 
@@ -411,8 +412,9 @@ onMounted(() => {
 .page-header h1 {
   margin: 0 0 6px;
   font-size: 28px;
-  color: #111827;
-  letter-spacing: 0;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .page-header p {
@@ -424,13 +426,16 @@ onMounted(() => {
 
 .profile-card {
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.64)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.66)),
     rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(226, 232, 240, 0.74);
-  border-radius: 22px;
-  padding: 28px 30px;
-  box-shadow: 0 16px 34px rgba(65, 78, 96, 0.1);
-  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 24px;
+  padding: 30px 32px;
+  box-shadow:
+    0 24px 50px rgba(65, 78, 96, 0.14),
+    0 3px 10px rgba(65, 78, 96, 0.05),
+    0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+  backdrop-filter: blur(18px) saturate(1.12);
 }
 
 .card-section-title {
@@ -444,6 +449,7 @@ onMounted(() => {
   color: #0f172a;
   font-size: 16px;
   font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .card-section-title span {
@@ -476,22 +482,27 @@ onMounted(() => {
 
 .form-item input {
   width: 100%;
-  height: 45px;
-  border-radius: 12px;
-  border: 1px solid #dbe3ee;
+  height: 46px;
+  border-radius: 13px;
+  border: 1px solid rgba(203, 213, 225, 0.9);
   padding: 0 14px;
   font-size: 14px;
   outline: none;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.82);
   color: #0f172a;
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
+.form-item input:hover:not(:focus) {
+  border-color: #b8c6dc;
+  background: rgba(255, 255, 255, 0.92);
+}
+
 .form-item input:focus {
-  border-color: #7fb4ec;
+  border-color: #60a5fa;
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(125, 179, 234, 0.14);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16);
 }
 
 .form-item input::placeholder {
@@ -516,9 +527,9 @@ onMounted(() => {
 }
 
 .form-item :deep(.open .select-trigger) {
-  border-color: #7fb4ec;
+  border-color: #60a5fa;
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(125, 179, 234, 0.14);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16);
 }
 
 .form-item :deep(.select-dropdown) {
@@ -534,8 +545,9 @@ onMounted(() => {
 }
 
 .form-item :deep(.select-option.active) {
-  background: rgba(219, 234, 254, 0.92);
-  color: #1d4ed8;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font-weight: 600;
 }
 
 .form-helper-note {
@@ -556,30 +568,41 @@ onMounted(() => {
 
 .btn-primary,
 .btn-secondary {
-  height: 42px;
-  padding: 0 18px;
-  border-radius: 12px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 13px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   box-sizing: border-box;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 .btn-primary {
   border: 1px solid #2563eb;
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   color: #fff;
-  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.14);
+  box-shadow:
+    0 10px 22px rgba(37, 99, 235, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
 
 .btn-primary:hover:not(:disabled) {
   border-color: #1d4ed8;
-  background: #1d4ed8;
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  box-shadow:
+    0 14px 30px rgba(37, 99, 235, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.2);
 }
 
 .btn-secondary {
-  border: 1px solid rgba(203, 213, 225, 0.92);
+  border: 1.5px solid rgba(203, 213, 225, 0.85);
   background: rgba(255, 255, 255, 0.66);
   color: #475569;
 }
@@ -588,6 +611,11 @@ onMounted(() => {
   border-color: #94a3b8;
   background: #fff;
   color: #334155;
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-primary:disabled,
@@ -595,6 +623,7 @@ onMounted(() => {
   cursor: not-allowed;
   opacity: 0.62;
   box-shadow: none;
+  transform: none;
 }
 
 .page-header .btn-secondary {

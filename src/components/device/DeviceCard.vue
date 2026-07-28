@@ -14,6 +14,7 @@
     :device="device"
     :deleting="deleting"
     :all-devices="allDevices"
+    :zones="zones"
     @update-realtime="$emit('update-realtime', $event)"
     @delete="$emit('delete', $event)"
   />
@@ -60,17 +61,20 @@
 import { computed } from 'vue'
 import CameraDeviceCard from './CameraDeviceCard.vue'
 import LampDeviceCard from './LampDeviceCard.vue'
-import type { DeviceCreatePayload, DeviceItem } from '../../types/device'
+import type { DeviceItem } from '../../types/device'
 import { isCameraDevice, isLampDevice } from '../../utils/device'
+import type { LampRealtimeUpdateEnvelope } from '../../utils/garmentRecognition'
+import type { ZoneDefinition } from '../../utils/deviceZones'
 
 const props = defineProps<{
   device: DeviceItem
   deleting?: boolean
   allDevices?: DeviceItem[]
+  zones: ZoneDefinition[]
 }>()
 
 defineEmits<{
-  (e: 'update-realtime', value: { id: number; payload: DeviceCreatePayload; lightControl?: boolean }): void
+  (e: 'update-realtime', value: LampRealtimeUpdateEnvelope): void
   (e: 'delete', id: number): void
 }>()
 

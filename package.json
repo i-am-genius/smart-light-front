@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "android:sync": "npm run build && npx cap sync android",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -24,7 +25,9 @@
     "@types/node": "^24.12.2",
     "@types/three": "^0.185.0",
     "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/compiler-sfc": "^3.5.32",
     "@vue/tsconfig": "^0.9.1",
+    "playwright": "^1.61.1",
     "typescript": "~6.0.2",
     "vite": "^8.0.4",
     "vue-tsc": "^3.2.6"

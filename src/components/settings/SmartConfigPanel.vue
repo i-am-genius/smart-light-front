@@ -35,9 +35,9 @@
           <div class="wifi-row">
             <input
               v-model="ssid"
-              :placeholder="ssidPlaceholder"
+              placeholder="请先获取当前 WiFi"
               :disabled="taskActive"
-              @input="onSsidManualInput"
+              readonly
             />
             <button class="btn-secondary" :disabled="taskActive" @click="getCurrentWifi">
               获取 WiFi
@@ -96,9 +96,7 @@
         <p v-if="envWarning">{{ envWarning }}</p>
         <p>建议手机连接 2.4G WiFi，部分 ESP8266 / ESP32 不支持 5G WiFi。</p>
         <p>SmartConfig 需要 Android 真机环境和原生插件支持，浏览器 / 模拟器无法完成配网。</p>
-        <p v-if="currentStatus === 'ssid_failed' || manualSsidMode">
-          SmartConfig 自动获取 WiFi 失败不代表不能配网，只要手机连接目标 2.4G WiFi，并正确输入 WiFi 名称和密码，仍可尝试配网。
-        </p>
+        <p>配网仅支持手机当前连接的 2.4G WiFi；切换网络后请重新获取 WiFi 信息。</p>
       </div>
     </div>
   </section>
@@ -122,9 +120,14 @@ const envWarning = ref('')
 const wifiHint = ref('')
 const locationEnabled = ref(true)
 const envChecked = ref(false)
-const manualSsidMode = ref(false)
-const manualSsidEdited = ref(false)
 const deviceIp = ref('')
+const bridgeReady = ref(false)
+
+const SMARTCONFIG_BRIDGE_WAIT_MS = 3000
+const SMARTCONFIG_BRIDGE_POLL_INTERVAL_MS = 100
+
+let bridgePollTimer: ReturnType<typeof setTimeout> | null = null
+let bridgeWaitPromise: Promise<NonNullable<Window['AndroidSmartConfig']> | null> | null = null
 
 // ---- Status maps ----
 
@@ -146,8 +149,10 @@ const statusLabelMap: Record<string, string> = {
   location_disabled: '定位已关闭',
   wifi_disabled: 'WiFi 已关闭',
   not_connected_to_wifi: '未连接 WiFi',
-  ssid_failed: '获取 WiFi 失败，可手动输入',
+  ssid_failed: '获取 WiFi 失败',
   bssid_failed: '获取 WiFi BSSID 失败',
+  bssid_required: 'WiFi BSSID 不可用',
+  wifi_changed: '当前 WiFi 已变化',
   no_wifi: '未连接 WiFi',
   ssid_empty: 'SSID 为空',
   password_empty: '密码为空',
@@ -183,17 +188,12 @@ const configButtonLabel = computed(() => {
   return '开始配网'
 })
 
-// ---- Computed ----
-
-const ssidPlaceholder = computed(() => {
-  if (manualSsidMode.value) return '请手动输入当前连接的 2.4G WiFi 名称'
-  return '请先获取当前 WiFi，或直接手动输入'
-})
-
 const canStartConfig = computed(() => {
   if (taskActive.value) return false
+  if (!bridgeReady.value) return false
   if (!getEspTouchPlugin()) return false
   if (!ssid.value.trim()) return false
+  if (!bssid.value.trim()) return false
   if (!password.value) return false
   return true
 })
@@ -211,6 +211,61 @@ function getEspTouchPlugin() {
   return window.AndroidSmartConfig || null
 }
 
+function clearBridgePollTimer() {
+  if (bridgePollTimer) {
+    clearTimeout(bridgePollTimer)
+    bridgePollTimer = null
+  }
+}
+
+function markBridgeReady(source: string) {
+  bridgeReady.value = true
+  if (envWarning.value.includes('SmartConfig 需要真机 App')) {
+    envWarning.value = ''
+  }
+  console.log('[SmartConfig] window.AndroidSmartConfig ready via %s, exists=%s', source, !!getEspTouchPlugin())
+}
+
+function waitForSmartConfigBridge() {
+  if (bridgeWaitPromise) {
+    return bridgeWaitPromise
+  }
+
+  const startedAt = Date.now()
+
+  bridgeWaitPromise = new Promise<NonNullable<Window['AndroidSmartConfig']> | null>((resolve) => {
+    const tryResolveBridge = () => {
+      const bridge = getEspTouchPlugin()
+
+      if (bridge) {
+        clearBridgePollTimer()
+        markBridgeReady('poll')
+        resolve(bridge)
+        bridgeWaitPromise = null
+        return
+      }
+
+      if (Date.now() - startedAt >= SMARTCONFIG_BRIDGE_WAIT_MS) {
+        clearBridgePollTimer()
+        bridgeReady.value = false
+        resolve(null)
+        bridgeWaitPromise = null
+        return
+      }
+
+      bridgePollTimer = setTimeout(tryResolveBridge, SMARTCONFIG_BRIDGE_POLL_INTERVAL_MS)
+    }
+
+    tryResolveBridge()
+  })
+
+  return bridgeWaitPromise
+}
+
+async function resolveBridgeForAction() {
+  return getEspTouchPlugin() || await waitForSmartConfigBridge()
+}
+
 function resolveDefaultServerHost() {
   const host = String(import.meta.env.VITE_DEVICE_SERVER_HOST || '').trim()
   if (!host) return ''
@@ -223,11 +278,9 @@ function isLocalOnlyHost(host: string) {
   return normalized === '127.0.0.1' || normalized === 'localhost' || normalized === '10.0.2.2'
 }
 
-function onSsidManualInput() {
-  if (!manualSsidEdited.value && ssid.value.trim()) {
-    manualSsidEdited.value = true
-    manualSsidMode.value = true
-  }
+function clearWifiIdentity() {
+  ssid.value = ''
+  bssid.value = ''
 }
 
 async function normalizeBridgeResult(value: any) {
@@ -250,6 +303,11 @@ function handleSmartConfigStatus(event: Event) {
   const msg = detail.message || ''
 
   console.log('[SmartConfig] event received — status=%s, message=%s', status, msg)
+
+  if (status === 'wifi_info' || detail.source === 'getWifiInfo') {
+    applyWifiInfoStatus(detail)
+    return
+  }
 
   // Terminal states from the background thread
   if (status === 'success') {
@@ -291,10 +349,97 @@ function handleSmartConfigStatus(event: Event) {
   }
 }
 
+function handleSmartConfigBridgeReady() {
+  markBridgeReady('native-event')
+  checkEnvironment()
+}
+
+function handleWifiInfoResult(detail: any) {
+  const status = String(detail?.status || 'failed')
+  const msg = detail?.message || '获取 WiFi 失败'
+
+  if (status === 'success' || status === 'wifi_info') {
+    ssid.value = detail?.ssid || ''
+    bssid.value = detail?.bssid || ''
+    wifiHint.value = ''
+    setMessage(msg || '已获取当前 WiFi。', 'idle')
+    console.log('[SmartConfig] WiFi info filled, ssid=%s, bssid=%s', ssid.value, bssid.value)
+    return true
+  }
+
+  return false
+}
+
+function applyWifiInfoStatus(res: any) {
+  const status = res?.status || 'failed'
+  const msg = res?.message || '获取 WiFi 失败'
+
+  if (handleWifiInfoResult(res)) {
+    return true
+  }
+
+  if (status === 'wifi_disabled') {
+    clearWifiIdentity()
+    wifiHint.value = '请先打开系统 WiFi 开关，并连接 2.4G WiFi'
+    setMessage(msg || 'WiFi 未开启，请打开 WiFi 并连接 2.4G 网络。', 'wifi_disabled')
+    return true
+  }
+
+  if (status === 'not_connected_to_wifi' || status === 'no_wifi') {
+    clearWifiIdentity()
+    wifiHint.value = '请先连接 2.4G WiFi 网络'
+    setMessage(msg || '手机未连接 WiFi，请先连接 2.4G WiFi。', 'not_connected_to_wifi')
+    return true
+  }
+
+  if (status === 'permission_denied') {
+    clearWifiIdentity()
+    wifiHint.value = '需要授权权限后才能获取 WiFi，请点击"获取 WiFi"重新申请'
+    setMessage(msg || '权限未授权，请允许定位 / 附近设备权限。', 'permission_denied')
+    return true
+  }
+
+  if (status === 'permission_denied_permanent') {
+    clearWifiIdentity()
+    wifiHint.value = '权限被永久拒绝，请进入系统设置手动开启权限'
+    setMessage(msg || '权限已被拒绝且不再询问，请进入系统设置手动开启权限。', 'permission_denied_permanent')
+    return true
+  }
+
+  if (status === 'location_disabled') {
+    clearWifiIdentity()
+    wifiHint.value = '请先打开系统定位服务'
+    setMessage(msg || '系统定位未开启，请打开定位后重新获取 WiFi。', 'location_disabled')
+    return true
+  }
+
+  if (status === 'bssid_failed' || status === 'bssid_required') {
+    clearWifiIdentity()
+    wifiHint.value = '已获取 WiFi 名称，但 BSSID 获取失败。请确认权限和系统定位已开启后重试。'
+    setMessage(msg || '获取 WiFi BSSID 失败，请确认权限和系统定位已开启后重新获取当前 WiFi。', 'bssid_required')
+    return true
+  }
+
+  if (status === 'ssid_failed') {
+    clearWifiIdentity()
+    wifiHint.value = '获取失败，请确认权限、定位和当前 WiFi 连接状态'
+    setMessage(
+      msg || '获取 WiFi 名称失败，请确认权限、定位和 WiFi 连接状态。',
+      'ssid_failed',
+    )
+    return true
+  }
+
+  clearWifiIdentity()
+  wifiHint.value = '获取失败，请确认当前 WiFi、权限和定位状态'
+  setMessage(msg || '获取 WiFi 信息异常。', 'unknown_error')
+  return false
+}
+
 // ---- WiFi ----
 
 async function getCurrentWifi() {
-  const esptouch = getEspTouchPlugin()
+  const esptouch = await resolveBridgeForAction()
 
   if (!esptouch) {
     setMessage('当前浏览器环境不支持 SmartConfig，请在 Android App 真机中使用。浏览器 / 模拟器无法完成配网。', 'unsupported')
@@ -308,71 +453,7 @@ async function getCurrentWifi() {
     const res = await normalizeBridgeResult(esptouch.getWifiInfo())
     console.log('[SmartConfig] getWifiInfo result:', JSON.stringify(res))
 
-    const status = res?.status || 'failed'
-    const msg = res?.message || '获取 WiFi 失败'
-
-    if (status === 'success') {
-      ssid.value = res?.ssid || ''
-      bssid.value = res?.bssid || ''
-      wifiHint.value = ''
-      setMessage(msg, 'idle')
-      return
-    }
-
-    if (status === 'wifi_disabled') {
-      wifiHint.value = '请先打开系统 WiFi 开关，并连接 2.4G WiFi'
-      setMessage(msg || 'WiFi 未开启，请打开 WiFi 并连接 2.4G 网络。', 'wifi_disabled')
-      return
-    }
-
-    if (status === 'not_connected_to_wifi' || status === 'no_wifi') {
-      wifiHint.value = '请先连接 2.4G WiFi 网络'
-      manualSsidMode.value = true
-      setMessage(msg || '手机未连接 WiFi，请先连接 2.4G WiFi。', 'not_connected_to_wifi')
-      return
-    }
-
-    if (status === 'permission_denied') {
-      wifiHint.value = '需要授权权限后才能获取 WiFi，请点击"获取 WiFi"重新申请'
-      setMessage(msg || '权限未授权，请允许定位 / 附近设备权限。', 'permission_denied')
-      return
-    }
-
-    if (status === 'permission_denied_permanent') {
-      wifiHint.value = '权限被永久拒绝，请进入系统设置手动开启权限'
-      setMessage(msg || '权限已被拒绝且不再询问，请进入系统设置手动开启权限。', 'permission_denied_permanent')
-      return
-    }
-
-    if (status === 'location_disabled') {
-      wifiHint.value = '请先打开系统定位服务'
-      setMessage(msg || '系统定位未开启，请打开定位后重新获取 WiFi。', 'location_disabled')
-      return
-    }
-
-    if (status === 'bssid_failed') {
-      // SSID ok but BSSID invalid — still useful, fill SSID but warn
-      ssid.value = res?.ssid || ''
-      bssid.value = res?.bssid || ''
-      wifiHint.value = '已获取 WiFi 名称，但 BSSID 获取失败。请确认权限和系统定位已开启后重试。'
-      setMessage(msg || '获取 WiFi BSSID 失败，ESP-Touch 需要当前路由器 BSSID 才能启动配网。请确认权限和系统定位已开启。', 'bssid_failed')
-      return
-    }
-
-    if (status === 'ssid_failed') {
-      wifiHint.value = '自动获取失败，请手动输入当前连接的 2.4G WiFi 名称'
-      manualSsidMode.value = true
-      setMessage(
-        msg || '获取 WiFi 名称失败，请确认权限、定位和 WiFi 连接状态。',
-        'ssid_failed',
-      )
-      return
-    }
-
-    // unknown_error or any unhandled status — show error, allow manual input
-    wifiHint.value = '自动获取失败，请手动输入 WiFi 名称'
-    manualSsidMode.value = true
-    setMessage(msg || '获取 WiFi 信息异常。', 'unknown_error')
+    applyWifiInfoStatus(res)
   } catch (e) {
     console.error('[SmartConfig] getCurrentWifi error:', e)
     setMessage('调用获取 WiFi 接口失败，请确认 App 配置了 AndroidSmartConfig bridge。', 'ssid_failed')
@@ -382,7 +463,7 @@ async function getCurrentWifi() {
 // ---- SmartConfig ----
 
 async function startSmartConfig() {
-  const esptouch = getEspTouchPlugin()
+  const esptouch = await resolveBridgeForAction()
 
   if (!esptouch) {
     setMessage('当前浏览器环境不支持 SmartConfig，请在 Android App 真机中使用。浏览器 / 模拟器无法完成配网。', 'unsupported')
@@ -390,7 +471,12 @@ async function startSmartConfig() {
   }
 
   if (!ssid.value.trim()) {
-    setMessage('SSID 不能为空，请先获取或手动输入当前 WiFi 名称。', 'ssid_empty')
+    setMessage('SSID 不能为空，请先获取当前 WiFi 信息。', 'ssid_empty')
+    return
+  }
+
+  if (!bssid.value.trim()) {
+    setMessage('无法获取当前 WiFi BSSID，请重新获取 WiFi 信息。', 'bssid_required')
     return
   }
 
@@ -441,11 +527,12 @@ async function startSmartConfig() {
 
   // ---- All other statuses are failures — do NOT enter provisioning ----
   const errorMessages: Record<string, string> = {
-    ssid_empty: 'SSID 不能为空，请先获取或手动输入当前 WiFi 名称。',
+    ssid_empty: 'SSID 不能为空，请先获取当前 WiFi 信息。',
     password_empty: '密码不能为空。',
     wifi_disabled: 'WiFi 未开启，请先打开 WiFi 开关。',
     not_connected_to_wifi: '手机未连接 WiFi，请先连接到 2.4G WiFi 网络。',
-    bssid_required_but_empty: '无法获取 WiFi BSSID，请确认权限已授权且手机已连接 WiFi。',
+    bssid_required: '无法获取当前 WiFi BSSID，请确认权限和定位已开启后重新获取 WiFi。',
+    wifi_changed: '当前 WiFi 已变化，请重新获取 WiFi 信息后再配网。',
     multicast_lock_failed: '无法获取多播锁，SmartConfig 需要多播网络权限。',
     smartconfig_sdk_missing: '缺少 ESP-Touch 原生库，当前 App 版本不支持 SmartConfig。',
     smartconfig_task_create_failed: msg || '无法创建 SmartConfig 任务，请检查设备兼容性。',
@@ -454,6 +541,12 @@ async function startSmartConfig() {
     config_validation: msg || '配网参数校验失败。',
     permission_denied: '请先授权定位 / 附近设备权限后再开始配网。',
     location_disabled: '请先打开系统定位服务。',
+  }
+
+  if (status === 'wifi_changed' || status === 'bssid_required'
+    || status === 'not_connected_to_wifi' || status === 'location_disabled'
+    || status === 'permission_denied') {
+    clearWifiIdentity()
   }
 
   const fallbackMsg = errorMessages[status] || (msg || 'SmartConfig 启动失败，status=' + status)
@@ -499,10 +592,13 @@ async function checkEnvironment() {
   const esptouch = getEspTouchPlugin()
 
   if (!esptouch) {
+    bridgeReady.value = false
     envWarning.value = 'SmartConfig 需要真机 App 和原生插件支持，浏览器 / 模拟器无法完成配网。'
     setMessage(envWarning.value, 'unsupported')
     return
   }
+
+  bridgeReady.value = true
 
   if (esptouch.checkEnvironment) {
     try {
@@ -533,19 +629,26 @@ async function checkEnvironment() {
 
 onMounted(() => {
   window.addEventListener('smartconfig-status', handleSmartConfigStatus)
-  checkEnvironment()
-
-  if (!getEspTouchPlugin()) {
-    setMessage('当前浏览器环境不支持 SmartConfig，请在 Android App 真机中使用。浏览器 / 模拟器无法完成配网。', 'unsupported')
-  } else if (!serverHost.value) {
-    setMessage('请填写电脑局域网 IP，Android 真机不能使用 127.0.0.1 / localhost。', 'idle')
-  }
+  window.addEventListener('smartconfig-bridge-ready', handleSmartConfigBridgeReady)
 
   console.log('[SmartConfig] component mounted, bridge=%s, serverHost=%s', !!getEspTouchPlugin(), serverHost.value)
+  waitForSmartConfigBridge().then((bridge) => {
+    if (!bridge) {
+      setMessage('当前浏览器环境不支持 SmartConfig，请在 Android App 真机中使用。浏览器 / 模拟器无法完成配网。', 'unsupported')
+      return
+    }
+
+    checkEnvironment()
+    if (!serverHost.value) {
+      setMessage('请填写电脑局域网 IP，Android 真机不能使用 127.0.0.1 / localhost。', 'idle')
+    }
+  })
 })
 
 onBeforeUnmount(() => {
+  clearBridgePollTimer()
   window.removeEventListener('smartconfig-status', handleSmartConfigStatus)
+  window.removeEventListener('smartconfig-bridge-ready', handleSmartConfigBridgeReady)
 })
 </script>
 
@@ -913,7 +1016,7 @@ button:disabled {
 
   .smart-card {
     width: 100%;
-    padding: 12px 14px;
+    padding: 10px 12px;
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.68);
     border: 1px solid rgba(255, 255, 255, 0.72);
@@ -922,7 +1025,7 @@ button:disabled {
 
   .smart-header {
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 
   .smart-title {
@@ -932,6 +1035,7 @@ button:disabled {
   .smart-desc {
     margin: 4px 0 0;
     font-size: 12px;
+    line-height: 1.4;
   }
 
   .smart-status {
@@ -943,11 +1047,11 @@ button:disabled {
   .smart-steps {
     grid-template-columns: repeat(3, 1fr);
     gap: 6px;
-    margin: 10px 0;
+    margin: 8px 0;
   }
 
   .smart-step {
-    padding: 6px 5px;
+    padding: 5px 4px;
     gap: 4px;
     border-radius: 10px;
     flex-direction: column;
@@ -968,7 +1072,7 @@ button:disabled {
   }
 
   .smart-form {
-    gap: 10px;
+    gap: 8px;
   }
 
   .form-row label {
@@ -976,7 +1080,7 @@ button:disabled {
   }
 
   .form-row input {
-    height: 38px;
+    height: 40px;
     padding: 0 10px;
     font-size: 13px;
     border-radius: 10px;
@@ -984,7 +1088,7 @@ button:disabled {
 
   .wifi-row,
   .password-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px;
   }
 
@@ -1001,7 +1105,7 @@ button:disabled {
     display: grid;
     grid-template-columns: 1fr;
     gap: 6px;
-    margin-top: 12px;
+    margin-top: 8px;
   }
 
   .btn-primary,
@@ -1013,16 +1117,29 @@ button:disabled {
     font-size: 13px;
   }
 
+  .wifi-row .btn-secondary,
+  .password-row .btn-light {
+    width: auto;
+    min-width: 88px;
+    padding: 0 10px;
+  }
+
   .smart-message {
-    margin-top: 10px;
-    padding: 10px;
+    margin-top: 8px;
+    padding: 8px 10px;
     font-size: 12px;
+    line-height: 1.4;
   }
 
   .smart-tips {
-    margin-top: 10px;
-    padding: 10px;
+    margin-top: 8px;
+    padding: 8px 10px;
     font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .smart-tips p {
+    margin: 2px 0;
   }
 }
 

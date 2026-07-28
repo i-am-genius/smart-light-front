@@ -519,8 +519,10 @@ watch(() => props.modelValue, (key) => {
 const refractionCanvas = ref<HTMLCanvasElement | null>(null)
 let bgCanvas: HTMLCanvasElement | null = null
 let bgCtx: CanvasRenderingContext2D | null = null
+let bgImageCache: ImageData | null = null
 let dragBgCanvas: HTMLCanvasElement | null = null
 let dragBgCtx: CanvasRenderingContext2D | null = null
+let dragBgImageCache: ImageData | null = null
 let baseCanvas: HTMLCanvasElement | null = null
 let baseCtx: CanvasRenderingContext2D | null = null
 const iconImageCache = new Map<string, HTMLImageElement>()
@@ -602,11 +604,11 @@ function initRefractionCanvas() {
   // Offscreen background scene canvas
   if (!bgCanvas) {
     bgCanvas = document.createElement('canvas')
-    bgCtx = bgCanvas.getContext('2d')!
+    bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true })!
   }
   if (!dragBgCanvas) {
     dragBgCanvas = document.createElement('canvas')
-    dragBgCtx = dragBgCanvas.getContext('2d')!
+    dragBgCtx = dragBgCanvas.getContext('2d', { willReadFrequently: true })!
   }
   if (!baseCanvas) {
     baseCanvas = document.createElement('canvas')
@@ -662,6 +664,12 @@ function refreshRefractionSources() {
   drawRefractionScene(baseCtx, false)
   drawRefractionScene(bgCtx, true, false)
   drawRefractionScene(dragBgCtx, true, true)
+  bgImageCache = bgCtx.getImageData(0, 0, SW, SH)
+  dragBgImageCache = dragBgCtx.getImageData(0, 0, SW, SH)
+}
+
+function getRefractionSourceImage(mode: RefractionMode) {
+  return mode === 'drag' ? dragBgImageCache : bgImageCache
 }
 
 function isNightScene(): boolean {
@@ -828,9 +836,8 @@ function renderRefractionAtRect(rect: PillRect, mode: RefractionMode = 'static')
   const ctx = vis.getContext('2d')
   if (!ctx) return
 
-  const sourceCtx = mode === 'drag' ? dragBgCtx : bgCtx
-  if (!sourceCtx) return
-  const bgImage = sourceCtx.getImageData(0, 0, SW, SH)
+  const bgImage = getRefractionSourceImage(mode)
+  if (!bgImage) return
   const dragDepth = clamp(rect.h * DRAG_DEPTH_RATIO, 14, 24)
   const dragMaxBend = clamp(rect.h * DRAG_BEND_RATIO, 18, 30)
   const dragFoldDepth = dragDepth * 0.56

@@ -32,8 +32,48 @@
           @click="toggleMode"
         >
           <span class="theme-mode-icon" aria-hidden="true">
-            <span class="theme-mode-symbol theme-mode-symbol--sun">☀</span>
-            <span class="theme-mode-symbol theme-mode-symbol--moon">☾</span>
+            <svg class="theme-mode-svg" viewBox="0 0 24 24" focusable="false">
+              <defs>
+                <mask
+                  id="theme-crescent-mask"
+                  maskUnits="userSpaceOnUse"
+                  maskContentUnits="userSpaceOnUse"
+                  x="0"
+                  y="0"
+                  width="24"
+                  height="24"
+                >
+                  <rect width="24" height="24" fill="white" />
+                  <circle
+                    class="theme-mask-cutout"
+                    cx="15.2"
+                    cy="9.2"
+                    r="4.85"
+                    fill="black"
+                  />
+                </mask>
+              </defs>
+
+              <g class="theme-sun-rays">
+                <line class="theme-sun-ray" x1="12" y1="1.75" x2="12" y2="4.25" />
+                <line class="theme-sun-ray" x1="12" y1="19.75" x2="12" y2="22.25" />
+                <line class="theme-sun-ray" x1="1.75" y1="12" x2="4.25" y2="12" />
+                <line class="theme-sun-ray" x1="19.75" y1="12" x2="22.25" y2="12" />
+                <line class="theme-sun-ray" x1="4.75" y1="4.75" x2="6.5" y2="6.5" />
+                <line class="theme-sun-ray" x1="17.5" y1="17.5" x2="19.25" y2="19.25" />
+                <line class="theme-sun-ray" x1="4.75" y1="19.25" x2="6.5" y2="17.5" />
+                <line class="theme-sun-ray" x1="17.5" y1="6.5" x2="19.25" y2="4.75" />
+              </g>
+
+              <circle
+                class="theme-orb"
+                cx="12"
+                cy="12"
+                r="6.1"
+                mask="url(#theme-crescent-mask)"
+              />
+              <path class="theme-star" d="M19.15 4.65v2.7M17.8 6h2.7" />
+            </svg>
           </span>
           <span class="theme-mode-text">{{ isNightMode ? '夜间' : '日间' }}</span>
         </button>
@@ -258,50 +298,124 @@ function handleOpenStoreSettings() {
 }
 
 .theme-mode-icon {
+  --theme-morph-duration: 420ms;
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
 }
 
-.theme-mode-symbol {
-  grid-area: 1 / 1;
-  font-size: 18px;
-  line-height: 1;
-  opacity: 1;
-  transform: scale(1) rotate(0deg);
+.theme-mode-svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+  color: #d97706;
+  transform: rotate(0deg) scale(1);
   transition:
-    opacity 0.22s ease,
-    transform 0.22s ease,
-    color 0.22s ease;
+    color 300ms ease,
+    transform var(--theme-morph-duration) cubic-bezier(.34, 1.56, .64, 1);
 }
 
-.theme-mode-symbol--sun {
-  color: #c26a14;
-  opacity: 0.82;
+.theme-sun-rays,
+.theme-orb,
+.theme-mask-cutout,
+.theme-star {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
 }
 
-.theme-mode-symbol--moon {
-  color: #6366f1;
+.theme-sun-rays {
+  opacity: 0.92;
+  transform: rotate(0deg) scale(1);
+  transition:
+    opacity 180ms ease 120ms,
+    transform 320ms cubic-bezier(.34, 1.56, .64, 1) 100ms;
+}
+
+.theme-sun-ray {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+.theme-orb {
+  fill: currentColor;
+  transform: scale(1);
+  transition: transform var(--theme-morph-duration) cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.theme-mask-cutout {
   opacity: 0;
-  transform: scale(0.65) rotate(-24deg);
+  transform: translate(6.5px, -6.5px) scale(0.65);
+  transform-origin: 15.2px 9.2px;
+  transition:
+    opacity 120ms ease,
+    transform 300ms cubic-bezier(.4, 0, .2, 1);
 }
 
-.store-action-btn--theme.is-night .theme-mode-symbol--sun {
+.theme-star {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
   opacity: 0;
-  transform: scale(0.65) rotate(30deg);
+  transform: translate(-1.4px, 1.4px) rotate(-20deg) scale(0.25);
+  transform-origin: 19.15px 6px;
+  transition:
+    opacity 120ms ease,
+    transform 220ms cubic-bezier(.34, 1.56, .64, 1);
 }
 
-.store-action-btn--theme.is-night .theme-mode-symbol--moon {
-  opacity: 0.86;
-  transform: scale(1) rotate(0deg);
+.store-action-btn--theme.is-night .theme-mode-svg {
+  color: #818cf8;
+  transform: rotate(-5deg) scale(1.01);
+}
+
+.store-action-btn--theme.is-night .theme-sun-rays {
+  opacity: 0;
+  transform: rotate(38deg) scale(0.28);
+  transition-delay: 0ms;
+}
+
+.store-action-btn--theme.is-night .theme-orb {
+  transform: scale(1.03);
+}
+
+.store-action-btn--theme.is-night .theme-mask-cutout {
+  opacity: 1;
+  transform: translate(0, 0) scale(1);
+  transition-delay: 70ms;
+}
+
+.store-action-btn--theme.is-night .theme-star {
+  opacity: 1;
+  transform: translate(0, 0) rotate(0deg) scale(1);
+  transition-delay: 220ms, 190ms;
 }
 
 .theme-mode-text,
 .store-action-text {
   line-height: 1;
+}
+
+.theme-mode-text {
+  transition: color 240ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-mode-svg,
+  .theme-sun-rays,
+  .theme-orb,
+  .theme-mask-cutout,
+  .theme-star,
+  .theme-mode-text {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
 }
 
 :global(.app-container.night-mode) .meta-key {
@@ -355,14 +469,19 @@ function handleOpenStoreSettings() {
 
 @media (max-width: 768px) {
   .store-toolbar-card {
-    padding: 14px 16px;
+    padding: 10px 12px;
   }
 
-  .store-toolbar-left {
+  .store-toolbar {
     gap: 8px;
   }
 
+  .store-toolbar-left {
+    gap: 5px;
+  }
+
   .settings-title {
+    margin-bottom: 0;
     font-size: 16px;
   }
 

@@ -35,6 +35,13 @@ describe('ThreeLightingLayout workbench UI contract', () => {
     assert.match(component, /@click\.stop="handleArrangeSlotsEvenly"/)
   })
 
+  it('does not manufacture lamp slots beyond real devices and explicit manual slots', () => {
+    assert.doesNotMatch(component, /MIN_VISIBLE_SLOTS/)
+    assert.doesNotMatch(component, /function ensureMinVisibleSlots\(/)
+    assert.doesNotMatch(component, /placeholder-\$\{zoneId\}/)
+    assert.doesNotMatch(component, /mock-fallback/)
+  })
+
   it('renders an in-scene toolbar with explicit camera modes', () => {
     assert.match(component, /class="scene-toolbar"/)
     assert.match(component, /class="zone-cluster workbench-glass"/)
@@ -79,23 +86,83 @@ describe('ThreeLightingLayout workbench UI contract', () => {
       component,
       /\.zone-cluster button,\s*\.scene-edit-actions button,\s*\.view-mode-switch button,\s*\.scene-context-bar button\s*\{[^}]*pointer-events:\s*auto/,
     )
-    assert.match(component, /\.scene-overlay\s*\{[^}]*pointer-events:\s*none/)
+    assert.doesNotMatch(component, /\.scene-overlay/)
   })
 
-  it('uses the component width to stack the toolbar', () => {
+  it('compacts the narrow toolbar into one row', () => {
     assert.match(component, /\.three-layout-shell\s*\{[^}]*container-type:\s*inline-size/)
     assert.match(
       component,
-      /@container\s*\(max-width:\s*620px\)\s*\{[\s\S]*?\.scene-toolbar\s*\{[^}]*grid-template-areas:\s*"zone view"\s*"actions actions"/,
+      /@container\s*\(max-width:\s*620px\)\s*\{[\s\S]*?\.scene-toolbar\s*\{[^}]*grid-template-areas:\s*"zone actions view"/,
+    )
+    assert.doesNotMatch(
+      component,
+      /grid-template-areas:\s*"zone view"\s*"actions actions"/,
+    )
+    assert.match(component, /class="toolbar-label-compact"/)
+    assert.match(
+      component,
+      /@container\s*\(max-width:\s*620px\)[\s\S]*?\.toolbar-label-full\s*\{[^}]*display:\s*none/,
+    )
+    assert.match(
+      component,
+      /@container\s*\(max-width:\s*620px\)[\s\S]*?\.toolbar-label-compact\s*\{[^}]*display:\s*inline/,
+    )
+    assert.match(
+      component,
+      /@media\s*\(max-width:\s*768px\)[\s\S]*?\.zone-arrow-btn,[\s\S]*?min-height:\s*40px/,
+    )
+  })
+
+  it('keeps the full narrow zone name visible while preserving space for right-side actions', () => {
+    assert.match(
+      component,
+      /@container\s*\(max-width:\s*620px\)\s*\{[\s\S]*?\.scene-toolbar\s*\{[^}]*grid-template-columns:\s*38%\s+minmax\(0,\s*1fr\)\s+auto/,
+    )
+    assert.doesNotMatch(
+      component,
+      /@container\s*\(max-width:\s*620px\)\s*\{[\s\S]*?\.scene-toolbar\s*\{[^}]*grid-template-columns:\s*(?:clamp\(|minmax\([^)]*px)/,
+    )
+    assert.match(component, /--zone-name-length/)
+    assert.match(
+      component,
+      /@container\s*\(max-width:\s*620px\)[\s\S]*?\.zone-current-label\s*\{[^}]*container-type:\s*inline-size[^}]*flex:\s*1[^}]*max-width:\s*none/,
+    )
+    const mobileZoneNameRule = component.match(
+      /@container\s*\(max-width:\s*620px\)[\s\S]*?\.zone-current-label strong\s*\{([^}]*)\}/,
+    )?.[1]
+    assert.ok(mobileZoneNameRule)
+    assert.match(mobileZoneNameRule, /font-size:\s*clamp\(10px,\s*calc\([^;]*cqi[^;]*--zone-name-length[^;]*\),\s*13px\)/)
+    assert.match(mobileZoneNameRule, /overflow:\s*hidden/)
+    assert.match(mobileZoneNameRule, /text-overflow:\s*ellipsis/)
+  })
+
+  it('uses full action labels when the mobile toolbar has enough inline space', () => {
+    assert.match(
+      component,
+      /@container\s*\(min-width:\s*22rem\)\s*and\s*\(max-width:\s*38\.75rem\)[\s\S]*?\.layout-action-btn \.toolbar-label-full,[\s\S]*?\.view-mode-btn \.toolbar-label-full\s*\{[^}]*display:\s*inline/,
+    )
+    assert.match(
+      component,
+      /@container\s*\(min-width:\s*22rem\)\s*and\s*\(max-width:\s*38\.75rem\)[\s\S]*?\.layout-action-btn \.toolbar-label-compact,[\s\S]*?\.view-mode-btn \.toolbar-label-compact\s*\{[^}]*display:\s*none/,
+    )
+    assert.match(
+      component,
+      /@container\s*\(max-width:\s*22rem\)[\s\S]*?\.zone-switcher \.zone-arrow-btn\s*\{[^}]*width:\s*1\.5rem;[^}]*min-width:\s*1\.5rem/,
+    )
+    assert.match(
+      component,
+      /@container\s*\(min-width:\s*22rem\)\s*and\s*\(max-width:\s*38\.75rem\)[\s\S]*?\.layout-action-btn,\s*\.view-mode-switch \.view-mode-btn\s*\{[^}]*padding-right:\s*0\.375rem;[^}]*padding-left:\s*0\.375rem/,
     )
   })
 
   it('defines night, tablet, mobile touch, and reduced-motion states', () => {
     assert.match(component, /@media \(max-width: 1180px\)/)
     assert.match(component, /@media \(max-width: 768px\)/)
-    assert.match(component, /@media \(max-width: 768px\)[\s\S]*min-width:\s*44px/)
-    assert.match(component, /@media \(max-width: 768px\)[\s\S]*min-height:\s*44px/)
-    assert.match(component, /@media \(max-width: 768px\)[\s\S]*\.scene-overlay\s*\{[^}]*display:\s*none/)
+    assert.match(
+      component,
+      /@media \(max-width: 768px\)[\s\S]*?\.context-action\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px/,
+    )
     assert.match(component, /@media \(prefers-reduced-motion: reduce\)[\s\S]*transition:\s*none/)
   })
 

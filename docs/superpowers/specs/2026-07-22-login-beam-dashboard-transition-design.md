@@ -2,11 +2,11 @@
 
 ## Status
 
-Approved design direction: A, spotlight aperture expansion.
+Approved design direction: A, trapezoid-to-viewport beam morph with a four-edge rectangular reveal.
 
 ## Goal
 
-After a successful login that is destined for `/smartlightdashboard`, expand the existing authentication spotlight into a full-viewport warm beam that conceals the route swap and reveals the dashboard. The transition must feel continuous with the current pointer-following lamp, complete in about 1.1 seconds, and leave login, store setup, and dashboard business behavior unchanged.
+After a successful login that is destined for `/smartlightdashboard`, zoom the existing authentication spotlight from a dim, narrow beam into full-viewport warm illumination. Only after all four viewport corners are covered may the route swap occur; the dashboard then reveals outward from the frozen light landing point. The transition must feel continuous with the current pointer-following lamp, complete in about 1.1 seconds, and leave login, store setup, and dashboard business behavior unchanged.
 
 ## Confirmed Decisions
 
@@ -16,27 +16,38 @@ After a successful login that is destined for `/smartlightdashboard`, expand the
 - Use the full spotlight expansion on desktop, mobile, and reduced-motion environments.
 - Use the standard pacing, approximately 1.1 seconds total.
 - Use a restrained warm-white peak rather than a pure-white flash.
+- Start at low intensity and increase brightness continuously with the beam's coverage; do not jump near peak brightness during the opening frames.
+- Reach complete viewport coverage before changing routes.
+- Reveal the dashboard from the same frozen `lightX`/`lightY` landing point used by the expanding spotlight.
+- Keep the full-bright hold brief: the dashboard reveal follows the route swap without a separate pause.
+- Do not use a circular hotspot, circular iris, radial reveal, or rounded aperture. The approved A direction is a trapezoid-to-rectangle spotlight zoom followed by a four-edge rectangular dashboard opening.
 
 ## Visual Sequence
 
-The transition origin is the lamp's current on-screen position. Because the pointer is normally over the login button when authentication completes, the lamp will usually be near the form center. If no live lamp snapshot is available, use the existing form-centered default.
+The transition preserves two related origins. The beam cone opens from the lamp pivot (`lampX`/`lampY`), while the illumination spread and dashboard reveal share the frozen light landing point (`lightX`/`lightY`). Because the pointer is normally over the login button when authentication completes, the landing point will usually be near the form center. If no live lamp snapshot is available, use the existing form-centered default.
 
-1. **0-180 ms: charge**
+1. **0-176 ms: low-intensity focus**
    - Freeze the current lamp position, lamp angle, and light landing point.
-   - Increase beam intensity while retaining a narrow cone.
+   - Retain a narrow cone and increase intensity only slightly from a low visible starting level.
    - Keep the login page fully visible at the start.
-2. **180-420 ms: expand**
-   - Open the cone outward from the lamp bulb using an accelerating aperture curve.
-   - Begin dimming the login form as the warm beam covers it.
-3. **At 420 ms: route swap**
-   - Run `router.push('/smartlightdashboard')` while the beam is broad and bright enough to conceal the component replacement.
+2. **176-616 ms: spotlight zoom**
+   - Open the directional cone outward from the lamp pivot using an accelerating aperture curve.
+   - Expand a four-point trapezoid along the lamp-to-landing-point axis; morph its four vertices into the exact viewport corners at 616 ms.
+   - Increase brightness monotonically with the covered area so the login page changes progressively rather than flashing.
+   - End with the warm beam covering the entire viewport, including all four corners.
+3. **616-660 ms: complete warm coverage**
+   - Hold the restrained warm-white peak only long enough to guarantee there is no uncovered route-swap frame.
+   - Keep the login route active throughout this coverage milestone.
+4. **At 660 ms: route swap**
+   - Run `router.push('/smartlightdashboard')` only after full viewport coverage has been reached.
    - Keep the transition overlay mounted above `router-view` so the route swap cannot interrupt it.
-4. **420-720 ms: full coverage**
-   - Complete the beam expansion across the viewport.
+5. **660-704 ms: dashboard mount**
    - Fade the retained lamp silhouette after the original `AuthFollowLight` unmounts.
-   - Allow the dashboard to mount beneath the overlay.
-5. **720-1100 ms: reveal**
-   - Reveal the dashboard outward from the beam origin.
+   - Allow the dashboard to mount beneath the fully opaque warm cover.
+6. **704-1100 ms: dashboard reveal**
+   - Reveal the dashboard as a rectangular opening whose initial zero-area point is the frozen `lightX`/`lightY` landing point.
+   - Move four opaque warm panels independently toward the top, bottom, left, and right viewport edges. This expands the opening without scaling or deforming dashboard content.
+   - Keep adjacent panels overlapped by one pixel and feather only their moving inner edges so the rectangular opening has no seams or hard circular outline.
    - Reduce the warm highlight to transparent and release pointer input.
 
 The animation plays once and contains no strobing or repeated brightness pulses.
@@ -47,13 +58,14 @@ The animation plays once and contains no strobing or repeated brightness pulses.
 
 Mount one global fixed overlay in `App.vue`, after `router-view`. It owns only transition presentation:
 
-- warm beam and aperture layers;
+- a directional cone and four-point beam wash whose aperture and intensity rise together;
 - a short-lived lamp silhouette matching the accepted auth lamp outline;
-- login-page cover and dashboard reveal masks;
+- a fully opaque route-swap shield and a separate four-panel dashboard reveal curtain;
+- a guaranteed full-coverage handoff before the route swap;
 - pointer interception while active;
 - CSS animation completion reporting.
 
-The overlay must not render or initialize another Three.js scene. CSS gradients, masks, `clip-path`, opacity, and transforms provide the transition.
+The overlay must not render or initialize another Three.js scene. CSS linear gradients, `clip-path`, opacity, and transforms provide the transition. Circular and radial masks are explicitly excluded.
 
 ### Transition Controller
 
@@ -93,8 +105,8 @@ No transition-specific code or layout changes. It mounts normally beneath the gl
 
 Desktop and mobile use the same five-phase timeline. Only beam geometry changes:
 
-- desktop expands to cover the wider horizontal radius;
-- portrait mobile expands farther vertically and clamps the origin inside the viewport;
+- desktop and mobile both finish at the exact viewport bounds so all four corners are covered before navigation;
+- portrait mobile retains the same four-edge landing-point reveal and clamps the recorded origin inside the viewport;
 - no breakpoint changes, layout changes, or dashboard reflow are introduced.
 
 The full animation also runs when `prefers-reduced-motion: reduce` matches, as explicitly selected. It remains a single non-strobing 1.1-second transition.
@@ -103,7 +115,7 @@ The full animation also runs when `prefers-reduced-motion: reduce` matches, as e
 
 - Guard against concurrent starts; a second request returns the active transition promise.
 - If no light snapshot exists, use the current form-centered default origin.
-- If CSS `clip-path` or mask support is unavailable, use a warm opacity fade with the same route timing.
+- If CSS polygon `clip-path` support is unavailable, use a warm opacity fade that reaches full coverage before the same 660 ms route timing.
 - If presentation setup fails before navigation, clear transition state and navigate immediately.
 - If the navigation callback rejects, clear the overlay, release pointer input, and propagate the error to LoginView's existing error path.
 - Clear all timers, animation listeners, and pending promise resolvers when the global transition component unmounts.
@@ -114,7 +126,12 @@ The full animation also runs when `prefers-reduced-motion: reduce` matches, as e
 ### Unit Tests
 
 - Snapshot normalization and default-origin fallback.
-- Timeline constants: route swap at 420 ms and completion at 1100 ms.
+- Timeline constants: complete coverage by 616 ms, route swap at 660 ms, reveal start at 704 ms, and completion at 1100 ms.
+- Initial beam intensity remains low and brightness increases with each aperture stage until full coverage.
+- Route navigation never occurs before the full-viewport beam keyframe.
+- The trapezoid reaches `polygon(0 0, 100% 0, 100% 100%, 0 100%)` before navigation.
+- Dashboard reveal uses four rectangular panels whose inner edges begin at the frozen normalized `lightX`/`lightY` snapshot and move to the viewport edges.
+- Transition lighting and reveal layers contain no circular hotspot, radial gradient, radial mask, or rounded aperture.
 - Concurrent starts share one active operation.
 - Setup failure falls back to immediate navigation.
 - Navigation rejection clears transition state and propagates the error.
@@ -134,7 +151,7 @@ The full animation also runs when `prefers-reduced-motion: reduce` matches, as e
 - Run the transition controller tests.
 - Run `npm run build`.
 - Visually verify the successful dashboard route at `1440x900` and `390x844`.
-- Confirm full beam coverage, no horizontal overflow, no visible route-swap frame, and restored pointer interaction after completion.
+- Confirm low initial intensity, progressive trapezoid expansion, full four-corner coverage before navigation, a same-origin rectangular dashboard reveal, no circular edge, no horizontal overflow, no visible route-swap frame, and restored pointer interaction after completion.
 
 ## Non-Goals
 

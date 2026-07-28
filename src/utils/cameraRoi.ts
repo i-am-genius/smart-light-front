@@ -1,4 +1,4 @@
-import type { CamRoiItem, DeviceItem } from '../types/device'
+import type { CamPtzPreset, CamRoiItem, DeviceItem } from '../types/device'
 
 type RoiTargetDevice = DeviceItem & {
   name?: string
@@ -22,12 +22,10 @@ function resolveTargetName(target: RoiTargetDevice) {
   return trimText(target.name) || trimText(target.displayName)
 }
 
-function resolvePort(value: unknown, fallbackPort: number) {
+function clampNumber(value: unknown, fallback: number, min: number, max: number) {
   const numericValue = Number(value)
-  if (Number.isFinite(numericValue) && numericValue >= 1 && numericValue <= 65535) {
-    return numericValue
-  }
-  return fallbackPort
+  const resolvedValue = Number.isFinite(numericValue) ? numericValue : fallback
+  return Math.max(min, Math.min(max, resolvedValue))
 }
 
 export function getTargetDeviceLabel(target: DeviceItem, fallbackIndex: number) {
@@ -48,18 +46,39 @@ export function getTargetDeviceLabel(target: DeviceItem, fallbackIndex: number) 
 export function applyTargetDeviceToRoi(
   roi: CamRoiItem,
   target: DeviceItem | undefined,
-  fallbackPort: number,
 ) {
   if (!target?.chipId) return roi
 
   const typedTarget = target as RoiTargetDevice
   const areaName = resolveTargetAreaName(typedTarget)
-  const ip = trimText(target.ip)
-
   roi.targetChipId = target.chipId
   roi.areaName = areaName || roi.areaName || `区域 ${roi.targetIndex}`
-  roi.udpIp = ip || roi.udpIp
-  roi.udpPort = resolvePort(roi.udpPort, fallbackPort)
 
   return roi
+}
+
+export function normalizeCamPreset(value: unknown): CamPtzPreset {
+  const source = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+  const legacyPan = Number(source.yaw)
+  const panValue = source.pan ?? (Number.isFinite(legacyPan) ? legacyPan - 90 : undefined)
+
+  return {
+    pan: clampNumber(panValue, 0, -90, 90),
+    tilt: clampNumber(source.tilt ?? source.pitch, 0, -45, 45),
+    slider: clampNumber(source.slider, 0, 0, 1200),
+  }
+}
+
+export function pickCamRoiFields(value: CamRoiItem): CamRoiItem {
+  return {
+    targetIndex: value.targetIndex,
+    targetChipId: value.targetChipId,
+    areaName: value.areaName,
+    x: value.x,
+    y: value.y,
+    w: value.w,
+    h: value.h,
+  }
 }

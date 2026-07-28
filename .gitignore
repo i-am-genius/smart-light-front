@@ -48,6 +48,16 @@ public/backgrounds/store-layout.png
 test-results/
 playwright-report/
 
+# Local browser / visual QA scratch
+.playwright-cli/
+output/
+docs/analyze-screenshot.*
+docs/analyze2.cjs
+docs/analyze3.cjs
+docs/screenshot-night*.png
+docs/ss-*.png
+localStorage.setItem*
+
 # Local design brainstorming sessions
 .superpowers/
 

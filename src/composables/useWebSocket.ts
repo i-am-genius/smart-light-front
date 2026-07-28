@@ -1,6 +1,7 @@
 import { onBeforeUnmount, onMounted, ref, unref, watch, type ComputedRef, type Ref } from 'vue'
 
 type MessageHandler = (data: any) => void
+type BinaryMessageHandler = (data: ArrayBuffer) => void
 type Source<T> = Ref<T> | ComputedRef<T> | (() => T)
 type UrlSource = Source<string>
 type ProtocolValue = string | string[] | null | undefined
@@ -33,7 +34,12 @@ function resolveProtocolKey(source?: ProtocolSource): string {
   return Array.isArray(protocols) ? protocols.join(',') : protocols
 }
 
-export function useWebSocket(urlSource: UrlSource, onMessage?: MessageHandler, protocolSource?: ProtocolSource) {
+export function useWebSocket(
+  urlSource: UrlSource,
+  onMessage?: MessageHandler,
+  protocolSource?: ProtocolSource,
+  onBinaryMessage?: BinaryMessageHandler,
+) {
   const socket = ref<WebSocket | null>(null)
   const connected = ref(false)
   const lastMessage = ref<any>(null)
@@ -74,6 +80,7 @@ export function useWebSocket(urlSource: UrlSource, onMessage?: MessageHandler, p
     manualClose = false
 
     const ws = protocols ? new WebSocket(url, protocols) : new WebSocket(url)
+    ws.binaryType = 'arraybuffer'
     socket.value = ws
 
     ws.onopen = () => {
@@ -81,6 +88,10 @@ export function useWebSocket(urlSource: UrlSource, onMessage?: MessageHandler, p
     }
 
     ws.onmessage = (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        onBinaryMessage?.(event.data)
+        return
+      }
       if (typeof event.data !== 'string') return
 
       try {

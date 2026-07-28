@@ -52,9 +52,24 @@
               <span>拍摄</span>
               <small>{{ getTargetButtonStatusText(area.targetButton) }}</small>
             </button>
+            <button
+              v-if="area.targetButton"
+              type="button"
+              class="area-tracking-btn"
+              :class="{ stopping: isTargetTracking(area.targetButton) }"
+              :disabled="isTrackingButtonDisabled(area.targetButton)"
+              :title="getTrackingButtonStatusText(area.targetButton)"
+              @click.stop="handleTracking(area.targetButton)"
+            >
+              <span>{{ isTargetTracking(area.targetButton) ? '停止' : '跟踪' }}</span>
+              <small>{{ getTrackingButtonStatusText(area.targetButton) }}</small>
+            </button>
           </div>
         </div>
         <p v-if="aimMessage" class="camera-message error">{{ aimMessage }}</p>
+        <p v-if="trackingMessage" class="camera-message" :class="{ error: trackingMessageIsError }">
+          {{ trackingMessage }}
+        </p>
       </section>
 
     <section class="camera-preview" @click.stop>
@@ -291,36 +306,6 @@
                     </div>
 
                     <div class="roi-editor-list">
-                      <div class="roi-editor-item roi-global-config">
-                        <div class="roi-editor-title">追踪参数</div>
-                        <div class="roi-number-grid">
-                          <label>
-                            <span>目标丢失超时</span>
-                            <input v-model.number="roiDraft.trackingLostTimeoutSeconds" type="number" min="1" step="1" />
-                          </label>
-                          <label>
-                            <span>默认 UDP 端口</span>
-                            <input v-model.number="roiDraft.udpPort" type="number" min="1" max="65535" step="1" />
-                          </label>
-                        </div>
-                      </div>
-                      <div class="roi-editor-item roi-global-config">
-                        <div class="roi-editor-title">中心监测预设</div>
-                        <div class="roi-preset-grid">
-                          <label>
-                            <span>水平轴</span>
-                            <input v-model.number="roiDraft.centerPreset.yaw" type="number" min="0" max="180" step="1" />
-                          </label>
-                          <label>
-                            <span>垂直轴</span>
-                            <input v-model.number="roiDraft.centerPreset.pitch" type="number" min="-90" max="90" step="1" />
-                          </label>
-                          <label>
-                            <span>旋转轴</span>
-                            <input v-model.number="roiDraft.centerPreset.roll" type="number" min="0" max="180" step="1" />
-                          </label>
-                        </div>
-                      </div>
                       <div
                         v-for="roi in roiDraft.rois"
                         :key="`editor-${roi.targetIndex}`"
@@ -343,44 +328,29 @@
                           <span>区域名称</span>
                           <input v-model.trim="roi.areaName" type="text" placeholder="如 新品展示区" />
                         </label>
-                        <div class="roi-number-grid">
-                          <label>
-                            <span>停留秒</span>
-                            <input v-model.number="roi.dwellSeconds" type="number" min="0" step="1" />
-                          </label>
-                          <label>
-                            <span>离开延迟</span>
-                            <input v-model.number="roi.leaveDelaySeconds" type="number" min="0" step="1" />
-                          </label>
-                          <label>
-                            <span>置信度</span>
-                            <input v-model.number="roi.confidenceThreshold" type="number" min="0" max="1" step="0.05" />
-                          </label>
-                        </div>
-                        <div class="roi-number-grid roi-network-grid">
-                          <label>
-                            <span>UDP 地址</span>
-                            <input v-model.trim="roi.udpIp" type="text" placeholder="192.168.1.101" />
-                          </label>
-                          <label>
-                            <span>UDP 端口</span>
-                            <input v-model.number="roi.udpPort" type="number" min="1" max="65535" step="1" />
-                          </label>
-                        </div>
                         <div class="roi-preset-group">
                           <div class="roi-preset-title">拍摄预设</div>
                           <div class="roi-preset-grid">
                             <label>
-                              <span>水平轴</span>
-                              <input v-model.number="roiDraft.capturePresets[roi.targetIndex].yaw" type="number" min="0" max="180" step="1" />
+                              <span>Pan 水平：</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roiDraft.capturePresets[roi.targetIndex].pan" type="number" min="-90" max="90" step="1" />
+                                <small>°</small>
+                              </div>
                             </label>
                             <label>
-                              <span>垂直轴</span>
-                              <input v-model.number="roiDraft.capturePresets[roi.targetIndex].pitch" type="number" min="-90" max="90" step="1" />
+                              <span>Tilt 俯仰：</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roiDraft.capturePresets[roi.targetIndex].tilt" type="number" min="-45" max="45" step="1" />
+                                <small>°</small>
+                              </div>
                             </label>
                             <label>
-                              <span>旋转轴</span>
-                              <input v-model.number="roiDraft.capturePresets[roi.targetIndex].roll" type="number" min="0" max="180" step="1" />
+                              <span>Slider 滑轨：</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roiDraft.capturePresets[roi.targetIndex].slider" type="number" min="0" max="1200" step="1" />
+                                <small>mm</small>
+                              </div>
                             </label>
                           </div>
                         </div>
@@ -388,16 +358,25 @@
                           <div class="roi-preset-title">追踪预设</div>
                           <div class="roi-preset-grid">
                             <label>
-                              <span>水平轴</span>
-                              <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].yaw" type="number" min="0" max="180" step="1" />
+                              <span>Pan 水平：</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].pan" type="number" min="-90" max="90" step="1" />
+                                <small>°</small>
+                              </div>
                             </label>
                             <label>
-                              <span>垂直轴</span>
-                              <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].pitch" type="number" min="-90" max="90" step="1" />
+                              <span>Tilt 俯仰：</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].tilt" type="number" min="-45" max="45" step="1" />
+                                <small>°</small>
+                              </div>
                             </label>
                             <label>
-                              <span>旋转轴</span>
-                              <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].roll" type="number" min="0" max="180" step="1" />
+                              <span>Slider 滑轨：</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].slider" type="number" min="0" max="1200" step="1" />
+                                <small>mm</small>
+                              </div>
                             </label>
                           </div>
                         </div>
@@ -481,12 +460,13 @@ import {
   getCamRoiConfig,
   saveCamRoiConfig,
   sendCamPtz,
+  startCamTracking,
   startOtaUpdate,
+  stopCamTracking,
 } from '../../api/device'
 import { getPersonFlowImageObjectUrl } from '../../api/personFlow'
-import { applyTargetDeviceToRoi, getTargetDeviceLabel } from '../../utils/cameraRoi'
+import { applyTargetDeviceToRoi, getTargetDeviceLabel, normalizeCamPreset, pickCamRoiFields } from '../../utils/cameraRoi'
 import { getErrorMessage } from '../../utils/error'
-import { resolveFiniteNumber } from '../../utils/helpers'
 
 const props = defineProps<{
   device: DeviceItem
@@ -527,8 +507,8 @@ type TargetButton = {
   label: string
   targetIndex: number
   targetChipId?: string
-  targetOnline?: boolean
   targetMissing?: boolean
+  trackingConfigured?: boolean
 }
 
 type RoiDragMode = 'move' | 'resize'
@@ -566,6 +546,10 @@ const ptzMessage = ref('')
 const ptzStep = ref(5)
 const aimLoading = ref(false)
 const aimMessage = ref('')
+const trackingActionIndex = ref<number | null>(null)
+const manualTrackingTargetIndex = ref<number | null>(null)
+const trackingMessage = ref('')
+const trackingMessageIsError = ref(false)
 const localCapturePending = ref(false)
 let localCapturePendingTimer: ReturnType<typeof setTimeout> | null = null
 const onlineFlash = ref(false)
@@ -750,8 +734,8 @@ const targetButtons = computed<TargetButton[]>(() => {
       label: getPresenceLabel(roi.areaName?.trim() || `区域 ${roi.targetIndex}`, roi.targetChipId, roi.targetIndex),
       targetIndex: roi.targetIndex,
       targetChipId: roi.targetChipId,
-      targetOnline: target?.online,
       targetMissing: Boolean(roi.targetChipId && !target),
+      trackingConfigured: Boolean(roi.targetChipId),
     }
   })
 
@@ -761,8 +745,8 @@ const targetButtons = computed<TargetButton[]>(() => {
       label: getTargetDeviceLabel(target, index + 1),
       targetIndex: index + 1,
       targetChipId: target.chipId,
-      targetOnline: target.online,
       targetMissing: false,
+      trackingConfigured: false,
     }))
 
   while (realTargets.length < 3) {
@@ -770,6 +754,7 @@ const targetButtons = computed<TargetButton[]>(() => {
     realTargets.push({
       label: `灯具-${index}`,
       targetIndex: index,
+      trackingConfigured: false,
     })
   }
 
@@ -916,7 +901,7 @@ function findTargetDevice(chipId?: string) {
 
 function handleRoiTargetChange(roi: CamRoiItem, value: string | number) {
   const target = findTargetDevice(String(value))
-  applyTargetDeviceToRoi(roi, target, roiDraft.value.udpPort)
+  applyTargetDeviceToRoi(roi, target)
 }
 
 function isLampClothTaken(target?: DeviceItem) {
@@ -980,21 +965,14 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
   return {
     camChipId,
     configured: false,
-    centerPreset: createDefaultPreset(),
     capturePresets: createDefaultPresetMap(),
     trackingPresets: createDefaultPresetMap(),
-    trackingLostTimeoutSeconds: 5,
-    udpPort: 4211,
     rois: [1, 2, 3].map(createDefaultRoi),
   }
 }
 
 function createDefaultPreset(): CamPtzPreset {
-  return {
-    yaw: 90,
-    pitch: 0,
-    roll: 90,
-  }
+  return normalizeCamPreset(null)
 }
 
 function createDefaultPresetMap(): CamPresetMap {
@@ -1015,10 +993,6 @@ function createDefaultRoi(targetIndex: number): CamRoiItem {
     y: 0.3,
     w: width,
     h: height,
-    dwellSeconds: 2,
-    leaveDelaySeconds: 3,
-    confidenceThreshold: 0.65,
-    udpPort: 4211,
   }
 }
 
@@ -1031,22 +1005,9 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
   return {
     camChipId,
     configured: Boolean(value?.configured) || rois.every(isRoiReady),
-    centerPreset: normalizePreset(value?.centerPreset),
     capturePresets: normalizePresetMap(value?.capturePresets),
     trackingPresets: normalizePresetMap(value?.trackingPresets),
-    trackingLostTimeoutSeconds: clamp(resolveFiniteNumber(value?.trackingLostTimeoutSeconds, 5), 1, Number.MAX_SAFE_INTEGER),
-    udpPort: clamp(resolveFiniteNumber(value?.udpPort, 4211), 1, 65535),
     rois,
-  }
-}
-
-function normalizePreset(value: unknown): CamPtzPreset {
-  const source = isPlainObject(value) ? value : {}
-  return {
-    yaw: clamp(resolveFiniteNumber(source.yaw, 90), 0, 180),
-    pitch: clamp(resolveFiniteNumber(source.pitch, 0), -90, 90),
-    roll: clamp(resolveFiniteNumber(source.roll, 90), 0, 180),
-    configured: Boolean(source.configured),
   }
 }
 
@@ -1055,16 +1016,14 @@ function normalizePresetMap(value: unknown): CamPresetMap {
   const objectValue = isPlainObject(value) ? value : {}
   return [1, 2, 3].reduce<CamPresetMap>((map, index) => {
     const source = arrayValue ? arrayValue[index - 1] : objectValue[String(index)]
-    map[String(index)] = normalizePreset(source)
+    map[String(index)] = normalizeCamPreset(source)
     return map
   }, {})
 }
 
 function normalizeRoi(value: Partial<CamRoiItem> | undefined, targetIndex: number): CamRoiItem {
   const fallback = createDefaultRoi(targetIndex)
-  return {
-    ...fallback,
-    ...value,
+  return pickCamRoiFields({
     targetIndex,
     targetChipId: value?.targetChipId || '',
     areaName: value?.areaName || fallback.areaName,
@@ -1072,12 +1031,7 @@ function normalizeRoi(value: Partial<CamRoiItem> | undefined, targetIndex: numbe
     y: clamp(value?.y ?? fallback.y),
     w: clamp(value?.w ?? fallback.w, 0.03, 1),
     h: clamp(value?.h ?? fallback.h, 0.03, 1),
-    dwellSeconds: Number(value?.dwellSeconds ?? fallback.dwellSeconds),
-    leaveDelaySeconds: Number(value?.leaveDelaySeconds ?? fallback.leaveDelaySeconds),
-    confidenceThreshold: clamp(value?.confidenceThreshold ?? fallback.confidenceThreshold, 0, 1),
-    udpIp: value?.udpIp || fallback.udpIp,
-    udpPort: clamp(resolveFiniteNumber(value?.udpPort, fallback.udpPort || 4211), 1, 65535),
-  }
+  })
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -1184,7 +1138,6 @@ function getTargetButtonDisabledReason(target: TargetButton) {
   if (isCamBusy.value) return '摄像头忙碌中'
   if (!target.targetChipId) return '目标灯未绑定'
   if (target.targetMissing) return '目标灯不存在'
-  if (target.targetOnline === false) return '目标灯离线'
   return ''
 }
 
@@ -1192,6 +1145,83 @@ function getTargetButtonStatusText(target: TargetButton) {
   const disabledReason = getTargetButtonDisabledReason(target)
   if (disabledReason) return disabledReason
   return '创建服装拍摄任务'
+}
+
+function isTargetTracking(target: TargetButton) {
+  if (manualTrackingTargetIndex.value != null) {
+    return manualTrackingTargetIndex.value === target.targetIndex
+  }
+
+  const status = props.device.trackingStatus
+  return status?.status === 'tracking' && Number(status.targetIndex) === target.targetIndex
+}
+
+function getTrackingTargetChipId(target: TargetButton) {
+  if (isTargetTracking(target)) {
+    return props.device.trackingStatus?.targetChipId || target.targetChipId
+  }
+  return target.targetChipId
+}
+
+function isTrackingButtonDisabled(target: TargetButton) {
+  return Boolean(getTrackingButtonDisabledReason(target))
+}
+
+function getTrackingButtonDisabledReason(target: TargetButton) {
+  if (trackingActionIndex.value != null) return '正在下发'
+  if (!props.device.online) return '摄像头离线'
+
+  const targetChipId = getTrackingTargetChipId(target)
+  if (!targetChipId) return '目标灯未配置'
+  if (!isTargetTracking(target) && !target.trackingConfigured) return '目标灯未配置'
+  if (target.targetMissing) return '目标灯不存在'
+
+  const lamp = findTargetDevice(targetChipId)
+  if (!lamp?.online) return '目标灯离线'
+  return ''
+}
+
+function getTrackingButtonStatusText(target: TargetButton) {
+  const disabledReason = getTrackingButtonDisabledReason(target)
+  if (disabledReason) return disabledReason
+  return isTargetTracking(target) ? '停止当前追踪' : '立即开始追踪'
+}
+
+async function handleTracking(target: TargetButton) {
+  const disabledReason = getTrackingButtonDisabledReason(target)
+  const targetChipId = getTrackingTargetChipId(target)
+  if (!props.device.chipId || !targetChipId || disabledReason) {
+    trackingMessageIsError.value = true
+    trackingMessage.value = disabledReason || '追踪目标不完整'
+    return
+  }
+
+  const wasTracking = isTargetTracking(target)
+  trackingActionIndex.value = target.targetIndex
+  trackingMessage.value = ''
+  trackingMessageIsError.value = false
+
+  try {
+    const payload = {
+      camChipId: props.device.chipId,
+      targetChipId,
+      targetIndex: target.targetIndex,
+    }
+    if (wasTracking) {
+      await stopCamTracking(payload)
+      manualTrackingTargetIndex.value = null
+      trackingMessage.value = `区域 ${target.targetIndex} 已停止追踪`
+    } else {
+      await startCamTracking(payload)
+      manualTrackingTargetIndex.value = target.targetIndex
+      trackingMessage.value = `区域 ${target.targetIndex} 已开始追踪`
+    }
+  } catch (error) {
+    trackingMessageIsError.value = true
+    trackingMessage.value = getErrorMessage(error, '追踪指令下发失败')
+  } finally {
+    trackingActionIndex.value = null
+  }
 }
 
 async function handleAimTarget(target: TargetButton) {
@@ -1573,6 +1603,16 @@ watch(
     ptzMessage.value = ''
     aimMessage.value = ''
   },
+)
+
+watch(
+  () => props.device.trackingStatus,
+  (trackingStatus) => {
+    manualTrackingTargetIndex.value = trackingStatus?.status === 'tracking'
+      ? Number(trackingStatus.targetIndex) || null
+      : null
+  },
+  { immediate: true, deep: true },
 )
 
 watch(
@@ -1958,7 +1998,8 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-.area-capture-btn {
+.area-capture-btn,
+.area-tracking-btn {
   width: 100%;
   min-height: 30px;
   margin-top: 7px;
@@ -1981,21 +2022,25 @@ onBeforeUnmount(() => {
 }
 
 .area-capture-btn span,
-.area-capture-btn small {
+.area-capture-btn small,
+.area-tracking-btn span,
+.area-tracking-btn small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.area-capture-btn span {
+.area-capture-btn span,
+.area-tracking-btn span {
   margin: 0;
   color: inherit;
   font-size: 12px;
   line-height: 1.15;
 }
 
-.area-capture-btn small {
+.area-capture-btn small,
+.area-tracking-btn small {
   margin-top: 1px;
   color: #64748b;
   font-size: 9.5px;
@@ -2010,7 +2055,39 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
 }
 
-.area-capture-btn:disabled {
+.area-tracking-btn {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.area-tracking-btn:hover:not(:disabled) {
+  border-color: #86efac;
+  background: #dcfce7;
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.12);
+  transform: translateY(-1px);
+}
+
+.area-tracking-btn.stopping {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+.area-tracking-btn.stopping:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fee2e2;
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.12);
+}
+
+.area-capture-btn:focus-visible,
+.area-tracking-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.area-capture-btn:disabled,
+.area-tracking-btn:disabled {
   cursor: not-allowed;
   border-color: #eef2f7;
   background: #f8fafc;
@@ -2018,7 +2095,8 @@ onBeforeUnmount(() => {
   opacity: 0.82;
 }
 
-.area-capture-btn:disabled small {
+.area-capture-btn:disabled small,
+.area-tracking-btn:disabled small {
   color: #94a3b8;
 }
 
@@ -2310,6 +2388,20 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.roi-preset-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.roi-preset-input small {
+  min-width: 20px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .device-info-head {
@@ -2766,19 +2858,34 @@ onBeforeUnmount(() => {
   color: rgba(226, 232, 240, 0.94);
 }
 
-:global(.app-container.night-mode) .area-capture-btn {
+:global(.app-container.night-mode) .area-capture-btn,
+:global(.app-container.night-mode) .area-tracking-btn {
   background: rgba(30, 41, 59, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.24);
   color: rgba(226, 232, 240, 0.9);
 }
 
-:global(.app-container.night-mode) .area-capture-btn:hover:not(:disabled) {
+:global(.app-container.night-mode) .area-capture-btn:hover:not(:disabled),
+:global(.app-container.night-mode) .area-tracking-btn:hover:not(:disabled) {
   background: rgba(37, 99, 235, 0.26);
   border-color: rgba(96, 165, 250, 0.45);
   color: #bfdbfe;
 }
 
-:global(.app-container.night-mode) .area-capture-btn:disabled {
+:global(.app-container.night-mode) .area-tracking-btn.stopping {
+  background: rgba(127, 29, 29, 0.28);
+  border-color: rgba(248, 113, 113, 0.34);
+  color: #fecaca;
+}
+
+:global(.app-container.night-mode) .area-tracking-btn.stopping:hover:not(:disabled) {
+  background: rgba(153, 27, 27, 0.4);
+  border-color: rgba(252, 165, 165, 0.5);
+  color: #fee2e2;
+}
+
+:global(.app-container.night-mode) .area-capture-btn:disabled,
+:global(.app-container.night-mode) .area-tracking-btn:disabled {
   background: rgba(15, 23, 42, 0.56);
   border-color: rgba(148, 163, 184, 0.16);
   color: rgba(148, 163, 184, 0.78);
@@ -2792,6 +2899,121 @@ onBeforeUnmount(() => {
   .roi-preset-grid,
   .ptz-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .camera-card {
+    padding: clamp(12px, 3.5vw, 16px);
+    border-radius: 14px;
+  }
+
+  .card-header {
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .camera-card h3 {
+    margin-bottom: 0;
+    font-size: 16px;
+    line-height: 1.25;
+  }
+
+  .last-seen-under-name {
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .card-status-stack {
+    gap: 4px;
+  }
+
+  .status-badge,
+  .self-test-badge {
+    gap: 4px;
+    padding: 3px 7px;
+    font-size: 11px;
+  }
+
+  .status-badge::before,
+  .self-test-badge::before {
+    width: 6px;
+    height: 6px;
+  }
+
+  .camera-state-section {
+    margin: 6px 0 8px;
+    padding: 8px;
+    border-radius: 10px;
+  }
+
+  .presence-grid {
+    gap: 5px;
+    margin-top: 6px;
+  }
+
+  .presence-item {
+    padding: 6px 5px;
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .presence-item span {
+    font-size: 10px;
+  }
+
+  .presence-item strong {
+    font-size: 12px;
+  }
+
+  .area-capture-btn,
+  .area-tracking-btn {
+    min-height: 44px;
+    margin-top: 5px;
+    padding: 4px;
+  }
+
+  .camera-preview {
+    border-radius: 10px;
+  }
+
+  .camera-preview-placeholder {
+    gap: 4px;
+  }
+
+  .camera-lens {
+    width: 28px;
+    height: 28px;
+  }
+
+  .camera-preview-placeholder strong {
+    font-size: 13px;
+  }
+
+  .camera-preview-placeholder p {
+    font-size: 10px;
+  }
+
+  .camera-metrics-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    margin-top: 7px;
+  }
+
+  .camera-metrics-strip div {
+    padding: 6px 4px;
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .camera-metrics-strip span {
+    font-size: 10px;
+  }
+
+  .camera-metrics-strip strong {
+    margin-top: 2px;
+    font-size: 12px;
   }
 }
 </style>

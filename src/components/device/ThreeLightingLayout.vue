@@ -14,7 +14,10 @@
             >
               ‹
             </button>
-            <div class="zone-current-label">
+            <div
+              class="zone-current-label"
+              :style="{ '--zone-name-length': activeZoneNameLength }"
+            >
               <strong :title="activeZone.zoneName">{{ activeZone.zoneName }}</strong>
               <span>{{ activeZoneIndex + 1 }} / {{ zoneCount }}</span>
             </div>
@@ -32,19 +35,31 @@
         </div>
 
         <div class="scene-edit-actions slot-toolbar workbench-glass">
-          <span class="scene-slot-count">{{ slotCountLabel }}</span>
+          <span class="scene-slot-count">
+            <span class="toolbar-label-full">{{ slotCountLabel }}</span>
+            <span class="toolbar-label-compact">{{ layoutState.lamps.length }}</span>
+          </span>
           <span class="toolbar-divider" aria-hidden="true"></span>
-          <button class="toolbar-action primary-action-btn" type="button" @click.stop="addManualSlot">
-            <span aria-hidden="true">＋</span> 添加灯位
+          <button
+            class="toolbar-action primary-action-btn"
+            type="button"
+            aria-label="添加灯位"
+            title="添加灯位"
+            @click.stop="addManualSlot"
+          >
+            <span aria-hidden="true">＋</span>
+            <span class="toolbar-label-full">添加灯位</span>
           </button>
           <button
             class="toolbar-action layout-action-btn"
             type="button"
+            aria-label="均匀排列"
             :disabled="layoutState.lamps.length <= 1"
             :title="layoutState.lamps.length <= 1 ? '至少两个灯位' : '均匀排列'"
             @click.stop="handleArrangeSlotsEvenly"
           >
-            均匀排列
+            <span class="toolbar-label-full">均匀排列</span>
+            <span class="toolbar-label-compact">均排</span>
           </button>
         </div>
 
@@ -53,26 +68,27 @@
             class="view-mode-btn view-toggle-btn"
             :class="{ 'is-active': cameraViewMode === 'display' }"
             type="button"
+            aria-label="展示视角"
+            title="展示视角"
             :aria-pressed="cameraViewMode === 'display'"
             @click.stop="setCameraViewMode('display')"
           >
-            展示
+            <span class="toolbar-label-full">展示</span>
+            <span class="toolbar-label-compact">展</span>
           </button>
           <button
             class="view-mode-btn view-toggle-btn"
             :class="{ 'is-active': cameraViewMode === 'adjust' }"
             type="button"
+            aria-label="调节视角"
+            title="调节视角"
             :aria-pressed="cameraViewMode === 'adjust'"
             @click.stop="setCameraViewMode('adjust')"
           >
-            调节
+            <span class="toolbar-label-full">调节</span>
+            <span class="toolbar-label-compact">调</span>
           </button>
         </div>
-      </div>
-
-      <div class="scene-overlay" aria-hidden="true">
-        <span>精品服装灯光</span>
-        <small>轨道编排工作台</small>
       </div>
 
       <div ref="viewportRef" class="three-layout-viewport"></div>
@@ -126,17 +142,108 @@
         </div>
       </div>
     </div>
+
+    <div class="zone-quick-manager" aria-label="快速管理分区">
+      <div class="zone-quick-add">
+        <input
+          v-model="newZoneName"
+          class="zone-name-input"
+          type="text"
+          maxlength="24"
+          placeholder="新增分区"
+          :disabled="zoneManagementPending"
+          @keydown.enter.prevent="submitZoneAdd"
+        >
+        <button
+          class="zone-manager-btn zone-add-btn"
+          type="button"
+          aria-label="新增分区"
+          title="新增分区"
+          :disabled="zoneAddDisabled"
+          @click="submitZoneAdd"
+        >
+          ＋
+        </button>
+      </div>
+
+      <span class="zone-manager-current" :title="activeZone.zoneName">
+        {{ activeZone.zoneName }}
+      </span>
+
+      <div class="zone-manager-actions" role="group" aria-label="调整当前分区">
+        <button
+          class="zone-manager-btn"
+          type="button"
+          aria-label="分区前移"
+          title="分区前移"
+          :disabled="!canMoveActiveZoneLeft"
+          @click="requestZoneMove(-1)"
+        >
+          ←
+        </button>
+        <button
+          class="zone-manager-btn"
+          type="button"
+          aria-label="分区后移"
+          title="分区后移"
+          :disabled="!canMoveActiveZoneRight"
+          @click="requestZoneMove(1)"
+        >
+          →
+        </button>
+        <button
+          class="zone-manager-btn zone-delete-btn"
+          type="button"
+          aria-label="删除当前分区"
+          :title="activeZoneDeleteTitle"
+          :disabled="!canDeleteActiveZone"
+          @click="requestActiveZoneDelete"
+        >
+          ×
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import type { DeviceItem } from '../../types/device'
-import { normalizeDeviceType } from '../../utils/device'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import type { DeviceItem, GarmentPart } from '../../types/device'
+import { isCameraDevice, isLampDevice, normalizeDeviceType } from '../../utils/device'
+import {
+  ZONE_DEFINITION_STORAGE_KEY,
+  ZONE_LAYOUT_STORAGE_KEY,
+} from '../../utils/deviceZoneStorage'
+import {
+  UNASSIGNED_ZONE_NAME,
+  normalizeZoneName,
+  sortDevicesByNumber,
+} from '../../utils/deviceZones'
 import { clamp, colorTemperatureToHex, resolveFiniteNumber } from '../../utils/helpers'
+import {
+  garmentSignature,
+  getDisplayGarments,
+} from '../../utils/garmentRecognition'
 import { locateDevice } from '../../api/device'
+import {
+  createBoutiqueMaterialLibrary,
+  loadBoutiqueTextures,
+  type BoutiqueMaterialLibrary,
+} from './threeBoutiqueMaterials'
+import {
+  createBoutiqueTextureLoadCoordinator,
+  type BoutiqueTextureLoadCoordinator,
+} from './threeBoutiqueTextureLoadCoordinator'
+import {
+  GARMENT_DISPLAY_METRICS,
+  createGarmentDisplay,
+  disposeGarmentDisplay,
+  syncGarmentDisplayInScene,
+} from './threeGarmentModels'
+import { selectSpotShadowSlotIds } from './threeSpotShadowBudget'
 
 type LampTemperature = number
 
@@ -154,6 +261,8 @@ type LampLayout = {
   brightness: number
   temperature: LampTemperature
   clothingColor: string
+  garments: GarmentPart[]
+  garmentSignature: string
   online?: boolean
 }
 
@@ -210,6 +319,20 @@ type ThreeZoneOption = {
   zoneName: string
 }
 
+type ZoneMutationTarget = {
+  zoneId: string
+  zoneName: string
+}
+
+type ZoneMoveIntent = ZoneMutationTarget & {
+  direction: -1 | 1
+}
+
+type DeviceNumberSwapIntent = {
+  firstDeviceId: string | number
+  secondDeviceId: string | number
+}
+
 type StoredZoneLayout = {
   track?: Partial<TrackLayout>
   slots?: Array<Partial<ZoneSlot>>
@@ -246,21 +369,28 @@ type LampObjects = {
   aperture: THREE.Mesh
   selectionRing: THREE.Mesh
   selectionMarker: THREE.Mesh
-  shirt: THREE.Group
+  garmentDisplay: THREE.Group
 }
 
 const props = withDefaults(defineProps<{
   devices?: DeviceLike[]
   zones?: StoreZoneLike[]
   active?: boolean
+  activeZoneId?: string
+  zoneManagementPending?: boolean
 }>(), {
   devices: () => [],
-  zones: () => [],
   active: true,
+  zoneManagementPending: false,
 })
 
 const emit = defineEmits<{
   (event: 'selection-change', value: SelectionInfo): void
+  (event: 'zone-add', name: string): void
+  (event: 'zone-delete', target: ZoneMutationTarget): void
+  (event: 'zone-move', intent: ZoneMoveIntent): void
+  (event: 'update:activeZoneId', zoneId: string): void
+  (event: 'swap-device-numbers', intent: DeviceNumberSwapIntent): void
 }>()
 
 const viewportRef = ref<HTMLDivElement | null>(null)
@@ -268,10 +398,37 @@ const cameraViewMode = ref<CameraViewMode>('display')
 const activeZoneIndex = ref(0)
 const selectedSlotId = ref('')
 const locatingSlotId = ref('')
+const newZoneName = ref('')
 
+const zonesAreAuthoritative = computed(() => props.zones !== undefined)
 const zoneOptions = computed(() => normalizeZones(props.zones))
 const zoneCount = computed(() => zoneOptions.value.length)
 const activeZone = computed(() => zoneOptions.value[activeZoneIndex.value] || createDefaultZoneOption())
+const activeZoneNameLength = computed(() => Math.max(Array.from(activeZone.value.zoneName).length, 1))
+const namedZoneOptions = computed(() => zoneOptions.value.filter(zone => zone.zoneName !== UNASSIGNED_ZONE_NAME))
+const normalizedNewZoneName = computed(() => normalizeZoneName(newZoneName.value))
+const zoneAddDisabled = computed(() => {
+  if (props.zoneManagementPending) return true
+  if (!newZoneName.value.trim() || normalizedNewZoneName.value === UNASSIGNED_ZONE_NAME) return true
+  return zoneOptions.value.some(zone => normalizeZoneName(zone.zoneName) === normalizedNewZoneName.value)
+})
+const canDeleteActiveZone = computed(() =>
+  !props.zoneManagementPending && activeZone.value.zoneName !== UNASSIGNED_ZONE_NAME,
+)
+const activeZoneDeleteTitle = computed(() =>
+  activeZone.value.zoneName === UNASSIGNED_ZONE_NAME ? '未分区不可删除' : '删除当前分区',
+)
+const activeNamedZoneIndex = computed(() =>
+  namedZoneOptions.value.findIndex(zone => zone.zoneId === activeZone.value.zoneId),
+)
+const canMoveActiveZoneLeft = computed(() =>
+  !props.zoneManagementPending && activeNamedZoneIndex.value > 0,
+)
+const canMoveActiveZoneRight = computed(() =>
+  !props.zoneManagementPending
+  && activeNamedZoneIndex.value >= 0
+  && activeNamedZoneIndex.value < namedZoneOptions.value.length - 1,
+)
 const selectedSlot = computed(() => layoutState.lamps.find(lamp => lamp.slotId === selectedSlotId.value) || null)
 const selectedSlotIndex = computed(() => selectedSlot.value ? layoutState.lamps.findIndex(lamp => lamp.slotId === selectedSlot.value?.slotId) : -1)
 const canMoveSelectedLeft = computed(() => selectedSlotId.value !== '' && selectedSlotIndex.value > 0)
@@ -305,10 +462,21 @@ const deleteSlotTitle = computed(() => {
 })
 
 const mockLampLayouts: LampLayout[] = [
-  { slotId: 'mock-1', order: 0, name: '新品展示区', lampX: -2.15, targetX: -2.15, brightness: 72, temperature: 3000, clothingColor: '#d45a48' },
-  { slotId: 'mock-2', order: 1, name: '主通道区', lampX: 0, targetX: 0, brightness: 88, temperature: 4000, clothingColor: '#8fb95a' },
-  { slotId: 'mock-3', order: 2, name: '橱窗区', lampX: 2.05, targetX: 2.05, brightness: 56, temperature: 6000, clothingColor: '#4d86d9' },
+  { slotId: 'mock-1', order: 0, name: '新品展示区', lampX: -2.15, targetX: -2.15, brightness: 72, temperature: 3000, clothingColor: '#d45a48', garments: createMockUpperGarments('#d45a48'), garmentSignature: 'upper:upper' },
+  { slotId: 'mock-2', order: 1, name: '主通道区', lampX: 0, targetX: 0, brightness: 88, temperature: 4000, clothingColor: '#8fb95a', garments: createMockUpperGarments('#8fb95a'), garmentSignature: 'upper:upper' },
+  { slotId: 'mock-3', order: 2, name: '橱窗区', lampX: 2.05, targetX: 2.05, brightness: 56, temperature: 6000, clothingColor: '#4d86d9', garments: createMockUpperGarments('#4d86d9'), garmentSignature: 'upper:upper' },
 ]
+
+function createMockUpperGarments(color: string): GarmentPart[] {
+  return [{
+    position: 'upper',
+    category: 'upper',
+    categoryConfidence: null,
+    fabric: '',
+    mainColorRgb: color,
+    maskArea: 0,
+  }]
+}
 
 const mockCameraLayout: CameraLayout = {
   x: 4.05,
@@ -335,6 +503,10 @@ const layoutState = reactive<{
 let scene: THREE.Scene | null = null
 let camera: THREE.PerspectiveCamera | null = null
 let renderer: THREE.WebGLRenderer | null = null
+let boutiqueMaterials: BoutiqueMaterialLibrary | null = null
+let pmremGenerator: THREE.PMREMGenerator | null = null
+let environmentRenderTarget: THREE.WebGLRenderTarget | null = null
+let boutiqueTextureLoadCoordinator: BoutiqueTextureLoadCoordinator | null = null
 let controls: OrbitControls | null = null
 let animationFrame = 0
 let cameraAnimationFrame = 0
@@ -346,7 +518,7 @@ let leftHandleMesh: THREE.Mesh | null = null
 let rightHandleMesh: THREE.Mesh | null = null
 let dragState: DragState | null = null
 let hasRestoredActiveZone = false
-let cachedStoredLayouts: { version: number; activeZoneId: string; zoneLayouts: Record<string, StoredZoneLayout> } | null = null
+let renderedZoneId = ''
 
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
@@ -354,12 +526,10 @@ const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -layoutState.track
 const dragPoint = new THREE.Vector3()
 const beamAxis = new THREE.Vector3(0, -1, 0)
 const displayWallZ = -2.42
-const shirtBaseY = 0.72
-const shirtAimY = 1.26
+const garmentBaseY = GARMENT_DISPLAY_METRICS.baseY
+const garmentAimY = 1.26
 const wallLightSpotZ = displayWallZ + 0.065
-const ZONE_LAYOUT_STORAGE_KEY = 'SMART_LIGHT_THREE_ZONE_LAYOUTS_V1'
-const ZONE_DEFINITION_STORAGE_KEY = 'SMART_LIGHT_LAYOUT_ZONES'
-const MIN_VISIBLE_SLOTS = 3
+const STORE_SCENE_SIGNATURE = 'boutique-clothing-store'
 
 /** A slot is "visible" (renders a lamp model) unless it's a pure placeholder (no device link, not manual). */
 function isSlotVisible(slot: { boundLampDeviceId?: string | number | ''; sourceDeviceId?: string | number; isManual?: boolean }) {
@@ -367,26 +537,6 @@ function isSlotVisible(slot: { boundLampDeviceId?: string | number | ''; sourceD
   if (slot.boundLampDeviceId) return true
   if (slot.sourceDeviceId) return true
   return false
-}
-
-/** Pad layoutState.lamps with invisible placeholders to reach MIN_VISIBLE_SLOTS total. */
-function ensureMinVisibleSlots(zoneId: string) {
-  while (layoutState.lamps.length < MIN_VISIBLE_SLOTS) {
-    const idx = layoutState.lamps.length
-    const placeholder: LampLayout = {
-      slotId: `placeholder-${zoneId}-${idx}`,
-      order: idx,
-      lampX: getDefaultSlotX(idx, MIN_VISIBLE_SLOTS),
-      targetX: getDefaultSlotX(idx, MIN_VISIBLE_SLOTS),
-      boundLampDeviceId: '',
-      isManual: false,
-      name: '',
-      brightness: 72,
-      temperature: 4000,
-      clothingColor: '#8fb95a',
-    }
-    layoutState.lamps.push(placeholder)
-  }
 }
 
 function loadStoredZoneDefinitions(): StoreZoneLike[] {
@@ -425,8 +575,11 @@ onBeforeUnmount(() => {
 })
 
 // Stop render loop immediately when parent tab switches away
-watch(() => props.active, (isActive) => {
+watch(() => props.active, async (isActive) => {
   if (isActive && !document.hidden) {
+    await nextTick()
+    if (!props.active || document.hidden) return
+    handleResize()
     startRenderLoop()
   } else if (!isActive) {
     stopRenderLoop()
@@ -436,7 +589,7 @@ watch(() => props.active, (isActive) => {
 watch(
   () => props.devices,
   () => {
-    syncActiveZoneIndex()
+    syncRequestedActiveZoneIndex(props.activeZoneId)
     syncActiveZoneLampCount()
     syncDevicesToLayout()
   },
@@ -446,10 +599,26 @@ watch(
 watch(
   () => props.zones,
   () => {
-    syncActiveZoneIndex()
+    const renderedZoneStillExists = !renderedZoneId
+      || zoneOptions.value.some(zone => zone.zoneId === renderedZoneId)
+    syncRequestedActiveZoneIndex(props.activeZoneId)
+    if (renderedZoneStillExists) saveActiveZoneLayout()
     rebuildActiveZoneLayout()
   },
   { deep: true, immediate: true },
+)
+
+watch(
+  () => props.activeZoneId,
+  (zoneId, previousZoneId) => {
+    if (zoneId === undefined || zoneId === previousZoneId) return
+    saveActiveZoneLayout()
+    syncRequestedActiveZoneIndex(zoneId)
+    if (renderedZoneId === activeZone.value.zoneId) return
+    clearSelectedSlot()
+    rebuildActiveZoneLayout()
+    animateCameraTo(cameraViewPresets.display)
+  },
 )
 
 const selectedSlotInfo = computed<SelectionInfo>(() => {
@@ -480,22 +649,24 @@ watch(
 )
 
 function normalizeZones(inputZones: StoreZoneLike[] | undefined): ThreeZoneOption[] {
-  const source = (inputZones && inputZones.length > 0)
-    ? inputZones
-    : loadStoredZoneDefinitions()
-  const deviceZones = createDeviceZoneDefinitions()
-  const normalizedSource = source.length > 0
-    ? source
-    : deviceZones
+  const hasAuthoritativeZones = inputZones !== undefined
+  const storedZones = hasAuthoritativeZones ? inputZones : loadStoredZoneDefinitions()
+  const source = storedZones.length > 0
+    ? storedZones
+    : hasAuthoritativeZones ? [] : createDeviceZoneDefinitions()
+  const seenNames = new Set<string>()
 
-  const zones = normalizedSource
-    .map((zone, index) => ({
+  const zones = source.flatMap((zone, index) => {
+    const zoneName = normalizeZoneName(zone.name)
+    if (zoneName === UNASSIGNED_ZONE_NAME || seenNames.has(zoneName)) return []
+    seenNames.add(zoneName)
+    return [{
       zoneId: String(zone.id || `zone-${index + 1}`),
-      zoneName: String(zone.name || '').trim() || '未命名分区',
-    }))
-    .filter(zone => zone.zoneId)
+      zoneName,
+    }]
+  })
 
-  return zones.length > 0 ? zones : [createDefaultZoneOption()]
+  return [...zones, createDefaultZoneOption()]
 }
 
 function createDeviceZoneDefinitions(): StoreZoneLike[] {
@@ -505,8 +676,8 @@ function createDeviceZoneDefinitions(): StoreZoneLike[] {
   for (const device of props.devices || []) {
     if (!isLayoutLampDevice(device)) continue
 
-    const zoneName = normalizeZoneText(device.displayName)
-    if (!zoneName || zoneName === '未分区' || zoneName === '-') continue
+    const zoneName = normalizeZoneName(device.displayName)
+    if (zoneName === UNASSIGNED_ZONE_NAME) continue
     if (seen.has(zoneName)) continue
 
     seen.add(zoneName)
@@ -521,13 +692,33 @@ function createDeviceZoneDefinitions(): StoreZoneLike[] {
 
 function createDefaultZoneOption(): ThreeZoneOption {
   return {
-    zoneId: 'default-zone',
-    zoneName: '默认展示区',
+    zoneId: 'unassigned-zone',
+    zoneName: UNASSIGNED_ZONE_NAME,
   }
 }
 
+function syncRequestedActiveZoneIndex(controlledZoneId?: string) {
+  if (controlledZoneId === undefined) {
+    syncActiveZoneIndex()
+    return
+  }
+
+  const count = zoneCount.value
+  if (count <= 0) {
+    activeZoneIndex.value = 0
+    return
+  }
+
+  const previousZoneId = renderedZoneId || activeZone.value.zoneId
+  const controlledIndex = zoneOptions.value.findIndex(zone => zone.zoneId === controlledZoneId)
+  activeZoneIndex.value = controlledIndex >= 0
+    ? controlledIndex
+    : clamp(Math.floor(activeZoneIndex.value), 0, count - 1)
+  if (activeZone.value.zoneId !== previousZoneId) clearSelectedSlot()
+}
+
 function syncActiveZoneIndex() {
-  const previousZoneId = activeZone.value.zoneId
+  const previousZoneId = renderedZoneId || activeZone.value.zoneId
   const count = zoneCount.value
   if (count <= 0) {
     activeZoneIndex.value = 0
@@ -541,6 +732,11 @@ function syncActiveZoneIndex() {
       activeZoneIndex.value = storedIndex
     }
     hasRestoredActiveZone = true
+  } else {
+    const previousIndex = zoneOptions.value.findIndex(zone => zone.zoneId === previousZoneId)
+    if (previousIndex >= 0) {
+      activeZoneIndex.value = previousIndex
+    }
   }
 
   activeZoneIndex.value = clamp(Math.floor(activeZoneIndex.value), 0, count - 1)
@@ -553,10 +749,39 @@ function switchZone(direction: -1 | 1) {
   if (zoneCount.value <= 1 || dragState) return
 
   saveActiveZoneLayout()
-  activeZoneIndex.value = (activeZoneIndex.value + direction + zoneCount.value) % zoneCount.value
+  const nextIndex = (activeZoneIndex.value + direction + zoneCount.value) % zoneCount.value
+  const nextZone = zoneOptions.value[nextIndex]
+  emit('update:activeZoneId', nextZone.zoneId)
+  if (props.activeZoneId !== undefined) return
+
+  activeZoneIndex.value = nextIndex
   clearSelectedSlot()
   rebuildActiveZoneLayout()
   animateCameraTo(cameraViewPresets.display)
+}
+
+function submitZoneAdd() {
+  if (zoneAddDisabled.value) return
+  emit('zone-add', normalizedNewZoneName.value)
+  newZoneName.value = ''
+}
+
+function requestActiveZoneDelete() {
+  if (!canDeleteActiveZone.value) return
+  emit('zone-delete', {
+    zoneId: activeZone.value.zoneId,
+    zoneName: activeZone.value.zoneName,
+  })
+}
+
+function requestZoneMove(direction: -1 | 1) {
+  const canMove = direction === -1 ? canMoveActiveZoneLeft.value : canMoveActiveZoneRight.value
+  if (!canMove) return
+  emit('zone-move', {
+    zoneId: activeZone.value.zoneId,
+    zoneName: activeZone.value.zoneName,
+    direction,
+  })
 }
 
 function rebuildActiveZoneLayout() {
@@ -579,11 +804,11 @@ function rebuildActiveZoneLayout() {
     return {
       ...mock,
       ...slot,
+      garments: mock.garments.map(garment => ({ ...garment })),
       name: slot.isManual ? `${zone.zoneName} · 未绑定灯位` : `${zone.zoneName} · 灯具-${index + 1}`,
     }
   })
-
-  ensureMinVisibleSlots(zone.zoneId)
+  renderedZoneId = zone.zoneId
 
   if (!layoutState.lamps.some(lamp => lamp.slotId === selectedSlotId.value)) {
     clearSelectedSlot()
@@ -596,50 +821,58 @@ function rebuildActiveZoneLayout() {
 }
 
 function buildZoneSlots(stored: StoredZoneLayout | undefined, zoneLampDevices: DeviceLike[]) {
-  const currentDeviceIds = getDeviceIdSet(zoneLampDevices)
   const storedSlots = normalizeStoredSlots(stored, zoneLampDevices)
-    .filter(slot => shouldKeepStoredSlot(slot, currentDeviceIds))
-  const manualSlots = storedSlots.filter(slot => slot.isManual)
+    .sort((left, right) => left.order - right.order)
   const deviceSlots: ZoneSlot[] = []
 
   zoneLampDevices.forEach((device, index) => {
     const sourceDeviceId = getDeviceId(device)
     const slotId = `device-${sourceDeviceId || index + 1}`
-    const existing = findStoredSlotForDevice(storedSlots, device, slotId)
-    const order = existing?.order ?? index
     const fallbackX = getDefaultSlotX(index, Math.max(zoneLampDevices.length, 1))
 
     deviceSlots.push({
       slotId,
-      order,
-      lampX: existing?.lampX ?? fallbackX,
-      targetX: existing?.targetX ?? fallbackX,
-      boundLampDeviceId: existing?.boundLampDeviceId || '',
+      order: index,
+      lampX: fallbackX,
+      targetX: fallbackX,
+      boundLampDeviceId: '',
       sourceDeviceId,
       isManual: false,
     })
   })
 
-  if (zoneLampDevices.length === 0 && deviceSlots.length === 0) {
-    const slotId = 'mock-fallback'
-    deviceSlots.push({
-      slotId,
-      order: 0,
-      lampX: 0,
-      targetX: 0,
-      boundLampDeviceId: '',
-      isManual: false,
-    })
+  return mergeDeviceSlotsWithManualOrder(deviceSlots, storedSlots)
+}
+
+function mergeDeviceSlotsWithManualOrder(deviceSlots: ZoneSlot[], storedSlots: ZoneSlot[]) {
+  const mergedSlots: ZoneSlot[] = []
+  let deviceIndex = 0
+
+  for (const storedSlot of storedSlots) {
+    if (storedSlot.isManual) {
+      mergedSlots.push(storedSlot)
+      continue
+    }
+
+    const deviceSlot = deviceSlots[deviceIndex]
+    if (!deviceSlot) continue
+    mergedSlots.push(deviceSlot)
+    deviceIndex += 1
   }
 
-  return [...deviceSlots, ...manualSlots]
-    .sort((a, b) => a.order - b.order)
-    .map((slot, index, list) => ({
+  mergedSlots.push(...deviceSlots.slice(deviceIndex))
+
+  return mergedSlots.map((slot, index, slots) => {
+    if (slot.isManual) return { ...slot, order: index }
+
+    const fallbackX = getDefaultSlotX(index, slots.length)
+    return {
       ...slot,
       order: index,
-      lampX: resolveFiniteNumber(slot.lampX, getDefaultSlotX(index, list.length)),
-      targetX: resolveFiniteNumber(slot.targetX, getDefaultSlotX(index, list.length)),
-    }))
+      lampX: fallbackX,
+      targetX: fallbackX,
+    }
+  })
 }
 
 function normalizeStoredSlots(stored: StoredZoneLayout | undefined, zoneLampDevices: DeviceLike[]): ZoneSlot[] {
@@ -679,47 +912,6 @@ function normalizeStoredSlots(stored: StoredZoneLayout | undefined, zoneLampDevi
   return []
 }
 
-function getDeviceIdSet(devices: DeviceLike[]) {
-  const ids = new Set<string>()
-  devices.forEach((device) => {
-    addDeviceId(ids, device.id)
-    addDeviceId(ids, device.chipId)
-    addDeviceId(ids, getDeviceId(device))
-  })
-  return ids
-}
-
-function addDeviceId(ids: Set<string>, value: unknown) {
-  if (value === undefined || value === null || value === '') return
-  ids.add(String(value))
-}
-
-function shouldKeepStoredSlot(slot: ZoneSlot, currentDeviceIds: Set<string>) {
-  if (slot.isManual) return true
-  if (hasStoredDeviceMatch(slot.sourceDeviceId, currentDeviceIds)) return true
-  if (hasStoredDeviceMatch(slot.boundLampDeviceId, currentDeviceIds)) return true
-  return false
-}
-
-function hasStoredDeviceMatch(value: string | number | undefined, currentDeviceIds: Set<string>) {
-  if (value === undefined || value === null || value === '') return false
-  return currentDeviceIds.has(String(value))
-}
-
-function findStoredSlotForDevice(storedSlots: ZoneSlot[], device: DeviceLike, slotId: string) {
-  return storedSlots.find(slot =>
-    slot.slotId === slotId ||
-    isStoredSlotLinkedToDevice(slot, device),
-  )
-}
-
-function isStoredSlotLinkedToDevice(slot: ZoneSlot, device: DeviceLike) {
-  return Boolean(
-    (slot.sourceDeviceId && isSameDeviceId(device, slot.sourceDeviceId)) ||
-    (slot.boundLampDeviceId && isSameDeviceId(device, slot.boundLampDeviceId)),
-  )
-}
-
 function getDefaultTrackLayout(): TrackLayout {
   return {
     startX: -3.2,
@@ -737,44 +929,33 @@ function getDefaultSlotX(index: number, count: number) {
 }
 
 function getLampDevicesForZone(zoneName: string) {
-  const normalizedZoneName = normalizeZoneText(zoneName)
-  if (!normalizedZoneName) return []
+  const normalizedZoneName = normalizeZoneName(zoneName)
 
   const lamps = (props.devices || []).filter(isLayoutLampDevice)
-  return lamps.filter(device => normalizeZoneText(device.displayName) === normalizedZoneName)
-}
-
-function normalizeZoneText(value: unknown) {
-  return String(value || '').trim()
+  return sortDevicesByNumber(
+    lamps.filter(device => normalizeZoneName(device.displayName) === normalizedZoneName),
+  )
 }
 
 function getStoredLayouts() {
-  if (cachedStoredLayouts) return cachedStoredLayouts
-
   try {
     const raw = localStorage.getItem(ZONE_LAYOUT_STORAGE_KEY)
     const defaultValue = { version: 1, activeZoneId: '', zoneLayouts: {} as Record<string, StoredZoneLayout> }
-    if (!raw) {
-      cachedStoredLayouts = defaultValue
-      return cachedStoredLayouts
-    }
+    if (!raw) return defaultValue
     const parsed = JSON.parse(raw)
     if (parsed?.version === 1 && parsed.zoneLayouts && typeof parsed.zoneLayouts === 'object') {
-      cachedStoredLayouts = {
+      return {
         version: 1,
         activeZoneId: String(parsed.activeZoneId || ''),
         zoneLayouts: parsed.zoneLayouts as Record<string, StoredZoneLayout>,
       }
-      return cachedStoredLayouts
     }
-    cachedStoredLayouts = defaultValue
-    return cachedStoredLayouts
+    return defaultValue
   } catch (error) {
     console.warn('3D 分区布局读取失败', error)
   }
 
-  cachedStoredLayouts = { version: 1, activeZoneId: '', zoneLayouts: {} as Record<string, StoredZoneLayout> }
-  return cachedStoredLayouts
+  return { version: 1, activeZoneId: '', zoneLayouts: {} as Record<string, StoredZoneLayout> }
 }
 
 function getStoredZoneLayout(zoneId: string) {
@@ -782,10 +963,16 @@ function getStoredZoneLayout(zoneId: string) {
 }
 
 function saveActiveZoneLayout() {
-  const zone = activeZone.value
+  if (!renderedZoneId) return
+  if (
+    typeof zonesAreAuthoritative !== 'undefined'
+    && zonesAreAuthoritative.value
+    && !zoneOptions.value.some(zone => zone.zoneId === renderedZoneId)
+  ) return
+
   const stored = getStoredLayouts()
-  stored.activeZoneId = zone.zoneId
-  stored.zoneLayouts[zone.zoneId] = {
+  stored.activeZoneId = activeZone.value.zoneId
+  stored.zoneLayouts[renderedZoneId] = {
     track: { ...layoutState.track },
     slots: layoutState.lamps
       .filter(isSlotVisible)
@@ -800,18 +987,16 @@ function saveActiveZoneLayout() {
       })),
   }
   localStorage.setItem(ZONE_LAYOUT_STORAGE_KEY, JSON.stringify(stored))
-  cachedStoredLayouts = stored
 }
 
 function syncLampObjectsWithState() {
   if (!scene) return
 
+  const disposedGeometries = new Set<THREE.BufferGeometry>()
+  const disposedMaterials = new Set<THREE.Material>()
   for (const objects of lampObjects.values()) {
-    scene.remove(objects.group, objects.spot, objects.spotTarget, objects.shirt, objects.beam)
-    disposeObject(objects.group)
-    disposeObject(objects.shirt)
-    objects.beam.geometry.dispose()
-    disposeMaterial(objects.beam.material)
+    scene.remove(objects.group, objects.spot, objects.spotTarget, objects.garmentDisplay, objects.beam)
+    disposeLampObjects(objects, disposedGeometries, disposedMaterials)
   }
   lampObjects.clear()
   removeLampPickables()
@@ -820,11 +1005,21 @@ function syncLampObjectsWithState() {
     if (!isSlotVisible(lamp)) continue
     const objects = createLampObjects(lamp)
     lampObjects.set(lamp.slotId, objects)
-    scene.add(objects.group, objects.spot, objects.spotTarget, objects.shirt)
+    scene.add(objects.group, objects.spot, objects.spotTarget, objects.garmentDisplay)
+  }
+
+  updateSpotShadowBudget()
+}
+
+function updateSpotShadowBudget() {
+  const shadowIds = selectSpotShadowSlotIds(layoutState.lamps, selectedSlotId.value)
+  for (const [slotId, objects] of lampObjects) {
+    objects.spot.castShadow = shadowIds.has(slotId)
   }
 }
 
 function syncActiveZoneLampCount() {
+  const hasActiveZoneChanged = renderedZoneId !== '' && renderedZoneId !== activeZone.value.zoneId
   const zoneLampDevices = getLampDevicesForZone(activeZone.value.zoneName)
   const deviceSlotIds = zoneLampDevices
     .map(device => `device-${getDeviceId(device)}`)
@@ -835,12 +1030,12 @@ function syncActiveZoneLampCount() {
     .filter(lamp => !lamp.isManual)
     .map(lamp => lamp.slotId)
   const hasNewDeviceSlot = deviceSlotIds.some(slotId => !existingSlotIds.has(slotId))
-  const hasStaleDeviceSlot = existingDeviceSlotIds.some((slotId) => {
-    if (zoneLampDevices.length === 0) return slotId !== 'mock-fallback'
-    return !expectedSlotIds.has(slotId)
-  })
+  const hasStaleDeviceSlot = existingDeviceSlotIds.some(slotId => !expectedSlotIds.has(slotId))
+  const hasDeviceOrderChanged = deviceSlotIds.some(
+    (slotId, index) => existingDeviceSlotIds[index] !== slotId,
+  )
 
-  if (!hasNewDeviceSlot && !hasStaleDeviceSlot) return
+  if (!hasActiveZoneChanged && !hasNewDeviceSlot && !hasStaleDeviceSlot && !hasDeviceOrderChanged) return
 
   saveActiveZoneLayout()
   rebuildActiveZoneLayout()
@@ -866,9 +1061,9 @@ function addManualSlot() {
     deviceId: undefined,
     chipId: undefined,
     name: `${activeZone.value.zoneName} · 未绑定灯位`,
+    garments: mock.garments.map(garment => ({ ...garment })),
   })
 
-  ensureMinVisibleSlots(activeZone.value.zoneId)
   arrangeSlotsEvenly()
   selectSlot(slotId)
   syncLampObjectsWithState()
@@ -879,6 +1074,7 @@ function addManualSlot() {
 function selectSlot(slotId: string) {
   selectedSlotId.value = slotId
   updateLayoutVisuals()
+  updateSpotShadowBudget()
   silentLocateSlot(slotId)
 }
 
@@ -899,6 +1095,7 @@ async function silentLocateSlot(slotId: string) {
 function clearSelectedSlot() {
   selectedSlotId.value = ''
   updateLayoutVisuals()
+  updateSpotShadowBudget()
 }
 
 function isDeletableSlot(slot: LampLayout | null) {
@@ -913,33 +1110,14 @@ function deleteSelectedSlot() {
   layoutState.lamps = layoutState.lamps.filter(slot => slot.slotId !== slotId)
   clearSelectedSlot()
 
-  if (layoutState.lamps.length === 0) {
-    const mock = mockLampLayouts[0]
-    layoutState.lamps = [{
-      ...mock,
-      slotId: 'mock-fallback',
-      order: 0,
-      lampX: 0,
-      targetX: 0,
-      boundLampDeviceId: '',
-      sourceDeviceId: '',
-      isManual: false,
-      deviceId: undefined,
-      chipId: undefined,
-      name: `${activeZone.value.zoneName} · 未绑定灯位`,
-    }]
-  } else {
-    applySlotOrderLayout()
-  }
-
-  ensureMinVisibleSlots(activeZone.value.zoneId)
+  applySlotOrderLayout()
   syncLampObjectsWithState()
   updateLayoutVisuals()
   saveActiveZoneLayout()
 }
 
 function moveSelectedSlot(direction: -1 | 1) {
-  if (!selectedSlotId.value || !selectedSlot.value) return
+  if (!selectedSlotId.value || !selectedSlot.value || props.zoneManagementPending) return
 
   const next = [...layoutState.lamps].sort((a, b) => a.order - b.order)
   const index = next.findIndex(slot => slot.slotId === selectedSlotId.value)
@@ -947,10 +1125,23 @@ function moveSelectedSlot(direction: -1 | 1) {
   if (index < 0 || targetIndex < 0 || targetIndex >= layoutState.lamps.length) return
 
   const current = next[index]
+  const target = next[targetIndex]
+  if (isRealDeviceSlot(current) && isRealDeviceSlot(target)) {
+    emit('swap-device-numbers', {
+      firstDeviceId: current.deviceId ?? current.sourceDeviceId!,
+      secondDeviceId: target.deviceId ?? target.sourceDeviceId!,
+    })
+    return
+  }
+
   next[index] = next[targetIndex]
   next[targetIndex] = current
   layoutState.lamps = next
   applySlotOrderLayout()
+}
+
+function isRealDeviceSlot(slot: LampLayout) {
+  return !slot.isManual && Boolean(slot.deviceId ?? slot.sourceDeviceId)
 }
 
 function applySlotOrderLayout() {
@@ -962,6 +1153,7 @@ function applySlotOrderLayout() {
     slot.targetX = x
   })
   updateLayoutVisuals()
+  updateSpotShadowBudget()
   saveActiveZoneLayout()
 }
 
@@ -982,13 +1174,31 @@ function removeLampPickables() {
   }
 }
 
-function disposeObject(object: THREE.Object3D) {
+function disposeObject(
+  object: THREE.Object3D,
+  disposedGeometries = new Set<THREE.BufferGeometry>(),
+  disposedMaterials = new Set<THREE.Material>(),
+) {
   object.traverse((child) => {
     if (child instanceof THREE.Mesh) {
-      child.geometry?.dispose()
-      disposeMaterial(child.material)
+      if (!disposedGeometries.has(child.geometry)) {
+        disposedGeometries.add(child.geometry)
+        child.geometry.dispose()
+      }
+      disposeMaterial(child.material, disposedMaterials)
     }
   })
+}
+
+function disposeLampObjects(
+  objects: LampObjects,
+  disposedGeometries = new Set<THREE.BufferGeometry>(),
+  disposedMaterials = new Set<THREE.Material>(),
+) {
+  disposeObject(objects.group, disposedGeometries, disposedMaterials)
+  disposeGarmentDisplay(objects.garmentDisplay)
+  disposeObject(objects.beam, disposedGeometries, disposedMaterials)
+  objects.spot.dispose()
 }
 
 function initThreeScene() {
@@ -996,18 +1206,30 @@ function initThreeScene() {
   if (!host) return
 
   scene = new THREE.Scene()
-  scene.background = new THREE.Color('#eef4fb')
-  scene.fog = new THREE.Fog('#eef4fb', 7, 16)
+  scene.userData.signature = STORE_SCENE_SIGNATURE
+  scene.background = new THREE.Color('#b7b1aa')
+  scene.fog = new THREE.Fog('#b7b1aa', 7, 16)
 
   camera = new THREE.PerspectiveCamera(42, host.clientWidth / host.clientHeight, 0.1, 100)
   camera.position.copy(cameraViewPresets.display.position)
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 0.92
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   renderer.setSize(host.clientWidth, host.clientHeight)
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   host.appendChild(renderer.domElement)
+
+  pmremGenerator = new THREE.PMREMGenerator(renderer)
+  const roomEnvironment = new RoomEnvironment()
+  environmentRenderTarget = pmremGenerator.fromScene(roomEnvironment, 0.04)
+  roomEnvironment.dispose()
+  scene.environment = environmentRenderTarget.texture
+  scene.environmentIntensity = 0.25
+  requireBoutiqueMaterials()
 
   controls = new OrbitControls(camera, renderer.domElement)
   controls.enableDamping = true
@@ -1027,6 +1249,8 @@ function initThreeScene() {
   createCameraNode()
   updateLayoutVisuals()
 
+  startBoutiqueTextureLoad(renderer)
+
   renderer.domElement.addEventListener('pointerdown', handlePointerDown)
   window.addEventListener('pointermove', handlePointerMove)
   window.addEventListener('pointerup', handlePointerUp)
@@ -1036,214 +1260,200 @@ function initThreeScene() {
   if (props.active && !document.hidden) startRenderLoop()
 }
 
+function startBoutiqueTextureLoad(renderer: THREE.WebGLRenderer) {
+  boutiqueTextureLoadCoordinator = createBoutiqueTextureLoadCoordinator({
+    loader: () => loadBoutiqueTextures(renderer.capabilities.getMaxAnisotropy()),
+    getLibrary: () => boutiqueMaterials,
+    warn: error => console.warn('[three-boutique] texture loading failed', error),
+  })
+  void boutiqueTextureLoadCoordinator.start()
+}
+
 function createStoreSpace() {
   if (!scene) return
 
-  const ambient = new THREE.HemisphereLight('#fafcff', '#d8c5ad', 1.55)
-  scene.add(ambient)
+  createBoutiqueFloor()
+  createClothingDisplayWall()
+  createWarmRetailLighting()
+}
 
-  const fill = new THREE.DirectionalLight('#ffffff', 0.52)
-  fill.position.set(-3.2, 4.8, 4.1)
-  fill.castShadow = true
-  scene.add(fill)
+function createBoutiqueFloor() {
+  if (!scene || !boutiqueMaterials) return
+
+  const foundation = new THREE.Mesh(
+    new THREE.BoxGeometry(8.9, 0.1, 6.1),
+    new THREE.MeshStandardMaterial({ color: '#4d3327', roughness: 0.72 }),
+  )
+  foundation.position.set(0, -0.07, 0.35)
+  foundation.receiveShadow = true
 
   const floor = new THREE.Mesh(
-    new THREE.BoxGeometry(8.9, 0.08, 6.1),
-    new THREE.MeshStandardMaterial({ color: '#d9c9b8', roughness: 0.7 }),
+    new THREE.PlaneGeometry(8.84, 6.02, 1, 1),
+    boutiqueMaterials.floor,
   )
-  floor.position.set(0, -0.04, 0.35)
+  floor.rotation.x = -Math.PI / 2
+  floor.position.set(0, -0.012, 0.35)
   floor.receiveShadow = true
-  scene.add(floor)
 
-  const floorInset = new THREE.Mesh(
-    new THREE.BoxGeometry(7.75, 0.012, 4.45),
-    new THREE.MeshStandardMaterial({ color: '#ecdecc', roughness: 0.82 }),
+  const rearThreshold = new THREE.Mesh(
+    new THREE.BoxGeometry(8.9, 0.035, 0.08),
+    boutiqueMaterials.darkMetal,
   )
-  floorInset.position.set(0, 0.012, 0.42)
-  floorInset.receiveShadow = true
-  scene.add(floorInset)
+  rearThreshold.position.set(0, 0.018, -2.65)
+  rearThreshold.castShadow = true
+  scene.add(foundation, floor, rearThreshold)
+}
 
+function createClothingDisplayWall() {
+  if (!scene || !boutiqueMaterials) return
 
-  const seamMaterial = new THREE.MeshBasicMaterial({ color: '#a18e78', transparent: true, opacity: 0.1 })
-  for (const z of [-1.85, -1.05, -0.25, 0.55, 1.35, 2.15]) {
-    const seam = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.009, 0.007), seamMaterial)
-    seam.position.set(0, 0.03, z)
-    scene.add(seam)
-  }
-  for (const x of [-3.0, -2.0, -1.0, 0, 1.0, 2.0, 3.0]) {
-    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.007, 0.009, 4.28), seamMaterial)
-    seam.position.set(x, 0.031, 0.42)
-    scene.add(seam)
-  }
-
-  const floorWashMaterial = new THREE.MeshBasicMaterial({ color: '#fff6e8', transparent: true, opacity: 0.055 })
-  const floorWash = new THREE.Mesh(new THREE.BoxGeometry(7.15, 0.006, 3.6), floorWashMaterial)
-  floorWash.position.set(0.15, 0.038, 0.34)
-  scene.add(floorWash)
-
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: '#f2eee8', roughness: 0.86 })
-  const backWall = new THREE.Mesh(new THREE.BoxGeometry(8.9, 3.6, 0.1), wallMaterial)
-  backWall.position.set(0, 1.8, displayWallZ - 0.055)
-  backWall.receiveShadow = true
-  scene.add(backWall)
-
-  const ceilingStrip = new THREE.Mesh(
-    new THREE.BoxGeometry(8.05, 0.08, 0.05),
-    new THREE.MeshStandardMaterial({ color: '#fffaf2', roughness: 0.72 }),
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(8.9, 3.7, 0.12),
+    boutiqueMaterials.wall,
   )
-  ceilingStrip.position.set(0, 2.72, displayWallZ + 0.03)
-  scene.add(ceilingStrip)
+  wall.position.set(0, 1.85, displayWallZ - 0.07)
+  wall.receiveShadow = true
+  scene.add(wall)
 
-  const coveShadow = new THREE.Mesh(
-    new THREE.BoxGeometry(8.05, 0.018, 0.04),
-    new THREE.MeshBasicMaterial({ color: '#d6c7b8', transparent: true, opacity: 0.2 }),
-  )
-  coveShadow.position.set(0, 2.62, displayWallZ + 0.065)
-  scene.add(coveShadow)
-
-  const wallLineMaterial = new THREE.MeshBasicMaterial({ color: '#d7c8b8', transparent: true, opacity: 0.24 })
-  for (const x of [-3.35, -1.12, 1.12, 3.35]) {
-    const divider = new THREE.Mesh(new THREE.BoxGeometry(0.018, 2.42, 0.026), wallLineMaterial)
-    divider.position.set(x, 1.47, displayWallZ + 0.025)
-    scene.add(divider)
+  for (const x of [-4.45, 4.45]) {
+    const sideWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 3.35, 5.7),
+      boutiqueMaterials.wall,
+    )
+    sideWall.position.set(x, 1.675, 0.18)
+    sideWall.receiveShadow = true
+    scene.add(sideWall)
   }
 
-  const panelMaterial = new THREE.MeshStandardMaterial({ color: '#fff8ef', roughness: 0.74 })
-  const panelBorderMaterial = new THREE.MeshStandardMaterial({ color: '#dcc9b3', roughness: 0.64, metalness: 0.03 })
-  const rackMaterial = new THREE.MeshStandardMaterial({ color: '#7b8794', roughness: 0.36, metalness: 0.46 })
-  const displayXs = [-2.25, 0, 2.25]
+  const ceilingReveal = new THREE.Mesh(
+    new THREE.BoxGeometry(8.1, 0.11, 0.22),
+    boutiqueMaterials.coveGlow,
+  )
+  ceilingReveal.position.set(0, 2.78, displayWallZ + 0.08)
+  scene.add(ceilingReveal)
 
-  for (const x of displayXs) {
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.65, 1.85, 0.04), panelMaterial)
-    panel.position.set(x, 1.45, displayWallZ + 0.04)
+  for (const x of [-2.25, 0, 2.25]) {
+    const panel = new THREE.Mesh(
+      new THREE.BoxGeometry(1.78, 2.02, 0.045),
+      boutiqueMaterials.wallInset,
+    )
+    panel.position.set(x, 1.5, displayWallZ + 0.035)
     panel.receiveShadow = true
-    scene.add(panel)
 
-    const topBorder = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.035, 0.035), panelBorderMaterial)
-    topBorder.position.set(x, 2.39, displayWallZ + 0.072)
-    topBorder.castShadow = true
-    scene.add(topBorder)
-
-    const labelPlate = new THREE.Mesh(
-      new THREE.BoxGeometry(0.58, 0.105, 0.026),
-      new THREE.MeshStandardMaterial({ color: '#efe3d3', roughness: 0.7 }),
+    const topFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(1.86, 0.045, 0.055),
+      boutiqueMaterials.champagneMetal,
     )
-    labelPlate.position.set(x, 2.2, displayWallZ + 0.086)
-    scene.add(labelPlate)
+    topFrame.position.set(x, 2.53, displayWallZ + 0.074)
+    topFrame.castShadow = true
+    const bottomFrame = topFrame.clone()
+    bottomFrame.position.y = 0.47
 
-    const accentLine = new THREE.Mesh(
-      new THREE.BoxGeometry(1.08, 0.018, 0.02),
-      new THREE.MeshBasicMaterial({ color: '#c7a987', transparent: true, opacity: 0.34 }),
+    const leftFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(0.045, 2.105, 0.055),
+      boutiqueMaterials.champagneMetal,
     )
-    accentLine.position.set(x, 2.115, displayWallZ + 0.092)
-    scene.add(accentLine)
+    leftFrame.position.set(x - 0.91, 1.5, displayWallZ + 0.074)
+    leftFrame.castShadow = true
+    const rightFrame = leftFrame.clone()
+    rightFrame.position.x = x + 0.91
 
-    const bottomBorder = topBorder.clone()
-    bottomBorder.position.y = 0.51
-    scene.add(bottomBorder)
-
-    for (const sideX of [-0.86, 0.86]) {
-      const sideBorder = new THREE.Mesh(new THREE.BoxGeometry(0.032, 1.84, 0.034), panelBorderMaterial)
-      sideBorder.position.set(x + sideX, 1.45, displayWallZ + 0.072)
-      sideBorder.castShadow = true
-      scene.add(sideBorder)
-    }
-
-    const rack = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 1.18, 18), rackMaterial)
-    rack.position.set(x, 1.92, displayWallZ + 0.16)
-    rack.rotation.z = Math.PI / 2
-    rack.castShadow = true
-    scene.add(rack)
-
-    const hangerHook = new THREE.Mesh(new THREE.TorusGeometry(0.082, 0.009, 8, 20, Math.PI), rackMaterial)
-    hangerHook.position.set(x, 1.84, displayWallZ + 0.18)
-    hangerHook.rotation.x = Math.PI / 2
-    hangerHook.castShadow = true
-    scene.add(hangerHook)
-  }
-
-  const sideWallMaterial = new THREE.MeshStandardMaterial({ color: '#eee4da', roughness: 0.88 })
-  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.25, 5.65), sideWallMaterial)
-  leftWall.position.set(-4.45, 1.62, 0.2)
-  leftWall.receiveShadow = true
-  scene.add(leftWall)
-
-  const rightWall = leftWall.clone()
-  rightWall.position.x = 4.45
-  scene.add(rightWall)
-
-
-  const cabinetMaterial = new THREE.MeshStandardMaterial({ color: '#c4ad91', roughness: 0.72 })
-  const cabinet = new THREE.Mesh(new THREE.BoxGeometry(7.1, 0.38, 0.42), cabinetMaterial)
-  cabinet.position.set(0, 0.19, displayWallZ + 0.36)
-  cabinet.castShadow = true
-  cabinet.receiveShadow = true
-  scene.add(cabinet)
-
-  const cabinetTop = new THREE.Mesh(
-    new THREE.BoxGeometry(7.18, 0.045, 0.46),
-    new THREE.MeshStandardMaterial({ color: '#dac7ad', roughness: 0.68 }),
-  )
-  cabinetTop.position.set(0, 0.405, displayWallZ + 0.36)
-  cabinetTop.castShadow = true
-  scene.add(cabinetTop)
-
-  const drawerLineMaterial = new THREE.MeshBasicMaterial({ color: '#8f765d', transparent: true, opacity: 0.2 })
-  const cabinetEdgeMaterial = new THREE.MeshBasicMaterial({ color: '#f0dcc0', transparent: true, opacity: 0.28 })
-  const cabinetShadowMaterial = new THREE.MeshBasicMaterial({ color: '#7d6045', transparent: true, opacity: 0.16 })
-
-  const topEdge = new THREE.Mesh(new THREE.BoxGeometry(7.05, 0.018, 0.012), cabinetEdgeMaterial)
-  topEdge.position.set(0, 0.398, displayWallZ + 0.59)
-  scene.add(topEdge)
-
-  const bottomShadow = new THREE.Mesh(new THREE.BoxGeometry(7.05, 0.022, 0.012), cabinetShadowMaterial)
-  bottomShadow.position.set(0, 0.02, displayWallZ + 0.585)
-  scene.add(bottomShadow)
-
-  const horizontalDrawerLine = new THREE.Mesh(new THREE.BoxGeometry(6.85, 0.014, 0.012), drawerLineMaterial)
-  horizontalDrawerLine.position.set(0, 0.215, displayWallZ + 0.575)
-  scene.add(horizontalDrawerLine)
-
-  for (const y of [0.12, 0.31]) {
-    const woodLine = new THREE.Mesh(
-      new THREE.BoxGeometry(6.72, 0.008, 0.01),
-      new THREE.MeshBasicMaterial({ color: '#9a8066', transparent: true, opacity: 0.12 }),
+    const rail = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.026, 0.026, 1.34, 20),
+      boutiqueMaterials.darkMetal,
     )
-    woodLine.position.set(0, y, displayWallZ + 0.578)
-    scene.add(woodLine)
-  }
+    rail.position.set(x, GARMENT_DISPLAY_METRICS.railWorldY, displayWallZ + 0.14)
+    rail.rotation.z = Math.PI / 2
+    rail.castShadow = true
 
-  for (const x of [-2.35, 0, 2.35]) {
-    const drawerLine = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.24, 0.012), drawerLineMaterial)
-    drawerLine.position.set(x, 0.19, displayWallZ + 0.574)
-    scene.add(drawerLine)
+    const leftBracket = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.06, 0.1),
+      boutiqueMaterials.darkMetal,
+    )
+    leftBracket.position.set(x - 0.67, 1.98, displayWallZ + 0.085)
+    const rightBracket = leftBracket.clone()
+    rightBracket.position.x = x + 0.67
+
+    const plinth = new THREE.Mesh(
+      new THREE.BoxGeometry(1.5, 0.18, 0.32),
+      boutiqueMaterials.plinthWood,
+    )
+    plinth.position.set(x, 0.34, displayWallZ + 0.2)
+    plinth.castShadow = true
+    plinth.receiveShadow = true
+
+    const plinthTop = new THREE.Mesh(
+      new THREE.BoxGeometry(1.56, 0.018, 0.36),
+      boutiqueMaterials.champagneMetal,
+    )
+    plinthTop.position.set(
+      x,
+      GARMENT_DISPLAY_METRICS.plinthTopWorldY - 0.018 / 2,
+      displayWallZ + 0.2,
+    )
+    plinthTop.castShadow = true
+
+    scene.add(
+      panel,
+      topFrame,
+      bottomFrame,
+      leftFrame,
+      rightFrame,
+      rail,
+      leftBracket,
+      rightBracket,
+      plinth,
+      plinthTop,
+    )
   }
+}
+
+function createWarmRetailLighting() {
+  if (!scene) return
+
+  const ambient = new THREE.HemisphereLight('#fff8ec', '#5e4a3e', 0.58)
+  const key = new THREE.DirectionalLight('#fff0d4', 0.46)
+  key.position.set(-3.8, 4.8, 3.2)
+  key.castShadow = true
+  key.shadow.mapSize.set(2048, 2048)
+  key.shadow.camera.left = -5
+  key.shadow.camera.right = 5
+  key.shadow.camera.top = 4
+  key.shadow.camera.bottom = -1
+
+  const neutralFill = new THREE.AmbientLight('#d8dcde', 0.55)
+  neutralFill.castShadow = false
+  scene.add(ambient, key, neutralFill)
+}
+
+function requireBoutiqueMaterials() {
+  boutiqueMaterials ??= createBoutiqueMaterialLibrary()
+  return boutiqueMaterials
+}
+
+function createOwnedGarmentMaterial(color: THREE.ColorRepresentation) {
+  const materials = requireBoutiqueMaterials()
+  const material = materials.createFabricMaterial(color)
+  material.userData.releaseGarmentMaterial = () => materials.releaseMaterial(material)
+  return material
 }
 
 function createTrack() {
   if (!scene) return
+  const materials = requireBoutiqueMaterials()
 
-  railMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 0.1, 0.18),
-    new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.42, metalness: 0.28 }),
-  )
+  railMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 0.18), materials.darkMetal)
   railMesh.castShadow = true
   scene.add(railMesh)
 
-  railGrooveMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 0.024, 0.19),
-    new THREE.MeshStandardMaterial({ color: '#172033', roughness: 0.36, metalness: 0.42 }),
-  )
+  railGrooveMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.024, 0.19), materials.darkMetal)
   railGrooveMesh.castShadow = true
   scene.add(railGrooveMesh)
 
-  railHighlightMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 0.014, 0.028),
-    new THREE.MeshBasicMaterial({ color: '#93a4b8', transparent: true, opacity: 0.42 }),
-  )
+  railHighlightMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.014, 0.028), materials.champagneMetal)
   scene.add(railHighlightMesh)
 
-  const supportMaterial = new THREE.MeshStandardMaterial({ color: '#6b7280', roughness: 0.42, metalness: 0.32 })
+  const supportMaterial = materials.darkMetal
   for (let index = 0; index < 3; index += 1) {
     const support = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.46, 12), supportMaterial)
     support.castShadow = true
@@ -1266,26 +1476,24 @@ function createTrack() {
 function createMockLamps() {
   if (!scene) return
   for (const lamp of layoutState.lamps) {
+    if (!isSlotVisible(lamp)) continue
     const objects = createLampObjects(lamp)
     lampObjects.set(lamp.slotId, objects)
-    scene.add(objects.group, objects.spot, objects.spotTarget, objects.shirt)
+    scene.add(objects.group, objects.spot, objects.spotTarget, objects.garmentDisplay)
   }
+  updateSpotShadowBudget()
 }
 
-const sharedMountMaterial = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.38, metalness: 0.34 })
-const sharedHingeMaterial = new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.42, metalness: 0.42 })
-const sharedDarkMetalMaterial = new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.55, metalness: 0.48 })
-const sharedRimMaterial = new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.3, metalness: 0.55 })
-
 function createLampObjects(lamp: LampLayout): LampObjects {
+  const materials = requireBoutiqueMaterials()
   const group = new THREE.Group()
   group.userData.dragType = 'lamp'
   group.userData.lampId = lamp.slotId
 
-  const mountMaterial = sharedMountMaterial
-  const hingeMaterial = sharedHingeMaterial
-  const darkMetalMaterial = sharedDarkMetalMaterial
-  const rimMaterial = sharedRimMaterial
+  const mountMaterial = materials.darkMetal
+  const hingeMaterial = materials.darkMetal
+  const darkMetalMaterial = materials.darkMetal
+  const rimMaterial = materials.champagneMetal
 
   const mount = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.15, 0.36), mountMaterial)
   mount.position.set(0, -0.11, 0)
@@ -1301,7 +1509,7 @@ function createLampObjects(lamp: LampLayout): LampObjects {
 
   const yawDisk = new THREE.Mesh(
     new THREE.CylinderGeometry(0.2, 0.2, 0.055, 40),
-    new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.34, metalness: 0.38 }),
+    darkMetalMaterial,
   )
   yawDisk.position.set(0, 0, 0)
 
@@ -1341,7 +1549,7 @@ function createLampObjects(lamp: LampLayout): LampObjects {
   const sideBracketGeometry = new THREE.BoxGeometry(0.042, 0.34, 0.058)
   const leftArm = new THREE.Mesh(sideBracketGeometry, hingeMaterial)
   leftArm.position.set(-0.285, -0.19, 0)
-  const rightArm = new THREE.Mesh(sideBracketGeometry.clone(), hingeMaterial.clone())
+  const rightArm = new THREE.Mesh(sideBracketGeometry.clone(), hingeMaterial)
   rightArm.position.set(0.285, -0.19, 0)
 
   const leftArmFoot = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.035, 0.07), hingeMaterial)
@@ -1351,7 +1559,7 @@ function createLampObjects(lamp: LampLayout): LampObjects {
 
   const hingeAxle = new THREE.Mesh(
     new THREE.CylinderGeometry(0.025, 0.025, 0.52, 18),
-    new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.36, metalness: 0.5 }),
+    rimMaterial,
   )
   hingeAxle.rotation.z = Math.PI / 2
   hingeAxle.position.set(0, -0.365, 0)
@@ -1383,6 +1591,18 @@ function createLampObjects(lamp: LampLayout): LampObjects {
   )
   barrelRim.position.set(0, -0.335, 0)
 
+  const reflectorCup = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.09, 0.19, 0.11, 40, 1, true),
+    new THREE.MeshStandardMaterial({
+      color: '#f2d8a3',
+      roughness: 0.12,
+      metalness: 0.92,
+      side: THREE.DoubleSide,
+    }),
+  )
+  reflectorCup.position.set(0, -0.34, 0)
+  reflectorCup.userData.ignorePickable = true
+
   const aperture = new THREE.Mesh(
     new THREE.CylinderGeometry(0.2, 0.2, 0.018, 40),
     new THREE.MeshStandardMaterial({
@@ -1392,6 +1612,41 @@ function createLampObjects(lamp: LampLayout): LampObjects {
     }),
   )
   aperture.position.set(0, -0.37, 0)
+
+  const heatSink = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.205, 0.21, 0.16, 40),
+    new THREE.MeshStandardMaterial({ color: '#22211f', roughness: 0.36, metalness: 0.72 }),
+  )
+  heatSink.position.set(0, 0.17, 0)
+  heatSink.userData.ignorePickable = true
+
+  const heatSinkFinMaterial = materials.darkMetal
+  for (let index = 0; index < 6; index += 1) {
+    const heatSinkFin = new THREE.Mesh(
+      new THREE.TorusGeometry(0.208, 0.008, 6, 40),
+      heatSinkFinMaterial,
+    )
+    heatSinkFin.rotation.x = Math.PI / 2
+    heatSinkFin.position.y = -0.06 + index * 0.024
+    heatSinkFin.userData.ignorePickable = true
+    heatSink.add(heatSinkFin)
+  }
+
+  const champagneRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.246, 0.018, 10, 40),
+    rimMaterial,
+  )
+  champagneRing.rotation.x = Math.PI / 2
+  champagneRing.position.set(0, -0.385, 0)
+  champagneRing.userData.ignorePickable = true
+
+  const lensMaterial = materials.opticalGlass.clone()
+  const lensGlass = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.187, 0.187, 0.022, 40),
+    lensMaterial,
+  )
+  lensGlass.position.set(0, -0.388, 0)
+  lensGlass.userData.ignorePickable = true
 
   const selectionRing = new THREE.Mesh(
     new THREE.TorusGeometry(0.32, 0.022, 12, 64),
@@ -1424,13 +1679,26 @@ function createLampObjects(lamp: LampLayout): LampObjects {
   selectionMarker.userData.ignorePickable = true
   selectionMarker.visible = false
 
-  const leftBodyPivot = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 24), rimMaterial.clone())
+  const leftBodyPivot = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 24), rimMaterial)
   leftBodyPivot.rotation.z = Math.PI / 2
   leftBodyPivot.position.set(-0.255, 0, 0)
   const rightBodyPivot = leftBodyPivot.clone()
   rightBodyPivot.position.set(0.255, 0, 0)
 
-  pitchBody.add(barrel, rearCap, barrelRim, aperture, selectionRing, selectionMarker, leftBodyPivot, rightBodyPivot)
+  pitchBody.add(
+    barrel,
+    rearCap,
+    barrelRim,
+    reflectorCup,
+    heatSink,
+    aperture,
+    champagneRing,
+    lensGlass,
+    selectionRing,
+    selectionMarker,
+    leftBodyPivot,
+    rightBodyPivot,
+  )
   yokeFrame.add(neckBlock, yokeTopBlock, leftArm, rightArm, leftArmFoot, rightArmFoot, hingeAxle, leftPivot, rightPivot, pitchBody)
   yawGroup.add(yawDisk, yawDiskLower, yawIndicator, shortNeck, yokeFrame)
   group.add(mount, mountInset, yawGroup)
@@ -1438,7 +1706,6 @@ function createLampObjects(lamp: LampLayout): LampObjects {
 
   const target = new THREE.Object3D()
   const spot = new THREE.SpotLight(colorTemperatureToHex(lamp.temperature), 2.2, 6.5, Math.PI / 6, 0.42, 1.2)
-  spot.castShadow = true
   spot.shadow.mapSize.set(1024, 1024)
   spot.target = target
 
@@ -1455,126 +1722,49 @@ function createLampObjects(lamp: LampLayout): LampObjects {
   )
 
 
-  const shirt = createShirt(lamp.clothingColor)
-  return { group, body: group, head: pitchBody, yawGroup, yokeFrame, pitchBody, spot, spotTarget: target, beam, aperture, selectionRing, selectionMarker, shirt }
-}
-
-function createShirt(color: string) {
-  const shirt = new THREE.Group()
-  const baseColor = new THREE.Color(color)
-  const trimColor = baseColor.clone().lerp(new THREE.Color('#f1eadf'), 0.22)
-  shirt.userData.clothingColor = normalizeDeviceColor(color, color)
-
-  const bodyMaterial = new THREE.MeshStandardMaterial({
-    color: baseColor,
-    roughness: 0.8,
-    metalness: 0.01,
-    side: THREE.DoubleSide,
-  })
-
-  const trimMaterial = new THREE.MeshStandardMaterial({
-    color: trimColor,
-    roughness: 0.88,
-    metalness: 0,
-  })
-
-  const outline = new THREE.Shape()
-  outline.moveTo(-0.38, 0.03)
-  outline.quadraticCurveTo(-0.18, -0.015, 0.02, 0)
-  outline.quadraticCurveTo(0.19, -0.018, 0.4, 0.04)
-  outline.bezierCurveTo(0.36, 0.25, 0.35, 0.45, 0.43, 0.64)
-  outline.bezierCurveTo(0.52, 0.63, 0.61, 0.59, 0.67, 0.53)
-  outline.quadraticCurveTo(0.72, 0.62, 0.75, 0.73)
-  outline.quadraticCurveTo(0.61, 0.84, 0.43, 0.9)
-  outline.bezierCurveTo(0.34, 0.93, 0.25, 0.96, 0.17, 1.02)
-  outline.quadraticCurveTo(0.09, 0.965, 0, 0.965)
-  outline.quadraticCurveTo(-0.09, 0.965, -0.18, 1.025)
-  outline.bezierCurveTo(-0.26, 0.96, -0.35, 0.93, -0.44, 0.9)
-  outline.quadraticCurveTo(-0.62, 0.84, -0.76, 0.72)
-  outline.quadraticCurveTo(-0.72, 0.61, -0.67, 0.52)
-  outline.bezierCurveTo(-0.6, 0.59, -0.51, 0.63, -0.43, 0.64)
-  outline.bezierCurveTo(-0.36, 0.44, -0.37, 0.24, -0.38, 0.03)
-
-  const extrudeOptions = {
-    depth: 0.058,
-    bevelEnabled: true,
-    bevelSize: 0.007,
-    bevelThickness: 0.006,
-    bevelSegments: 2,
-  }
-  const geometry = new THREE.ExtrudeGeometry(outline, extrudeOptions)
-  geometry.translate(0, 0, -0.029)
-
-
-  const body = new THREE.Mesh(geometry, bodyMaterial)
-  body.userData.shirtBody = true
-  body.castShadow = true
-  body.receiveShadow = true
-
-  const collarCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-0.125, 0.952, 0.042),
-    new THREE.Vector3(-0.055, 0.91, 0.048),
-    new THREE.Vector3(0.03, 0.908, 0.048),
-    new THREE.Vector3(0.118, 0.95, 0.042),
-  ])
-  const collar = new THREE.Mesh(
-    new THREE.TubeGeometry(collarCurve, 24, 0.008, 8, false),
-    trimMaterial,
+  const garmentDisplay = createGarmentDisplay(
+    lamp.garments,
+    createOwnedGarmentMaterial,
   )
-  collar.userData.shirtTrim = true
-
-  const hem = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.014, 0.012), trimMaterial)
-  hem.position.set(0.02, 0.055, 0.072)
-  hem.rotation.z = 0.025
-  hem.userData.shirtTrim = true
-
-  const leftCuff = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.013, 0.012), trimMaterial)
-  leftCuff.position.set(-0.62, 0.61, 0.072)
-  leftCuff.rotation.z = -0.43
-  leftCuff.userData.shirtTrim = true
-
-  const rightCuff = leftCuff.clone()
-  rightCuff.position.set(0.62, 0.615, 0.046)
-  rightCuff.rotation.z = 0.38
-  rightCuff.userData.shirtTrim = true
-
-
-  const hanger = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.009, 0.009, 0.4, 12),
-    new THREE.MeshStandardMaterial({ color: '#a3adb8', roughness: 0.48, metalness: 0.24 }),
-  )
-  hanger.position.set(0, 1.075, -0.014)
-  hanger.rotation.z = Math.PI / 2
-
-  shirt.add(body, collar, hem, leftCuff, rightCuff, hanger)
-  shirt.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      child.castShadow = true
-      child.receiveShadow = false
-    }
-  })
-  return shirt
+  return { group, body: group, head: pitchBody, yawGroup, yokeFrame, pitchBody, spot, spotTarget: target, beam, aperture, selectionRing, selectionMarker, garmentDisplay }
 }
 function createCameraNode() {
   if (!scene) return
+  const materials = requireBoutiqueMaterials()
 
   const camGroup = new THREE.Group()
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(0.36, 0.22, 0.22),
-    new THREE.MeshStandardMaterial({ color: '#1f2937', roughness: 0.5, metalness: 0.12 }),
+    materials.cameraShell,
   )
+  const lensMaterial = materials.opticalGlass.clone()
+  lensMaterial.color.set('#7aa7c7')
+  lensMaterial.emissive = new THREE.Color('#1d4ed8')
+  lensMaterial.emissiveIntensity = 0.08
   const lens = new THREE.Mesh(
     new THREE.CylinderGeometry(0.07, 0.07, 0.09, 24),
-    new THREE.MeshStandardMaterial({ color: '#475569', emissive: '#1d4ed8', emissiveIntensity: 0.16 }),
+    lensMaterial,
   )
   lens.position.set(0, 0, -0.155)
   lens.rotation.x = Math.PI / 2
+  lens.userData.ignorePickable = true
   const bracket = new THREE.Mesh(
     new THREE.CylinderGeometry(0.026, 0.026, 0.38, 12),
-    new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.46, metalness: 0.32 }),
+    materials.darkMetal,
   )
   bracket.position.set(0, 0.31, 0)
-  camGroup.add(body, lens, bracket)
+  const statusLight = new THREE.Mesh(
+    new THREE.SphereGeometry(0.012, 12, 8),
+    new THREE.MeshStandardMaterial({
+      color: '#85b9a0',
+      emissive: '#4ade80',
+      emissiveIntensity: 0.18,
+      roughness: 0.35,
+    }),
+  )
+  statusLight.position.set(0.12, 0.055, -0.116)
+  statusLight.userData.ignorePickable = true
+  camGroup.add(body, lens, bracket, statusLight)
   camGroup.position.set(layoutState.camera.x, layoutState.camera.y, layoutState.camera.z)
   camGroup.lookAt(0, 1.35, displayWallZ + 0.08)
   camGroup.traverse((child) => {
@@ -1599,6 +1789,8 @@ function syncDevicesToLayout() {
       lamp.brightness = mock.brightness
       lamp.temperature = mock.temperature
       lamp.clothingColor = mock.clothingColor
+      lamp.garments = mock.garments.map(garment => ({ ...garment }))
+      lamp.garmentSignature = mock.garmentSignature
       lamp.online = undefined
       return
     }
@@ -1609,6 +1801,9 @@ function syncDevicesToLayout() {
     lamp.brightness = resolveDeviceBrightness(device, lamp.brightness || mock.brightness)
     lamp.temperature = resolveDeviceTemperature(device, lamp.temperature || mock.temperature)
     lamp.clothingColor = normalizeDeviceColor(resolveDeviceColorValue(device), lamp.clothingColor || mock.clothingColor)
+    const garments = getDisplayGarments(device)
+    lamp.garments = garments
+    lamp.garmentSignature = garmentSignature(garments)
     lamp.online = device.online
   })
 
@@ -1624,6 +1819,7 @@ function syncDevicesToLayout() {
     layoutState.camera.online = undefined
   }
 
+  updateSpotShadowBudget()
   updateLayoutVisuals()
 }
 
@@ -1644,40 +1840,15 @@ function findDeviceForSlot(slot: ZoneSlot, devices: DeviceLike[]) {
 }
 
 function isLayoutLampDevice(device: DeviceLike) {
-  const type = normalizeLayoutDeviceType(device)
-  if (type) return type === 'lamp'
-
-  const text = getDeviceSearchText(device)
-  return text.includes('lamp')
-    && !text.includes('camlamp')
-    && !text.includes('camera')
-    && !text.includes('cam')
+  return isLampDevice({ deviceType: normalizeLayoutDeviceType(device) })
 }
 
 function isLayoutCameraDevice(device: DeviceLike) {
-  const type = normalizeLayoutDeviceType(device)
-  if (type) return type === 'cam' || type === 'camera' || type === 'camlamp'
-
-  const text = getDeviceSearchText(device)
-  return text.includes('camlamp') || text.includes('camera') || text.includes('cam')
+  return isCameraDevice({ deviceType: normalizeLayoutDeviceType(device) })
 }
 
 function normalizeLayoutDeviceType(device: DeviceLike) {
   return normalizeDeviceType(String(device.deviceType ?? device.type ?? ''))
-}
-
-function getDeviceSearchText(device: DeviceLike) {
-  return [
-    device.id,
-    device.chipId,
-    device.displayName,
-    device.name,
-    device.deviceType,
-    device.type,
-  ]
-    .filter(value => value != null && String(value).trim() !== '')
-    .join(' ')
-    .toLowerCase()
 }
 
 function getDeviceId(device: DeviceLike | undefined) {
@@ -1848,13 +2019,13 @@ function updateLampVisuals(lamp: LampLayout) {
 
   const lampY = layoutState.track.y
   const lampZ = layoutState.track.z
-  const shirtX = lamp.targetX
+  const garmentX = lamp.targetX
 
   objects.group.position.set(lamp.lampX, lampY, lampZ)
-  objects.shirt.position.set(shirtX, shirtBaseY, wallLightSpotZ)
-  updateShirtColor(objects.shirt, lamp.clothingColor)
+  syncGarmentDisplay(objects, lamp)
+  objects.garmentDisplay.position.set(garmentX, garmentBaseY, wallLightSpotZ)
 
-  const beamEnd = new THREE.Vector3(shirtX, shirtAimY, wallLightSpotZ + 0.02)
+  const beamEnd = new THREE.Vector3(garmentX, garmentAimY, wallLightSpotZ + 0.02)
   objects.group.updateWorldMatrix(true, true)
 
   const beamStart = new THREE.Vector3()
@@ -1864,8 +2035,8 @@ function updateLampVisuals(lamp: LampLayout) {
   applyLampAim(objects, beamDirection)
 
   const color = new THREE.Color(colorTemperatureToHex(lamp.temperature))
-  const intensity = 0.45 + lamp.brightness / 100 * 3.4
-  const opacity = 0.028 + lamp.brightness / 100 * 0.085
+  const intensity = 0.7 + lamp.brightness / 100 * 10.8
+  const opacity = 0.04 + lamp.brightness / 100 * 0.12
 
   objects.spot.color.copy(color)
   objects.spot.intensity = intensity
@@ -1898,6 +2069,17 @@ function updateLampVisuals(lamp: LampLayout) {
   }
 }
 
+function syncGarmentDisplay(objects: LampObjects, lamp: LampLayout) {
+  if (!scene) return
+  syncGarmentDisplayInScene(
+    scene,
+    objects,
+    lamp.garments,
+    lamp.garmentSignature,
+    createOwnedGarmentMaterial,
+  )
+}
+
 function applyLampAim(objects: LampObjects, direction: THREE.Vector3) {
   const horizontalLength = Math.hypot(direction.x, direction.z)
   const yaw = horizontalLength > 0.001
@@ -1907,28 +2089,6 @@ function applyLampAim(objects: LampObjects, direction: THREE.Vector3) {
 
   objects.yawGroup.rotation.set(0, yaw, 0)
   objects.pitchBody.rotation.set(pitch, 0, 0)
-}
-
-function updateShirtColor(shirt: THREE.Group, color: string) {
-  const normalizedColor = normalizeDeviceColor(color, '#8fb95a')
-  if (shirt.userData.clothingColor === normalizedColor) return
-
-  const baseColor = new THREE.Color(normalizedColor)
-  const trimColor = baseColor.clone().lerp(new THREE.Color('#f1eadf'), 0.22)
-
-  shirt.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return
-    const material = child.material
-    if (!(material instanceof THREE.MeshStandardMaterial)) return
-
-    if (child.userData.shirtBody) {
-      material.color.copy(baseColor)
-    } else if (child.userData.shirtTrim) {
-      material.color.copy(trimColor)
-    }
-  })
-
-  shirt.userData.clothingColor = normalizedColor
 }
 
 function handlePointerDown(event: PointerEvent) {
@@ -2037,6 +2197,7 @@ function handleVisibilityChange() {
   if (document.hidden) {
     stopRenderLoop()
   } else if (props.active) {
+    handleResize()
     startRenderLoop()
   }
 }
@@ -2046,6 +2207,7 @@ function handleResize() {
   if (!host || !renderer || !camera) return
   const width = host.clientWidth
   const height = host.clientHeight
+  if (width <= 0 || height <= 0) return
   camera.aspect = width / height
   camera.updateProjectionMatrix()
   renderer.setSize(width, height)
@@ -2094,6 +2256,8 @@ function animateCameraTo(preset: CameraViewPreset) {
   cameraAnimationFrame = requestAnimationFrame(step)
 }
 function cleanupThreeScene() {
+  boutiqueTextureLoadCoordinator?.invalidate()
+  boutiqueTextureLoadCoordinator = null
   stopRenderLoop()
   if (cameraAnimationFrame) {
     cancelAnimationFrame(cameraAnimationFrame)
@@ -2106,14 +2270,19 @@ function cleanupThreeScene() {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   controls?.dispose()
 
-  if (scene) {
-    scene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        object.geometry?.dispose()
-        disposeMaterial(object.material)
-      }
-    })
+  const disposedGeometries = new Set<THREE.BufferGeometry>()
+  const disposedMaterials = new Set<THREE.Material>()
+  for (const objects of lampObjects.values()) {
+    disposeLampObjects(objects, disposedGeometries, disposedMaterials)
   }
+  if (scene) disposeObject(scene, disposedGeometries, disposedMaterials)
+
+  boutiqueMaterials?.dispose()
+  boutiqueMaterials = null
+  environmentRenderTarget?.dispose()
+  environmentRenderTarget = null
+  pmremGenerator?.dispose()
+  pmremGenerator = null
 
   if (renderer) {
     renderer.dispose()
@@ -2137,12 +2306,20 @@ function cleanupThreeScene() {
   cameraAnimationFrame = 0
 }
 
-function disposeMaterial(material: THREE.Material | THREE.Material[]) {
+function disposeMaterial(
+  material: THREE.Material | THREE.Material[],
+  disposedMaterials = new Set<THREE.Material>(),
+) {
   if (Array.isArray(material)) {
-    material.forEach(item => item.dispose())
-  } else {
-    material.dispose()
+    material.forEach(item => disposeMaterial(item, disposedMaterials))
+    return
   }
+
+  if (disposedMaterials.has(material)) return
+  disposedMaterials.add(material)
+  if (boutiqueMaterials?.releaseMaterial(material)) return
+  if (boutiqueMaterials?.ownsMaterial(material)) return
+  material.dispose()
 }
 
 function round(value: number) {
@@ -2160,14 +2337,118 @@ function round(value: number) {
   --workbench-muted: #64748b;
   --workbench-panel: rgba(255, 255, 255, 0.86);
   --workbench-border: rgba(148, 163, 184, 0.25);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   container-type: inline-size;
   display: flex;
   min-height: 0;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.zone-quick-manager {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--workbench-border);
+  padding: 5px 2px 0;
+  color: var(--workbench-text);
+}
+
+.zone-quick-add,
+.zone-manager-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zone-quick-add {
+  min-width: 0;
+}
+
+.zone-name-input {
+  width: 112px;
+  height: 30px;
+  box-sizing: border-box;
+  border: 1px solid var(--workbench-border);
+  border-radius: 6px;
+  outline: none;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--workbench-text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.zone-name-input:focus {
+  border-color: var(--workbench-blue);
+}
+
+.zone-name-input::placeholder {
+  color: var(--workbench-muted);
+}
+
+.zone-manager-current {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--workbench-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zone-manager-btn {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: var(--workbench-blue-soft);
+  color: var(--workbench-blue);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.zone-manager-btn:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.18);
+}
+
+.zone-manager-btn:focus-visible,
+.zone-name-input:focus-visible {
+  outline: 2px solid var(--workbench-blue);
+  outline-offset: 1px;
+}
+
+.zone-manager-btn:disabled,
+.zone-name-input:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.zone-add-btn {
+  background: var(--workbench-blue);
+  color: #fff;
+}
+
+.zone-delete-btn {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--workbench-danger);
 }
 
 .three-viewport-wrap {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   min-height: 430px;
   overflow: hidden;
   border: 1px solid var(--workbench-border);
@@ -2191,6 +2472,9 @@ function round(value: number) {
   right: 14px;
   left: 14px;
   display: grid;
+  min-width: 0;
+  max-width: calc(100% - 28px);
+  box-sizing: border-box;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
@@ -2200,6 +2484,7 @@ function round(value: number) {
 .zone-cluster,
 .scene-edit-actions,
 .view-mode-switch {
+  min-width: 0;
   pointer-events: none;
 }
 
@@ -2294,6 +2579,10 @@ function round(value: number) {
   white-space: nowrap;
 }
 
+.toolbar-label-compact {
+  display: none;
+}
+
 .toolbar-divider,
 .context-divider {
   width: 1px;
@@ -2359,33 +2648,6 @@ function round(value: number) {
   background: var(--workbench-blue);
   color: #fff;
   box-shadow: 0 7px 16px rgba(37, 99, 235, 0.2);
-}
-
-.scene-overlay {
-  position: absolute;
-  z-index: 2;
-  top: 78px;
-  left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  pointer-events: none;
-  color: #fff1d6;
-  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-  letter-spacing: 0.08em;
-  text-shadow: 0 2px 12px rgba(48, 25, 9, 0.86);
-}
-
-.scene-overlay span {
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.scene-overlay small {
-  color: rgba(255, 241, 214, 0.78);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
 }
 
 .scene-context-layer {
@@ -2526,6 +2788,9 @@ function round(value: number) {
 
 .three-layout-viewport {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   height: 430px;
   min-height: 430px;
 }
@@ -2533,6 +2798,8 @@ function round(value: number) {
 .three-layout-viewport :deep(canvas) {
   display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 100%;
   cursor: grab;
 }
@@ -2596,62 +2863,150 @@ function round(value: number) {
 
 @container (max-width: 620px) {
   .scene-toolbar {
-    top: 10px;
-    right: 10px;
-    left: 10px;
-    grid-template-areas:
-      "zone view"
-      "actions actions";
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    grid-template-areas: "zone actions view";
+    grid-template-columns: 38% minmax(0, 1fr) auto;
+    gap: 4px;
   }
 
   .zone-cluster {
     grid-area: zone;
     min-width: 0;
     justify-self: stretch;
+    border-radius: 12px;
+    padding: 3px;
   }
 
   .zone-switcher {
     width: 100%;
     justify-content: space-between;
+    gap: 3px;
+  }
+
+  .zone-arrow-btn {
+    width: 32px;
+    height: 32px;
   }
 
   .zone-current-label {
+    container-type: inline-size;
     min-width: 0;
-    max-width: 128px;
+    flex: 1;
+    max-width: none;
+  }
+
+  .zone-current-label strong {
+    overflow: hidden;
+    font-size: clamp(10px, calc(96cqi / var(--zone-name-length)), 13px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .view-mode-switch {
     grid-area: view;
+    gap: 2px;
+    border-radius: 12px;
+    padding: 3px;
+  }
+
+  .view-mode-btn {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
   }
 
   .scene-edit-actions {
     grid-area: actions;
-    width: 100%;
+    width: auto;
     box-sizing: border-box;
-    justify-self: stretch;
-    justify-content: flex-end;
+    justify-self: end;
+    flex-wrap: nowrap;
+    gap: 3px;
+    padding: 3px;
   }
 
   .scene-slot-count {
-    margin-right: auto;
+    margin-right: 0;
+    padding: 0 3px;
+  }
+
+  .toolbar-action {
+    min-height: 32px;
+    padding: 0 6px;
+  }
+
+  .primary-action-btn {
+    width: 32px;
+    padding: 0;
+  }
+
+  .layout-action-btn {
+    min-width: 40px;
+    white-space: nowrap;
+  }
+
+  .toolbar-label-full {
+    display: none;
+  }
+
+  .toolbar-divider {
+    display: none;
+  }
+
+  .toolbar-label-compact {
+    display: inline;
+  }
+}
+
+@container (min-width: 22rem) and (max-width: 38.75rem) {
+  .layout-action-btn .toolbar-label-full,
+  .view-mode-btn .toolbar-label-full {
+    display: inline;
+  }
+
+  .layout-action-btn .toolbar-label-compact,
+  .view-mode-btn .toolbar-label-compact {
+    display: none;
+  }
+
+  .layout-action-btn,
+  .view-mode-switch .view-mode-btn {
+    min-width: max-content;
+    padding-right: 0.375rem;
+    padding-left: 0.375rem;
   }
 }
 
 @media (max-width: 768px) {
   .three-viewport-wrap,
   .three-layout-viewport {
-    min-height: 360px;
+    min-height: 280px;
+    aspect-ratio: 16 / 10;
+  }
+
+  .three-viewport-wrap {
+    border-radius: 16px;
   }
 
   .three-layout-viewport {
-    height: 360px;
+    height: clamp(280px, 78vw, 360px);
   }
 
   .zone-arrow-btn,
   .view-mode-btn,
-  .toolbar-action,
+  .toolbar-action {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .primary-action-btn {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .context-action {
     min-width: 44px;
     min-height: 44px;
@@ -2659,10 +3014,6 @@ function round(value: number) {
 
   .view-mode-btn {
     padding: 0 10px;
-  }
-
-  .scene-overlay {
-    display: none;
   }
 
   .scene-context-layer {
@@ -2691,6 +3042,76 @@ function round(value: number) {
   .scene-empty-hint {
     max-width: calc(100% - 20px);
     box-sizing: border-box;
+  }
+
+  .zone-quick-manager {
+    gap: 5px;
+  }
+
+  .zone-name-input {
+    width: 92px;
+  }
+
+  .zone-manager-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .zone-name-input {
+    width: 72px;
+    height: 40px;
+  }
+}
+
+@container (max-width: 22rem) {
+  .zone-switcher .zone-arrow-btn {
+    width: 1.5rem;
+    min-width: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .scene-toolbar {
+    max-width: calc(100% - 16px);
+    grid-template-columns: 38% minmax(0, 1fr) auto;
+  }
+
+  .toolbar-label-full {
+    display: none;
+  }
+
+  .toolbar-label-compact {
+    display: inline;
+  }
+
+  .layout-action-btn,
+  .view-mode-switch .view-mode-btn {
+    min-width: 40px;
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .zone-switcher .zone-arrow-btn {
+    width: 40px;
+    min-width: 40px;
+  }
+
+  .primary-action-btn {
+    width: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (max-width: 380px) {
+  .scene-toolbar {
+    grid-template-areas:
+      "zone zone view"
+      "actions actions actions";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .scene-edit-actions {
+    justify-self: end;
   }
 }
 

@@ -50,21 +50,41 @@
                 />
             </template>
 
-            <label class="modal-label">显示名称</label>
-            <input
-              v-model.trim="form.displayName"
-              class="modal-input"
-              type="text"
-              placeholder="如 橱窗灯1"
-            />
+            <template v-if="isScannedZoneDevice">
+              <label class="modal-label">所属分区</label>
+              <BaseSelect
+                v-model="form.displayName"
+                :options="zoneOptions"
+                placeholder="请选择所属分区"
+                @change="handleZoneChange"
+              />
 
-            <label class="modal-label">设备编号</label>
-            <input
-              v-model.trim="form.deviceNo"
-              class="modal-input"
-              type="text"
-              placeholder="如 LIGHT-001"
-            />
+              <label class="modal-label">设备编号</label>
+              <input
+                v-model="form.deviceNo"
+                class="modal-input"
+                type="text"
+                readonly
+              />
+            </template>
+
+            <template v-else>
+              <label class="modal-label">显示名称</label>
+              <input
+                v-model.trim="form.displayName"
+                class="modal-input"
+                type="text"
+                placeholder="如 橱窗灯1"
+              />
+
+              <label class="modal-label">设备编号</label>
+              <input
+                v-model.trim="form.deviceNo"
+                class="modal-input"
+                type="text"
+                placeholder="如 LIGHT-001"
+              />
+            </template>
 
           <div class="modal-actions">
             <button class="btn-confirm" :disabled="submitting" @click="submit">
@@ -82,9 +102,15 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, reactive, ref, watch } from 'vue'
-import type { DeviceCreatePayload } from '../../types/device'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import type { DeviceCreatePayload, DeviceItem } from '../../types/device'
 import { isLampDevice } from '../../utils/device'
+import {
+  UNASSIGNED_ZONE_NAME,
+  buildZoneSelectOptions,
+  findSmallestAvailableDeviceNo,
+  type ZoneDefinition,
+} from '../../utils/deviceZones'
 import BaseSelect from '../common/BaseSelect.vue'
 type DeviceAddInitialData = {
   chipId?: string
@@ -101,6 +127,8 @@ const deviceTypeOptions = [
 const props = defineProps<{
   submitting?: boolean
   initialData?: DeviceAddInitialData
+  zones: ZoneDefinition[]
+  devices: DeviceItem[]
 }>()
 
 const emit = defineEmits<{
@@ -111,6 +139,11 @@ const emit = defineEmits<{
 const overlayVisible = ref(false)
 const visible = ref(false)
 const closing = ref(false)
+
+const isScannedZoneDevice = computed(() => {
+  return Boolean(props.initialData) && isLampDevice({ deviceType: form.deviceType })
+})
+const zoneOptions = computed(() => buildZoneSelectOptions(props.zones))
 
 const form = reactive<DeviceCreatePayload>({
   chipId: '',
@@ -155,14 +188,28 @@ function fillFormByInitialData(data?: DeviceAddInitialData) {
   form.chipId = data.chipId?.trim?.() || ''
   form.ip = data.ip?.trim?.() || ''
   form.deviceType = data.deviceType?.trim?.() || ''
+  if (isLampDevice({ deviceType: form.deviceType })) {
+    const zoneName = data.displayName?.trim?.() || UNASSIGNED_ZONE_NAME
+    form.displayName = zoneName
+    form.deviceNo = findSmallestAvailableDeviceNo(props.devices, zoneName)
+    return
+  }
+
   form.deviceNo = data.deviceNo?.trim?.() || ''
-  form.displayName =
-    data.displayName?.trim?.() ||
-    buildDefaultDisplayName(data.chipId)
+  form.displayName = data.displayName?.trim?.() || buildDefaultDisplayName(data.chipId)
+}
+
+function handleZoneChange(value: string | number) {
+  const zoneName = String(value)
+  form.displayName = zoneName
+  form.deviceNo = findSmallestAvailableDeviceNo(props.devices, zoneName)
 }
 
 function submit() {
   if (!form.chipId) return
+  if (isScannedZoneDevice.value) {
+    form.deviceNo = findSmallestAvailableDeviceNo(props.devices, form.displayName || UNASSIGNED_ZONE_NAME)
+  }
   const basePayload: DeviceCreatePayload = {
     chipId: form.chipId,
     ip: form.ip,
@@ -236,11 +283,17 @@ watch(
   position: relative;
   z-index: 2001;
   background: #fff;
-  width: 360px;
-  max-width: 92vw;
-  padding: 24px;
+  width: min(360px, calc(100vw - 24px));
+  max-width: 360px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  padding: clamp(16px, 5vw, 24px);
   border-radius: 16px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-card h3 {
@@ -435,5 +488,34 @@ watch(
   background: rgba(30, 41, 59, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.24);
   color: rgba(226, 232, 240, 0.9);
+}
+
+@media (max-width: 768px), (max-height: 640px) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+
+  .modal-card h3 {
+    margin-bottom: 12px;
+    font-size: 18px;
+  }
+
+  .modal-label {
+    margin-top: 9px;
+    font-size: 13px;
+  }
+
+  .modal-actions {
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .btn-confirm,
+  .btn-cancel {
+    min-height: 44px;
+  }
 }
 </style>

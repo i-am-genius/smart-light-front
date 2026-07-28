@@ -1,4 +1,5 @@
 ﻿import http from './http'
+import type { GarmentPart, OutfitType } from '../types/device'
 
 interface CommonResult<T> {
   code: number
@@ -118,6 +119,10 @@ export interface FabricRecognizeRespVO {
   fabricConfidence?: number
 
   mainColorRgb?: string
+  resultVersion?: number
+  segmentationFallback?: boolean
+  outfitType?: OutfitType
+  garments?: GarmentPart[]
   recommendedBrightness?: number
   recommendedTemp?: number
 
@@ -138,7 +143,6 @@ export interface FabricRecognizeRespVO {
   combinedImageUrl?: string
 
   imageUrl?: string
-  [key: string]: any
 }
 
 

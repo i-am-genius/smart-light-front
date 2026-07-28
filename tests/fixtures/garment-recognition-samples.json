@@ -1,0 +1,44 @@
+{
+  "structured": {
+    "resultVersion": 1,
+    "clothDetected": true,
+    "segmentationFallback": false,
+    "outfitType": "dress",
+    "fabric": "legacy-ignored",
+    "mainColorRgb": "1,1,1",
+    "garments": [
+      {
+        "position": "fullBody",
+        "category": "dress",
+        "categoryConfidence": 0.96,
+        "fabric": "silk",
+        "fabricConfidence": 0.91,
+        "mainColorRgb": "120,20,30",
+        "maskArea": 460
+      }
+    ]
+  },
+  "legacy": {
+    "fabric": "polyester",
+    "mainColorRgb": "213,215,217"
+  },
+  "unknownVersion": {
+    "resultVersion": 99,
+    "clothDetected": true,
+    "segmentationFallback": true,
+    "outfitType": "dress",
+    "fabric": "polyester",
+    "label": "legacy-label",
+    "mainColorRgb": "9,8,7",
+    "garments": [
+      {
+        "position": "fullBody",
+        "category": "dress",
+        "categoryConfidence": 0.99,
+        "fabric": "future-fabric",
+        "mainColorRgb": "1,1,1",
+        "maskArea": 500
+      }
+    ]
+  }
+}

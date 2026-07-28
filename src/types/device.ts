@@ -1,3 +1,29 @@
+export type GarmentPosition = 'upper' | 'lower' | 'fullBody'
+export type GarmentCategory = 'upper' | 'pants' | 'skirt' | 'dress'
+export type OutfitType = 'upper_only' | 'lower_only' | 'separates' | 'dress'
+
+export interface GarmentPart {
+  position: GarmentPosition
+  category: GarmentCategory
+  categoryConfidence?: number | null
+  fabric: string
+  fabricConfidence?: number
+  mainColorRgb: string
+  maskArea: number
+  x?: number
+  y?: number
+  w?: number
+  h?: number
+}
+
+export interface GarmentState {
+  resultVersion?: number
+  clothDetected?: boolean
+  segmentationFallback?: boolean
+  outfitType?: OutfitType
+  garments: GarmentPart[]
+}
+
 export type DeviceType = 'lamp' | 'camlamp' | 'cam' | string
 
 export interface DeviceItem {
@@ -20,6 +46,10 @@ export interface DeviceItem {
   confidence?: number
   fabricConfidence?: number
   mainColorRgb?: string
+  resultVersion?: number
+  segmentationFallback?: boolean
+  outfitType?: OutfitType
+  garments?: GarmentPart[]
   clothDetected?: boolean
   clothX?: number
   clothY?: number
@@ -27,6 +57,8 @@ export interface DeviceItem {
   clothH?: number
   originalImageUrl?: string
   annotatedImageUrl?: string
+  annotatedImageBlobUrl?: string
+  annotatedImageId?: string
   combinedImageUrl?: string
   createTime?: string
   updateTime?: string
@@ -117,6 +149,23 @@ export interface CameraAimTargetPayload {
   targetIndex?: number
 }
 
+export interface CamTrackingControlPayload {
+  camChipId: string
+  targetChipId: string
+  targetIndex: number
+}
+
+export interface CamTrackingControlResult {
+  chipId?: string
+  role?: string
+  trackingStatus: string
+  camChipId?: string
+  lampChipId?: string
+  targetIndex?: number
+  message?: string
+  updateTime?: string | number
+}
+
 export type CamWorkStatus =
   | 'monitoring'
   | 'presence'
@@ -138,18 +187,12 @@ export interface CamRoiItem {
   y: number
   w: number
   h: number
-  dwellSeconds?: number
-  leaveDelaySeconds?: number
-  confidenceThreshold?: number
-  udpIp?: string
-  udpPort?: number
 }
 
 export interface CamPtzPreset {
-  yaw: number
-  pitch: number
-  roll: number
-  configured?: boolean
+  pan: number
+  tilt: number
+  slider: number
 }
 
 export type CamPresetMap = Record<string, CamPtzPreset>
@@ -157,11 +200,8 @@ export type CamPresetMap = Record<string, CamPtzPreset>
 export interface CamRoiConfig {
   camChipId: string
   configured?: boolean
-  centerPreset: CamPtzPreset
   capturePresets: CamPresetMap
   trackingPresets: CamPresetMap
-  trackingLostTimeoutSeconds: number
-  udpPort: number
   rois: CamRoiItem[]
 }
 
@@ -214,6 +254,10 @@ export interface CamCaptureTaskResult {
   confidence?: number
   fabricConfidence?: number
   mainColorRgb?: string
+  resultVersion?: number
+  segmentationFallback?: boolean
+  outfitType?: OutfitType
+  garments?: GarmentPart[]
   recommendedBrightness?: number
   recommendedTemp?: number
   clothDetected?: boolean

@@ -262,9 +262,9 @@ interface EffectBrightnessPresetStore {
 }
 
 const quickActions: Array<{ key: QuickActionKey; label: string; desc: string }> = [
-  { key: 'warm', label: '暖光', desc: '3000K' },
-  { key: 'neutral', label: '中性白', desc: '4000K' },
-  { key: 'cool', label: '冷白', desc: '6000K' },
+  { key: 'warm', label: '秋冬暖调', desc: '3000K' },
+  { key: 'neutral', label: '春夏清新', desc: '4000K' },
+  { key: 'cool', label: '品牌冷调', desc: '6000K' },
   { key: 'auto', label: '自动模式', desc: '智能调节' },
   { key: 'loop', label: '循环效果', desc: '动态流光' },
   { key: 'settings', label: '循环设置', desc: '参数配置' },
@@ -623,9 +623,9 @@ async function handleQuickAction(action: QuickActionKey) {
   }
 
   const labelMap: Record<'warm' | 'neutral' | 'cool', string> = {
-    warm: '暖光',
-    neutral: '中性白',
-    cool: '冷白',
+    warm: '秋冬暖调',
+    neutral: '春夏清新',
+    cool: '品牌冷调',
   }
 
   await applyDeviceMode({
@@ -649,9 +649,9 @@ async function cancelEffect(effect: NonNullable<ActiveEffect>) {
   }
 
   const labelMap: Record<'warm' | 'neutral' | 'cool', string> = {
-    warm: '暖光',
-    neutral: '中性白',
-    cool: '冷白',
+    warm: '秋冬暖调',
+    neutral: '春夏清新',
+    cool: '品牌冷调',
   }
 
   activeEffect.value = null
@@ -1749,7 +1749,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 768px) {
   .light-effect-mini-card {
-    padding: 12px 14px;
+    padding: clamp(10px, 3vw, 14px);
     border-radius: 16px;
   }
 
@@ -1775,8 +1775,8 @@ onBeforeUnmount(() => {
 
   .effect-action-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
-    margin-top: 12px;
+    gap: 8px;
+    margin-top: 9px;
   }
 
   .effect-form {
@@ -1784,9 +1784,9 @@ onBeforeUnmount(() => {
   }
 
   .effect-action-btn {
-    min-height: 56px;
-    padding: 8px 10px;
-    border-radius: 14px;
+    min-height: clamp(48px, 13vw, 54px);
+    padding: 7px 8px;
+    border-radius: 12px;
   }
 
   .effect-action-btn strong {

@@ -85,17 +85,39 @@
       </div>
     </section>
 
-    <label class="field-label">面料：{{ localForm.fabric || '未设置' }}</label>
-
-<div
-  class="color-box"
-  :style="{
-    background: rgbStyle,
-    color: textColor,
-  }"
->
-  {{ "RGB(" + (localForm.mainColorRgb || '暂无主色') + ")" }}
-</div>
+    <template v-if="displayGarments.length">
+      <div class="garment-details">
+        <div
+          v-for="garment in displayGarments"
+          :key="`${garment.position}-${garment.category}`"
+          class="garment-detail-row"
+        >
+          <span class="garment-kind">{{ GARMENT_LABELS[garment.category] }}</span>
+          <span class="garment-fabric">{{ garment.fabric || '未识别面料' }}</span>
+          <span v-if="garment.fabricConfidence != null" class="garment-confidence">
+            {{ Math.round(garment.fabricConfidence * 100) }}%
+          </span>
+        </div>
+      </div>
+      <div
+        class="garment-color-bar"
+        :class="{ 'is-split': displayGarments.length === 2 }"
+      >
+        <div
+          v-for="garment in displayGarments"
+          :key="`color-${garment.position}-${garment.category}`"
+          class="garment-color-segment"
+          :style="{
+            backgroundColor: garmentRgbCss(garment.mainColorRgb),
+            color: garmentTextColor(garment.mainColorRgb),
+            width: displayGarments.length === 2 ? '50%' : '100%',
+          }"
+        >
+          RGB({{ garment.mainColorRgb || '暂无主色' }})
+        </div>
+      </div>
+    </template>
+    <p v-else class="garment-empty-state">未识别服装</p>
 
 <div class="ai-actions" :class="{ shake: shakingAiActions }">
   <template v-if="isLamp">
@@ -115,7 +137,7 @@
       {{ fabricLoading ? '识别中...' : '上传服装图片' }}
     </button>
     <button
-      v-if="annotatedImageBase64"
+      v-if="annotatedImageSrc"
       class="btn-ai btn-preview"
       type="button"
       @click.stop="openClothPreviewModal"
@@ -188,14 +210,16 @@
                   <span>IP</span>
                   <strong>{{ localForm.ip || '未设置' }}</strong>
                 </div>
-                <label class="device-info-cell editable">
+                <div class="device-info-cell editable zone-select-cell">
                   <span>所属分区</span>
-                  <input
-                    v-model.trim="localForm.displayName"
-                    type="text"
-                    placeholder="如 主通道区"
+                  <BaseSelect
+                    class="zone-cell-select"
+                    :model-value="localForm.displayName"
+                    :options="zoneOptions"
+                    placeholder="请选择分区"
+                    @change="handleZoneChange"
                   />
-                </label>
+                </div>
                 <label class="device-info-cell editable">
                   <span>分区内编号</span>
                   <input
@@ -339,6 +363,10 @@
           <button class="detail-close-btn" @click="closeClothPreviewModal">×</button>
         </div>
 
+        <p v-if="garmentState.segmentationFallback" class="segmentation-fallback-hint">
+          未检测到明确区域，已按上装整图识别
+        </p>
+
         <div class="cloth-preview-content">
           <div class="cloth-preview-image-wrap">
             <img
@@ -373,7 +401,7 @@
               </div>
             </template>
 
-            <div class="ai-reason-summary">{{ lightRecommendationReason.summary }}</div>
+            <div class="ai-reason-summary">{{ garmentRecommendationSummary }}</div>
           </div>
         </div>
 
@@ -395,6 +423,7 @@ import type {
   DeviceCreatePayload,
   DeviceItem,
   FirmwareChannel,
+  GarmentState,
   OtaCheckResult,
 } from '../../types/device'
 import { fabricRecognize } from '../../api/ai'
@@ -405,8 +434,22 @@ import {
   startOtaUpdate,
 } from '../../api/device'
 import { generateLightRecommendationReason } from '../../utils/lightRecommendationReason'
+import {
+  buildLampRealtimeUpdateEnvelope,
+  normalizeGarmentState,
+  getDisplayGarments,
+  GARMENT_LABELS,
+  garmentRgbCss,
+  garmentTextColor,
+} from '../../utils/garmentRecognition'
 import { getErrorMessage } from '../../utils/error'
-import { normalizeDeviceType } from '../../utils/device'
+import { isLampDevice, normalizeDeviceType } from '../../utils/device'
+import {
+  buildZoneSelectOptions,
+  findSmallestAvailableDeviceNo,
+  normalizeZoneName,
+  type ZoneDefinition,
+} from '../../utils/deviceZones'
 import { useToast } from '../../composables/useToast'
 import { useShake } from '../../composables/useShake'
 
@@ -414,7 +457,10 @@ const props = defineProps<{
   device: DeviceItem
   deleting?: boolean
   allDevices?: DeviceItem[]
+  zones: ZoneDefinition[]
 }>()
+
+const zoneOptions = computed(() => buildZoneSelectOptions(props.zones))
 
 type SelfTestValue = boolean | string | number | null | undefined
 type SelfTestResult = {
@@ -437,7 +483,12 @@ type SelfTestResult = {
 }
 
 const emit = defineEmits<{
-  (e: 'update-realtime', value: { id: number; payload: DeviceCreatePayload; lightControl?: boolean }): void
+  (e: 'update-realtime', value: {
+    id: number
+    payload: DeviceCreatePayload
+    garmentState?: GarmentState
+    lightControl?: boolean
+  }): void
   (e: 'delete', id: number): void
 }>()
 
@@ -530,6 +581,14 @@ const localForm = reactive<DeviceCreatePayload>({
   mainColorRgb: '',
 })
 
+const garmentState = ref<GarmentState>({
+  garments: [],
+})
+const displayGarments = computed(() => getDisplayGarments({
+  ...garmentState.value,
+  fabric: localForm.fabric,
+  mainColorRgb: localForm.mainColorRgb,
+}))
 const showDetailModal = ref(false)
 const fabricInputRef = ref<HTMLInputElement | null>(null)
 const fabricLoading = ref(false)
@@ -558,14 +617,17 @@ function normalizeBase64ImageSrc(value: string) {
 }
 
 const annotatedImageSrc = computed(() => {
-  const value = annotatedImageBase64.value
-  if (!value) {
-    return ''
+  if (props.device.annotatedImageBlobUrl) {
+    return props.device.annotatedImageBlobUrl
   }
-  return normalizeBase64ImageSrc(value)
+  if (annotatedImageBase64.value) {
+    return normalizeBase64ImageSrc(annotatedImageBase64.value)
+  }
+  return props.device.annotatedImageUrl || ''
 })
 const lightRecommendationHasData = computed(() => {
   return Boolean(
+    displayGarments.value.length > 0 ||
     localForm.fabric?.trim() ||
     localForm.mainColorRgb?.trim() ||
     props.device.recommendedBrightness !== undefined ||
@@ -576,13 +638,28 @@ const lightRecommendationHasData = computed(() => {
 })
 const lightRecommendationReason = computed(() => {
   const hasData = lightRecommendationHasData.value
+  const primaryGarment = displayGarments.value[0]
 
   return generateLightRecommendationReason({
-    fabric: localForm.fabric,
-    mainColorRgb: localForm.mainColorRgb,
+    fabric: primaryGarment?.fabric || localForm.fabric,
+    mainColorRgb: primaryGarment?.mainColorRgb || localForm.mainColorRgb,
     recommendedBrightness: hasData ? localForm.recommendedBrightness : null,
     recommendedTemp: hasData ? localForm.recommendedTemp : null,
   })
+})
+const garmentRecommendationSummary = computed(() => {
+  if (displayGarments.value.length === 0) {
+    return lightRecommendationReason.value.summary
+  }
+
+  const descriptions = displayGarments.value.map(
+    garment => `${GARMENT_LABELS[garment.category]}：${garment.fabric || '未识别面料'}，主色 RGB(${garment.mainColorRgb || '暂无主色'})`,
+  )
+  const weighting = displayGarments.value.length === 2
+    ? '；最终亮度和色温按服装区域面积加权'
+    : ''
+
+  return `${descriptions.join('；')}${weighting}。${lightRecommendationReason.value.summary}`
 })
 const clothDetected = ref<boolean | null>(null)
 const showClothPreviewModal = ref(false)
@@ -986,8 +1063,8 @@ const deviceNoError = computed(() => {
     return '分区内编号必须是从 1 开始的正整数'
   }
 
-  const duplicated = (props.allDevices || []).some(item => {
-    if (item.id === props.device.id) return false
+  const duplicated = (props.allDevices || []).filter(isLampDevice).some(item => {
+    if (String(item.id) === String(props.device.id)) return false
 
     const sameZone = (item.displayName || '').trim() === zoneName
     const sameNo = (item.deviceNo || '').trim() === deviceNo
@@ -1001,6 +1078,18 @@ const deviceNoError = computed(() => {
 
   return ''
 })
+
+function handleZoneChange(value: string | number) {
+  const zoneName = String(value)
+  if (normalizeZoneName(zoneName) === normalizeZoneName(localForm.displayName)) return
+
+  localForm.displayName = zoneName
+  localForm.deviceNo = findSmallestAvailableDeviceNo(
+    props.allDevices || [],
+    zoneName,
+    String(props.device.id),
+  )
+}
 
 function saveDeviceBaseInfo() {
   if (deviceNoError.value) {
@@ -1234,6 +1323,8 @@ function syncFromProps() {
   localForm.recommendedTemp = props.device.recommendedTemp ?? 4000
   localForm.fabric = props.device.fabric || ''
   localForm.mainColorRgb = props.device.mainColorRgb || ''
+  garmentState.value = normalizeGarmentState(props.device)
+  clothDetected.value = garmentState.value.clothDetected ?? null
   firmwareChannel.value = props.device.firmwareChannel === 'test' ? 'test' : 'stable'
   flowEnabled.value = Boolean(
   (props.device as any).flowEnabled ??
@@ -1289,9 +1380,10 @@ function resetForm() {
 }
 
 function emitRealtimeUpdate(lightControl = false) {
-  emit('update-realtime', {
+  emit('update-realtime', buildLampRealtimeUpdateEnvelope({
     id: props.device.id,
     lightControl,
+    garmentState: garmentState.value,
     payload: {
       chipId: localForm.chipId,
       ip: localForm.ip || '',
@@ -1307,7 +1399,7 @@ function emitRealtimeUpdate(lightControl = false) {
       mainColorRgb: localForm.mainColorRgb || '',
       
     },
-  })
+  }))
 }
 
 function handleBrightnessInput(event: Event) {
@@ -1360,6 +1452,8 @@ async function handleFabricFileChange(event: Event) {
 
   try {
     const result = await fabricRecognize(file, localForm.chipId)
+    garmentState.value = normalizeGarmentState(result)
+    clothDetected.value = garmentState.value.clothDetected ?? null
 
     const fabricName = result.fabric || result.label || ''
 
@@ -1381,10 +1475,6 @@ async function handleFabricFileChange(event: Event) {
 
     if (result.annotatedImageBase64) {
       annotatedImageBase64.value = result.annotatedImageBase64
-    }
-
-    if (result.clothDetected !== undefined) {
-      clothDetected.value = result.clothDetected
     }
 
     emitRealtimeUpdate()
@@ -1506,24 +1596,6 @@ const sliderTempValue = computed(() => {
     : (localForm.temp ?? 4000)
 })
 
-const rgbStyle = computed(() => {
-  const raw = localForm.mainColorRgb
-  if (!raw) return '#888'
-  if (raw.startsWith('rgb')) return raw
-  return `rgb(${raw})`
-})
-
-const textColor = computed(() => {
-  const raw = localForm.mainColorRgb
-  if (!raw) return '#fff'
-
-  const nums = raw.match(/\d+/g)
-  if (!nums || nums.length < 3) return '#fff'
-
-  const [r, g, b] = nums.map(Number)
-  const lum = 0.299 * r + 0.587 * g + 0.114 * b
-  return lum > 186 ? '#000' : '#fff'
-})
 </script>
 
 <style scoped>
@@ -1840,6 +1912,34 @@ const textColor = computed(() => {
 
 .device-info-cell.editable {
   cursor: text;
+}
+
+.zone-select-cell {
+  cursor: pointer;
+}
+
+.zone-cell-select :deep(.select-trigger) {
+  min-height: 0;
+  padding: 0 20px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+  box-shadow: none;
+}
+
+.zone-cell-select :deep(.select-trigger:hover),
+.zone-cell-select :deep(.select-trigger:focus) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.zone-cell-select :deep(.select-arrow) {
+  right: 0;
 }
 
 .device-info-cell input {
@@ -2203,18 +2303,86 @@ const textColor = computed(() => {
   margin-bottom: 12px;
 }
 
-.color-box {
-  display: inline-flex;
+.garment-details {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.garment-detail-row {
+  display: grid;
+  grid-template-columns: minmax(52px, 0.7fr) minmax(0, 1.4fr) minmax(36px, auto);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+}
+
+.garment-kind {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.garment-fabric {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.garment-confidence {
+  justify-self: end;
+  color: #2563eb;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.garment-color-bar {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  margin-top: 6px;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid #d6dde8;
+  border-radius: 10px;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.08);
+}
+
+.garment-color-segment {
+  display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 12px;
-  min-width: 180px;
-  height: 40px;
+  flex-shrink: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 8px;
+  overflow: hidden;
   text-align: center;
-  border-radius: 12px;
-  border: 1px solid #ccc;
-  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.08);
-  padding: 0 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.garment-color-segment + .garment-color-segment {
+  border-left: 1px solid rgba(255, 255, 255, 0.62);
+}
+
+.garment-empty-state {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
 }
 
 .lamp-card input[type='range'] {
@@ -2376,6 +2544,17 @@ const textColor = computed(() => {
   border-radius: 18px;
   padding: 20px;
   box-shadow: 0 20px 60px rgba(15, 23, 42, 0.24);
+}
+
+.segmentation-fallback-hint {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .cloth-preview-content {
@@ -2566,6 +2745,21 @@ const textColor = computed(() => {
   color: rgba(248, 250, 252, 0.96);
 }
 
+:global(body:has(.app-container.night-mode)) .zone-cell-select :deep(.select-trigger) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: rgba(248, 250, 252, 0.96);
+}
+
+:global(body:has(.app-container.night-mode)) .zone-cell-select :deep(.select-trigger:hover),
+:global(body:has(.app-container.night-mode)) .zone-cell-select :deep(.select-trigger:focus),
+:global(body:has(.app-container.night-mode)) .zone-cell-select.open :deep(.select-trigger) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
 :global(body:has(.app-container.night-mode)) .device-info-cell input::placeholder {
   color: rgba(203, 213, 225, 0.58);
 }
@@ -2722,9 +2916,154 @@ const textColor = computed(() => {
   color: #fecaca;
 }
 
-:global(.app-container.night-mode) .color-box {
+:global(.app-container.night-mode) .garment-detail-row,
+:global(.app-container.night-mode) .garment-empty-state {
+  background: rgba(15, 23, 42, 0.62);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: rgba(203, 213, 225, 0.78);
+}
+
+:global(.app-container.night-mode) .garment-kind {
+  color: rgba(248, 250, 252, 0.96);
+}
+
+:global(.app-container.night-mode) .garment-color-bar {
   border-color: rgba(148, 163, 184, 0.28);
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.22);
+}
+
+:global(body:has(.app-container.night-mode)) .segmentation-fallback-hint {
+  border-color: rgba(251, 191, 36, 0.24);
+  background: rgba(120, 53, 15, 0.28);
+  color: #fde68a;
+}
+
+@media (max-width: 768px) {
+  .lamp-card,
+  .placeholder-card {
+    padding: clamp(12px, 3.5vw, 16px);
+    border-radius: 14px;
+  }
+
+  .card-header {
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .lamp-card h3 {
+    margin-bottom: 0;
+    font-size: 16px;
+    line-height: 1.25;
+  }
+
+  .last-seen-under-name {
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .card-status-stack {
+    gap: 4px;
+  }
+
+  .status-badge,
+  .self-test-badge {
+    gap: 4px;
+    padding: 3px 7px;
+    font-size: 11px;
+  }
+
+  .status-badge::before,
+  .self-test-badge::before {
+    width: 6px;
+    height: 6px;
+  }
+
+  .field-label {
+    margin-top: 7px;
+    margin-bottom: 2px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .lamp-card input[type='range'] {
+    height: 28px;
+    margin-top: 0;
+  }
+
+  .checkbox-row {
+    min-height: 36px;
+    margin-top: 4px;
+    font-size: 13px;
+  }
+
+  .cloth-state-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    margin: 6px 0;
+  }
+
+  .cloth-state-strip div {
+    padding: 6px 4px;
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .cloth-state-strip span {
+    font-size: 10px;
+  }
+
+  .cloth-state-strip strong {
+    font-size: 12px;
+  }
+
+  .garment-details {
+    gap: 4px;
+    margin-top: 5px;
+  }
+
+  .garment-detail-row {
+    grid-template-columns: minmax(48px, 0.65fr) minmax(0, 1.35fr) auto;
+    gap: 5px;
+    padding: 6px 7px;
+    font-size: 11px;
+  }
+
+  .garment-color-bar {
+    min-height: 34px;
+    margin-top: 4px;
+    border-radius: 9px;
+  }
+
+  .garment-color-segment {
+    padding: 0 5px;
+    font-size: 12px;
+  }
+
+  .garment-empty-state {
+    margin-top: 5px;
+  }
+
+  .ai-actions,
+  .card-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+
+  .btn-ai,
+  .btn-secondary,
+  .btn-danger {
+    min-height: 44px;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+
+  .btn-preview {
+    margin-left: 0;
+  }
 }
 
 </style>

@@ -255,7 +255,7 @@ const TILT_MIN = -90
 const TILT_MAX = 90
 const SLIDER_MIN = 0
 const SLIDER_MAX_LAMP = 1200
-const SLIDER_MAX_CAM = 500
+const SLIDER_MAX_CAM = 1200
 const JOYSTICK_RENEW_INTERVAL = 150
 const JOYSTICK_DURATION_MS = 300
 
@@ -999,48 +999,105 @@ async function sendPreset(action: string) {
 }
 
 @media (max-width: 768px) {
+  .gimbal-panel {
+    padding: 12px;
+  }
+
+  .panel-desc {
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .form-row {
+    gap: 5px;
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+
+  .gimbal-self-test {
+    gap: 8px;
+    margin-top: 6px;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+
+  .speed-tab {
+    min-height: 40px;
+    padding: 6px 13px;
+  }
+
+  .mode-toggle-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+
+  .joystick-section {
+    margin-top: 10px;
+  }
+
   .gimbal-control-row {
     grid-template-columns: 1fr;
-    row-gap: 16px;
+    row-gap: 10px;
     max-width: 100%;
+    margin: 8px 0 4px;
   }
 
   .joystick-side {
     justify-self: center;
-    width: 200px;
-    min-width: 200px;
-    height: 200px;
-    flex: 0 0 200px;
+    width: clamp(144px, 40vw, 172px);
+    min-width: 0;
+    max-width: 172px;
+    height: clamp(144px, 40vw, 172px);
+    flex: 0 0 clamp(144px, 40vw, 172px);
   }
 
   .joystick-container {
-    width: 200px;
-    height: 200px;
+    width: clamp(144px, 40vw, 172px);
+    max-width: 172px;
+    height: clamp(144px, 40vw, 172px);
   }
 
   .gimbal-preset-side {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+    gap: 8px;
+  }
+
+  .preset-card {
+    min-height: 56px;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+
+  .preset-card strong {
+    margin-bottom: 2px;
+    font-size: 14px;
+  }
+
+  .preset-card span {
+    font-size: 11px;
+    line-height: 1.25;
   }
 
   .joystick-around {
-    width: 150px;
-    height: 150px;
+    width: 75%;
+    height: 75%;
   }
 
   .joystick-handle {
-    width: 116px;
-    height: 116px;
+    width: 77.33%;
+    height: 77.33%;
   }
 
   .joystick-button {
-    width: 76px;
-    height: 76px;
+    width: 65.52%;
+    height: 65.52%;
   }
 
   .joystick-inside {
-    width: 62px;
-    height: 62px;
+    width: 81.58%;
+    height: 81.58%;
   }
 
   .joystick-dot {
@@ -1049,7 +1106,23 @@ async function sendPreset(action: string) {
   }
 
   .joystick-icon {
-    width: 24px;
+    width: 20px;
+  }
+
+  .joystick-icon-up {
+    top: 12%;
+  }
+
+  .joystick-icon-right {
+    right: 7%;
+  }
+
+  .joystick-icon-down {
+    bottom: 7%;
+  }
+
+  .joystick-icon-left {
+    left: 12%;
   }
 
   .form-row {
@@ -1074,7 +1147,7 @@ async function sendPreset(action: string) {
 
 @media (max-width: 480px) {
   .gimbal-preset-side {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

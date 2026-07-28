@@ -51,6 +51,16 @@ public class AndroidSmartConfigBridge {
         this.wifiManager = (WifiManager) activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
     }
 
+    void notifyBridgeReady() {
+        Log.d(TAG, "AndroidSmartConfig bridge injected");
+        activity.runOnUiThread(() -> {
+            String script = "window.dispatchEvent(new CustomEvent('smartconfig-bridge-ready', { detail: "
+                    + "{\"available\":true,\"source\":\"AndroidSmartConfig\"}"
+                    + " }));";
+            webView.evaluateJavascript(script, null);
+        });
+    }
+
     // ---- Environment / capability check ----
 
     @JavascriptInterface
@@ -129,8 +139,8 @@ public class AndroidSmartConfigBridge {
             }
 
             WifiInfo info = getConnectionInfo();
-            if (info == null) {
-                Log.d(TAG, "getWifiInfo result: not_connected_to_wifi (connectionInfo is null)");
+            if (info == null || info.getIpAddress() == 0) {
+                Log.d(TAG, "getWifiInfo result: not_connected_to_wifi (missing connection or IP)");
                 return json("not_connected_to_wifi", "手机未连接 WiFi，请先连接 2.4G WiFi");
             }
 
@@ -156,9 +166,7 @@ public class AndroidSmartConfigBridge {
             }
 
             // ---- Validate BSSID ----
-            boolean bssidValid = !TextUtils.isEmpty(bssid)
-                    && !"02:00:00:00:00:00".equals(bssid)
-                    && !"00:00:00:00:00:00".equals(bssid);
+            boolean bssidValid = isValidBssid(bssid);
             Log.d(TAG, "  BSSID check: " + (bssidValid ? "valid" : "FAILED (empty or all-zeros)"));
 
             JSONObject result = new JSONObject();
@@ -204,7 +212,7 @@ public class AndroidSmartConfigBridge {
         // ---- Check 1: SSID ----
         if (TextUtils.isEmpty(targetSsid)) {
             Log.d(TAG, "result: ssid_empty");
-            return json("ssid_empty", "SSID 不能为空，请先获取或手动输入当前 WiFi 名称");
+            return json("ssid_empty", "SSID 不能为空，请先获取当前 WiFi 信息");
         }
 
         // ---- Check 2: Password ----
@@ -238,21 +246,41 @@ public class AndroidSmartConfigBridge {
             return json("wifi_disabled", "WiFi 未开启，请先打开 WiFi 开关");
         }
 
-        // ---- Check 6: WiFi connection info ----
+        // ---- Check 6: WiFi permissions ----
+        if (!ensureWifiPermissions()) {
+            pendingAction = "getWifiInfo";
+            Log.d(TAG, "result: permission_denied");
+            return json("permission_denied", "权限未授权，请允许定位 / 附近设备权限后重新获取当前 WiFi");
+        }
+
+        // ---- Check 7: Location service ----
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && !isLocationEnabled()) {
+            Log.d(TAG, "result: location_disabled");
+            return json("location_disabled", "系统定位未开启，请打开定位后重新获取当前 WiFi");
+        }
+
+        // ---- Check 8: Current WiFi identity ----
         @SuppressWarnings("deprecation")
         WifiInfo info = getConnectionInfo();
-        boolean wifiConnected = info != null;
-        Log.d(TAG, "  wifiConnected=" + wifiConnected);
-
-        // ---- Check 7: BSSID ----
-        String rawBssid = info == null ? "" : normalizeText(info.getBSSID());
-        if ("02:00:00:00:00:00".equals(rawBssid)) {
-            rawBssid = "";
+        String currentSsid = info == null ? "" : cleanSsid(info.getSSID());
+        if (info == null || TextUtils.isEmpty(currentSsid) || info.getIpAddress() == 0) {
+            Log.d(TAG, "result: not_connected_to_wifi");
+            return json("not_connected_to_wifi", "手机未连接 WiFi，请先连接目标 2.4G WiFi");
         }
-        final String bssid = rawBssid;
-        Log.d(TAG, "  bssid=" + (TextUtils.isEmpty(bssid) ? "empty (SmartConfig will broadcast to all APs)" : bssid));
 
-        // ---- Check 8: MulticastLock ----
+        if (!targetSsid.equals(currentSsid)) {
+            Log.d(TAG, "result: wifi_changed target=" + targetSsid + ", current=" + currentSsid);
+            return json("wifi_changed", "当前 WiFi 已变化，请重新获取 WiFi 信息后再配网");
+        }
+
+        final String bssid = normalizeText(info.getBSSID());
+        if (!isValidBssid(bssid)) {
+            Log.d(TAG, "result: bssid_required bssid=" + bssid);
+            return json("bssid_required", "无法获取当前 WiFi BSSID，请确认权限和定位已开启，并重新连接目标 2.4G WiFi");
+        }
+        Log.d(TAG, "  currentSsid=" + currentSsid + ", bssid=" + bssid);
+
+        // ---- Check 9: MulticastLock ----
         WifiManager.MulticastLock multicastLock = null;
         try {
             multicastLock = wifiManager.createMulticastLock("SmartConfigLock");
@@ -264,7 +292,7 @@ public class AndroidSmartConfigBridge {
             return json("multicast_lock_failed", "无法获取 MulticastLock，SmartConfig 需要多播权限");
         }
 
-        // ---- Check 9: Create EsptouchTask ----
+        // ---- Check 10: Create EsptouchTask ----
         final EsptouchTask task;
         try {
             task = new EsptouchTask(targetSsid, bssid, targetPassword, activity.getApplicationContext());
@@ -278,7 +306,7 @@ public class AndroidSmartConfigBridge {
             return json("smartconfig_task_create_failed", "无法创建 SmartConfig 任务: " + e.getMessage());
         }
 
-        // ---- Check 10: Stop previous task and start new thread ----
+        // ---- Check 11: Stop previous task and start new thread ----
         stopRunningTask(false);
         final WifiManager.MulticastLock finalLock = multicastLock;
 
@@ -364,7 +392,12 @@ public class AndroidSmartConfigBridge {
             String result = getWifiInfo();
             try {
                 JSONObject obj = new JSONObject(result);
-                dispatchStatus(obj);
+                JSONObject wifiInfoEvent = new JSONObject(obj.toString());
+                wifiInfoEvent.put("source", "getWifiInfo");
+                if ("success".equals(wifiInfoEvent.optString("status"))) {
+                    wifiInfoEvent.put("status", "wifi_info");
+                }
+                dispatchStatus(wifiInfoEvent);
             } catch (JSONException ignored) {
                 dispatchStatus("ssid_failed", "获取 WiFi 信息失败", null);
             }
@@ -649,6 +682,14 @@ public class AndroidSmartConfigBridge {
 
     private String normalizeText(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private boolean isValidBssid(String value) {
+        String normalized = normalizeText(value);
+        return !TextUtils.isEmpty(normalized)
+                && !"02:00:00:00:00:00".equalsIgnoreCase(normalized)
+                && !"00:00:00:00:00:00".equalsIgnoreCase(normalized)
+                && normalized.matches("(?i)([0-9a-f]{2}:){5}[0-9a-f]{2}");
     }
 
     private boolean isLocalOnlyHost(String host) {

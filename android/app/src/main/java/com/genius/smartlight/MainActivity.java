@@ -17,6 +17,12 @@ public class MainActivity extends BridgeActivity {
         WebView webView = getBridge().getWebView();
         smartConfigBridge = new AndroidSmartConfigBridge(this, webView);
         webView.addJavascriptInterface(smartConfigBridge, "AndroidSmartConfig");
+        smartConfigBridge.notifyBridgeReady();
+        webView.postDelayed(() -> {
+            if (smartConfigBridge != null) {
+                smartConfigBridge.notifyBridgeReady();
+            }
+        }, 300);
     }
 
     @Override

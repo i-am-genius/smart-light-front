@@ -9,6 +9,8 @@ import type {
   CamPresenceState,
   CamRoiConfig,
   CamStatusState,
+  CamTrackingControlPayload,
+  CamTrackingControlResult,
   CameraPtzPayload,
   FirmwareHistoryParams,
   FirmwareItem,
@@ -48,7 +50,7 @@ export interface UpdateDeviceOptions {
 }
 
 export async function updateDevice(
-  id: number,
+  id: string | number,
   payload: DeviceCreatePayload,
   options: UpdateDeviceOptions = {},
 ): Promise<boolean> {
@@ -138,6 +140,26 @@ export async function sendCamPtz(payload: CameraPtzPayload): Promise<boolean> {
 
 export async function sendCamAimTarget(payload: CameraAimTargetPayload): Promise<boolean> {
   const res = await http.post<CommonResult<boolean>>('/admin/device/cam/aim-target', payload)
+  return res.data.data
+}
+
+export async function startCamTracking(
+  payload: CamTrackingControlPayload,
+): Promise<CamTrackingControlResult> {
+  const res = await http.post<CommonResult<CamTrackingControlResult>>(
+    '/admin/device/cam/tracking/start',
+    payload,
+  )
+  return res.data.data
+}
+
+export async function stopCamTracking(
+  payload: CamTrackingControlPayload,
+): Promise<CamTrackingControlResult> {
+  const res = await http.post<CommonResult<CamTrackingControlResult>>(
+    '/admin/device/cam/tracking/stop',
+    payload,
+  )
   return res.data.data
 }
 

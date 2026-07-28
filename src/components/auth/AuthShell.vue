@@ -1,5 +1,6 @@
 <template>
   <div class="auth-page">
+    <AuthFollowLight />
     <div class="auth-shell">
       <div class="auth-card">
         <div class="auth-brand-row">
@@ -26,6 +27,8 @@
 </template>
 
 <script setup lang="ts">
+import AuthFollowLight from './AuthFollowLight.vue'
+
 defineProps<{
   title: string
   subtitle?: string
@@ -43,7 +46,7 @@ defineProps<{
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  background: #eef4fb;
+  background: #070b12;
   overflow: hidden;
 }
 
@@ -52,27 +55,17 @@ defineProps<{
   position: fixed;
   inset: 0;
   z-index: -2;
-  background-image: url('/backgrounds/bg-day.png');
+  background-image: url('/backgrounds/bg-night.png');
   background-size: cover;
   background-position: center right;
   background-repeat: no-repeat;
-  opacity: 0.95;
-  filter: blur(8px);
-  transform: scale(1.02);
-}
-
-.auth-page::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(90deg, rgba(245, 248, 252, 0.28) 0%, rgba(245, 248, 252, 0.14) 48%, rgba(245, 248, 252, 0.04) 100%);
-  pointer-events: none;
+  filter: saturate(0.92) brightness(0.82);
 }
 
 /* ===== Shell & card (with entrance animation) ===== */
 .auth-shell {
+  position: relative;
+  z-index: 2;
   width: min(100%, 460px);
   animation: card-rise 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
@@ -92,10 +85,13 @@ defineProps<{
   width: 100%;
   padding: 30px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.76);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.10);
-  backdrop-filter: blur(16px);
+  background: rgba(15, 20, 28, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.58),
+    0 3px 12px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  backdrop-filter: blur(20px) saturate(1.08);
   box-sizing: border-box;
 }
 
@@ -112,9 +108,9 @@ defineProps<{
   height: 42px;
   border-radius: 14px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(219, 234, 254, 0.72));
-  border: 1px solid rgba(191, 219, 254, 0.82);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
+    linear-gradient(135deg, rgba(31, 48, 70, 0.96), rgba(13, 19, 28, 0.9));
+  border: 1px solid rgba(124, 166, 228, 0.28);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -125,13 +121,13 @@ defineProps<{
 @keyframes brand-pulse {
   0%, 100% {
     box-shadow:
-      0 10px 22px rgba(37, 99, 235, 0.18),
-      0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+      0 10px 22px rgba(0, 0, 0, 0.26),
+      0 0 0 1px rgba(255, 255, 255, 0.08) inset;
   }
   50% {
     box-shadow:
-      0 12px 38px rgba(37, 99, 235, 0.42),
-      0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+      0 12px 38px rgba(37, 99, 235, 0.34),
+      0 0 0 1px rgba(255, 255, 255, 0.1) inset,
       0 0 60px rgba(96, 165, 250, 0.2);
   }
 }
@@ -151,8 +147,8 @@ defineProps<{
 }
 
 .bulb-glow {
-  fill: rgba(96, 165, 250, 0.2);
-  stroke: #2563eb;
+  fill: rgba(96, 165, 250, 0.22);
+  stroke: #7db1ff;
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -162,18 +158,18 @@ defineProps<{
 
 @keyframes glow-breathe {
   0%, 100% {
-    fill: rgba(96, 165, 250, 0.12);
-    stroke: rgba(37, 99, 235, 0.6);
+    fill: rgba(96, 165, 250, 0.14);
+    stroke: rgba(125, 177, 255, 0.7);
   }
   50% {
-    fill: rgba(96, 165, 250, 0.45);
-    stroke: rgba(37, 99, 235, 1);
+    fill: rgba(96, 165, 250, 0.4);
+    stroke: rgba(143, 189, 255, 1);
   }
 }
 
 .bulb-line {
   fill: none;
-  stroke: #1d4ed8;
+  stroke: #8fbdff;
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -182,17 +178,17 @@ defineProps<{
 
 @keyframes filament-glow {
   0%, 100% {
-    stroke: rgba(29, 78, 216, 0.5);
+    stroke: rgba(143, 189, 255, 0.6);
     stroke-width: 1.7;
   }
   50% {
-    stroke: rgba(29, 78, 216, 1);
+    stroke: rgba(167, 200, 255, 1);
     stroke-width: 2.1;
   }
 }
 
 .auth-brand-row strong {
-  color: #111827;
+  color: #f2f5f9;
   font-size: 18px;
   font-weight: 800;
   line-height: 1;
@@ -202,12 +198,12 @@ defineProps<{
 .form-header h2 {
   margin: 0 0 8px;
   font-size: 26px;
-  color: #111827;
+  color: #f2f5f9;
 }
 
 .form-header p {
   margin: 0 0 24px;
-  color: #64748b;
+  color: #9ba8b8;
   font-size: 14px;
 }
 
@@ -219,7 +215,7 @@ defineProps<{
 :deep(.form-item label) {
   display: block;
   margin-bottom: 8px;
-  color: #475569;
+  color: #c9d1dc;
   font-size: 13px;
   font-weight: 700;
 }
@@ -228,19 +224,29 @@ defineProps<{
   width: 100%;
   height: 44px;
   border-radius: 12px;
-  border: 1px solid rgba(203, 213, 225, 0.92);
+  border: 1px solid #354152;
   padding: 0 14px;
   font-size: 14px;
+  color: #e6ecf3;
   outline: none;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(5, 9, 15, 0.72);
   transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+:deep(.form-item input::placeholder) {
+  color: #738094;
+}
+
+:deep(.form-item input:hover:not(:focus)) {
+  border-color: #4b5d73;
+  background: rgba(8, 13, 21, 0.84);
 }
 
 :deep(.form-item input:focus) {
   border-color: #60a5fa;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
+  background: #0b111a;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16);
 }
 
 /* ===== Primary button (with hover animation) ===== */
@@ -279,14 +285,18 @@ defineProps<{
 :deep(.form-footer) {
   margin-top: 18px;
   text-align: center;
-  color: #64748b;
+  color: #9ba8b8;
   font-size: 14px;
 }
 
 :deep(.form-footer a) {
-  color: #2563eb;
+  color: #78aaf5;
   text-decoration: none;
   font-weight: 700;
+}
+
+:deep(.form-footer a:hover) {
+  color: #a7c8ff;
 }
 
 /* ===== Responsive: 640px ===== */
@@ -339,7 +349,7 @@ defineProps<{
 @media (max-width: 760px) {
   .auth-page {
     padding: 16px;
-    align-items: flex-start;
+    align-items: center;
   }
 
   .auth-card {

@@ -140,233 +140,41 @@ function goLogin() {
 </script>
 
 <style scoped>
-.auth-page {
-  min-height: 100vh;
-  position: relative;
-  isolation: isolate;
-  padding: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  background: #eef4fb;
-  overflow: hidden;
-}
-
-.auth-page::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  background-image: url('/backgrounds/bg-day.png');
-  background-size: cover;
-  background-position: center right;
-  background-repeat: no-repeat;
-  opacity: 0.95;
-  filter: blur(8px);
-  transform: scale(1.02);
-}
-
-.auth-page::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(90deg, rgba(245, 248, 252, 0.28) 0%, rgba(245, 248, 252, 0.14) 48%, rgba(245, 248, 252, 0.04) 100%);
-  pointer-events: none;
-}
-
-.auth-shell {
+/* Page background, card, inputs, button and footer are provided by AuthShell.
+   RegisterView only widens the shell and adds a staggered field entrance. */
+:deep(.auth-shell) {
   width: min(100%, 480px);
 }
 
-.auth-card {
-  width: 100%;
-  padding: 30px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.76);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.10);
-  backdrop-filter: blur(16px);
-  box-sizing: border-box;
+/* Staggered field entrance — fields glide in one after another */
+.form-body :deep(.form-item) {
+  animation: field-rise 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
-.auth-brand-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+.form-body :deep(.form-item:nth-child(1)) { animation-delay: 0.04s; }
+.form-body :deep(.form-item:nth-child(2)) { animation-delay: 0.10s; }
+.form-body :deep(.form-item:nth-child(3)) { animation-delay: 0.16s; }
+.form-body :deep(.form-item:nth-child(4)) { animation-delay: 0.22s; }
+
+.form-body :deep(.primary-btn) {
+  animation: field-rise 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) 0.28s both;
 }
 
-.brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(219, 234, 254, 0.72));
-  border: 1px solid rgba(191, 219, 254, 0.82);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brand-mark svg {
-  width: 26px;
-  height: 26px;
-  display: block;
-}
-
-.bulb-glow {
-  fill: rgba(96, 165, 250, 0.2);
-  stroke: #2563eb;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.bulb-line {
-  fill: none;
-  stroke: #1d4ed8;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.auth-brand-row strong {
-  color: #111827;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.form-header h2 {
-  margin: 0 0 8px;
-  font-size: 26px;
-  color: #111827;
-}
-
-.form-header p {
-  margin: 0 0 24px;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.form-item {
-  margin-bottom: 18px;
-}
-
-.form-item label {
-  display: block;
-  margin-bottom: 8px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.form-item input {
-  width: 100%;
-  height: 44px;
-  border-radius: 12px;
-  border: 1px solid rgba(203, 213, 225, 0.92);
-  padding: 0 14px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.88);
-  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-}
-
-.form-item input:focus {
-  border-color: #60a5fa;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
-}
-
-.primary-btn {
-  width: 100%;
-  height: 44px;
-  margin-top: 8px;
-  border: 1px solid #2563eb;
-  border-radius: 12px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.primary-btn:hover:not(:disabled) {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-}
-
-.primary-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.form-footer {
-  margin-top: 18px;
-  text-align: center;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.form-footer a {
-  color: #2563eb;
-  text-decoration: none;
-  font-weight: 700;
-}
-
-
-@media (max-width: 640px) {
-  .auth-page {
-    padding: 16px;
+@keyframes field-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
-
-  .auth-card {
-    padding: 24px 20px;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
+}
 
-  .form-header h2 {
-    font-size: 20px;
-  }
-
-  .form-header p {
-    font-size: 12px;
-    margin-bottom: 20px;
-  }
-
-  .form-item {
-    margin-bottom: 14px;
-  }
-
-  .form-item label {
-    font-size: 12px;
-    margin-bottom: 6px;
-  }
-
-  .form-item input {
-    height: 42px;
-    font-size: 13px;
-    border-radius: 11px;
-  }
-
-  .primary-btn {
-    height: 42px;
-    font-size: 14px;
-    border-radius: 11px;
-    margin-top: 4px;
-  }
-
-  .form-footer {
-    font-size: 12px;
-    margin-top: 14px;
+@media (prefers-reduced-motion: reduce) {
+  .form-body :deep(.form-item),
+  .form-body :deep(.primary-btn) {
+    animation: none;
   }
 }
 </style>

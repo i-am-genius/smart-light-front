@@ -10,40 +10,48 @@
       <!-- Weather icon -->
       <span
         v-if="weatherIcon"
+        :key="weatherIcon.type"
         class="weather-icon"
         :class="`weather-icon--${weatherIcon.type}`"
         aria-hidden="true"
       >
         <svg viewBox="0 0 36 36" role="img" focusable="false">
-          <!-- Clear sky — sun with gentle glow pulse -->
+          <!-- Clear sky — layered glow, rotating rays, glossy core -->
           <g v-if="weatherIcon.type === 'clear'" class="icon-sun">
-            <!-- Outer halo -->
-            <circle cx="18" cy="18" r="12" class="sun-halo" />
-            <!-- Core -->
-            <circle cx="18" cy="18" r="6" class="sun-core" />
-            <!-- 8 curved rays -->
+            <!-- Soft outer glow -->
+            <circle cx="18" cy="18" r="11" class="sun-glow" />
+            <!-- 8 straight rays, slow rotation -->
             <g class="sun-rays">
-              <path d="M18 3.5c.4 2.2.5 3.3 0 5.5" />
-              <path d="M18 27c-.4 2.2-.5 3.3 0 5.5" />
-              <path d="M3.5 18c2.2-.4 3.3-.5 5.5 0" />
-              <path d="M27 18c2.2.4 3.3.5 5.5 0" />
-              <path d="M7.8 7.8c1.6 1 2.4 1.5 3.9 2.5" />
-              <path d="M24.3 24.3c1.6 1 2.4 1.5 3.9 2.5" />
-              <path d="M28.2 7.8c-1 1.6-1.5 2.4-2.5 3.9" />
-              <path d="M11.7 24.3c-1 1.6-1.5 2.4-2.5 3.9" />
+              <path d="M18 5v4" />
+              <path d="M27.2 8.8l-2.8 2.8" />
+              <path d="M31 18h-4" />
+              <path d="M27.2 27.2l-2.8-2.8" />
+              <path d="M18 31v-4" />
+              <path d="M8.8 27.2l2.8-2.8" />
+              <path d="M5 18h4" />
+              <path d="M8.8 8.8l2.8 2.8" />
+            </g>
+            <!-- Glossy core with highlight -->
+            <g class="sun-core-group">
+              <circle cx="18" cy="18" r="5.5" class="sun-core" />
+              <circle cx="15.8" cy="15.8" r="1.8" class="sun-core-hl" />
             </g>
           </g>
 
           <!-- Cloud-based icons -->
           <g v-else class="icon-cloud-group">
-            <!-- Sun peek (partly cloudy) -->
+            <!-- Sun peek (partly cloudy) — sun tucked top-right, cloud in front -->
             <g v-if="weatherIcon.type === 'partly'" class="icon-sun-peek">
-              <circle cx="13.5" cy="12" r="4.5" class="sun-peek-body" />
+              <circle cx="24.5" cy="10.5" r="6.5" class="sun-peek-glow" />
+              <!-- Rays fan across the exposed (upper-right) arc only -->
               <g class="sun-peek-rays">
-                <path d="M13.5 4.5v2.5" />
-                <path d="M7 8.5l1.8 1.8" />
-                <path d="M20 8.5l-1.8 1.8" />
+                <path d="M24.5 4.5v-2.5" />
+                <path d="M28.7 6.3l1.8-1.8" />
+                <path d="M30.5 10.5h2.5" />
+                <path d="M20.3 6.3l-1.8-1.8" />
+                <path d="M28.7 14.7l1.8 1.8" />
               </g>
+              <circle cx="24.5" cy="10.5" r="4" class="sun-peek-body" />
             </g>
 
             <!-- Main cloud — float animation -->
@@ -293,30 +301,39 @@ onUnmounted(() => {
 }
 
 /* ── Sun ────────────────────────────────────────────────────── */
-.icon-sun .sun-halo {
-  fill: rgba(251, 191, 36, 0.08);
-  stroke: rgba(251, 191, 36, 0.2);
-  stroke-width: 1.5;
-  animation: halo-breathe 3s ease-in-out infinite;
+.icon-sun {
+  transform-origin: 18px 18px;
+  animation: sun-breathe 4s ease-in-out infinite;
+}
+
+.icon-sun .sun-glow {
+  fill: rgba(251, 191, 36, 0.18);
+  stroke: none;
+  transform-origin: 18px 18px;
+  animation: glow-pulse 4s ease-in-out infinite;
 }
 
 .icon-sun .sun-core {
   fill: #fbbf24;
   stroke: #f59e0b;
-  stroke-width: 1.5;
-  animation: core-breathe 3s ease-in-out infinite;
+  stroke-width: 1.2;
+}
+
+.icon-sun .sun-core-hl {
+  fill: rgba(255, 255, 255, 0.55);
+  stroke: none;
 }
 
 .icon-sun .sun-rays {
   transform-origin: 18px 18px;
-  animation: ray-spin 20s linear infinite;
+  animation: ray-spin 24s linear infinite;
 }
 
 .icon-sun .sun-rays path {
   stroke: #f59e0b;
-  stroke-width: 2;
-  opacity: 0.9;
-  animation: ray-breathe 3s ease-in-out infinite;
+  stroke-width: 2.2;
+  opacity: 0.85;
+  animation: ray-breathe 4s ease-in-out infinite;
 }
 
 @keyframes ray-spin {
@@ -324,37 +341,40 @@ onUnmounted(() => {
   to   { transform: rotate(360deg); }
 }
 
-@keyframes halo-breathe {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50%      { opacity: 1; transform: scale(1.06); }
+@keyframes sun-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
 }
 
-@keyframes core-breathe {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.04); }
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.95); }
+  50%      { opacity: 1; transform: scale(1.12); }
 }
 
 @keyframes ray-breathe {
-  0%, 100% { opacity: 0.7; }
+  0%, 100% { opacity: 0.6; }
   50%      { opacity: 1; }
 }
 
-/* ── Sun peek (partly cloudy) ───────────────────────────────── */
+/* ── Sun peek (partly cloudy) — corner sun behind cloud ─────── */
+.icon-sun-peek .sun-peek-glow {
+  fill: rgba(251, 176, 36, 0.4);
+  stroke: none;
+  transform-origin: 24.5px 10.5px;
+  animation: glow-pulse 4s ease-in-out infinite;
+}
+
 .icon-sun-peek .sun-peek-body {
-  fill: rgba(251, 191, 36, 0.2);
+  fill: #fbbf24;
+  stroke: #ea9008;
+  stroke-width: 1.4;
+}
+
+.icon-sun-peek .sun-peek-rays path {
   stroke: #f59e0b;
-  animation: sun-peek-pulse 3s ease-in-out infinite;
-}
-
-.icon-sun-peek .sun-peek-rays {
-  transform-origin: 13.5px 12px;
-  opacity: 0.7;
-  animation: sun-peek-pulse 3s ease-in-out infinite;
-}
-
-@keyframes sun-peek-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.7; }
+  stroke-width: 2.6;
+  opacity: 1;
+  animation: ray-breathe 4s ease-in-out infinite;
 }
 
 /* ── Cloud ──────────────────────────────────────────────────── */
@@ -369,8 +389,9 @@ onUnmounted(() => {
 
 /* Cloud palette per weather type */
 .weather-icon--partly .cloud-fill {
-  fill: rgba(203, 213, 225, 0.22);
-  stroke: #b0bec5;
+  fill: rgba(148, 163, 184, 0.35);
+  stroke: #94a3b8;
+  stroke-width: 2.4;
 }
 
 .weather-icon--cloudy .cloud-fill {
@@ -399,8 +420,8 @@ onUnmounted(() => {
 }
 
 @keyframes cloud-float {
-  0%, 100% { transform: translateX(0); }
-  50%      { transform: translateX(1.2px); }
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(1.2px, -0.8px); }
 }
 
 /* ── Rain ───────────────────────────────────────────────────── */
@@ -560,31 +581,62 @@ onUnmounted(() => {
 }
 
 /* ================================================================
+   Reduced motion — honor OS preference, freeze all icon animation
+   ================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .current-time,
+  .weather-icon,
+  .icon-sun,
+  .sun-glow,
+  .sun-rays,
+  .sun-rays path,
+  .sun-peek-glow,
+  .sun-peek-body,
+  .sun-peek-rays,
+  .cloud-body,
+  .raindrop,
+  .snowflake,
+  .fog-line,
+  .thunder-bolt,
+  .hailstone {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Keep particle-based icons legible when their fade-in is disabled */
+  .raindrop,
+  .snowflake,
+  .fog-line {
+    opacity: 0.85 !important;
+  }
+}
+
+/* ================================================================
    Night mode overrides
    ================================================================ */
-:global(.app-container.night-mode) .current-time {
+:global(.app-container.night-mode .current-time) {
   color: rgba(248, 250, 252, 0.96);
   text-shadow: 0 0 20px rgba(148, 163, 184, 0.15);
 }
 
-:global(.app-container.night-mode) .time-row {
+:global(.app-container.night-mode .time-row) {
   color: rgba(226, 232, 240, 0.78);
 }
 
-:global(.app-container.night-mode) .weather-icon {
+:global(.app-container.night-mode .weather-icon) {
   color: rgba(203, 213, 225, 0.88);
 }
 
-:global(.app-container.night-mode) .icon-snow .snowflake path {
+:global(.app-container.night-mode .icon-snow .snowflake path) {
   stroke: rgba(255, 255, 255, 0.95);
 }
 
-:global(.app-container.night-mode) .weather-icon--snow .cloud-fill {
+:global(.app-container.night-mode .weather-icon--snow .cloud-fill) {
   fill: rgba(200, 210, 220, 0.2);
   stroke: rgba(200, 210, 220, 0.5);
 }
 
-:global(.app-container.night-mode) .time-divider {
+:global(.app-container.night-mode .time-divider) {
   opacity: 0.25;
 }
 

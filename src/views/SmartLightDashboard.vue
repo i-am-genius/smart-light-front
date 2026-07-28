@@ -15,11 +15,13 @@
         :name="pageTransitionName"
         @before-leave="measurePagePushDistance"
         @before-enter="beginPageSwitch"
-        @after-enter="endPageSwitch"
-        @enter-cancelled="endPageSwitch"
-        @leave-cancelled="endPageSwitch"
       >
-      <section v-if="activeTab === 'main'" key="main" class="page-section">
+      <section
+        v-if="mountedTabs.has('main')"
+        v-show="activeTab === 'main'"
+        key="main"
+        class="page-section"
+      >
         <TopStatusBar
           :current-time="currentTime"
           :week-info="weekInfo"
@@ -209,13 +211,24 @@
               </div>
             </div>
             <div class="three-layout-mvp-panel">
-              <ThreeLightingLayout :devices="devices" :active="activeTab === 'main'" />
+              <ThreeLightingLayout
+                v-model:active-zone-id="activeZoneId"
+                :devices="devices"
+                :zones="zoneDefinitions"
+                :active="activeTab === 'main'"
+                :zone-management-pending="zoneManagementPending || deviceMutationPending"
+                @zone-add="handleZoneAdd"
+                @zone-delete="handleZoneDelete"
+                @zone-move="handleZoneMove"
+                @swap-device-numbers="handleDeviceNumberSwap"
+              />
             </div>
           </div>
         </div>
 
         <DeviceGrid
           :devices="devices"
+          :zones="zoneDefinitions"
           :loading="loading"
           :deleting-id="deletingId"
           @refresh="loadDevices"
@@ -223,10 +236,20 @@
           @delete="handleDeleteDevice"
         />
 
-      </section> 
+      </section>
+      </Transition>
 
-
-      <section v-else-if="activeTab === 'flow'" key="flow" class="page-section">
+      <Transition
+        :name="pageTransitionName"
+        @before-leave="measurePagePushDistance"
+        @before-enter="beginPageSwitch"
+      >
+      <section
+        v-if="mountedTabs.has('flow')"
+        v-show="activeTab === 'flow'"
+        key="flow"
+        class="page-section"
+      >
         <FlowOverview
           :devices="devices"
           :latest-lux="latestLux"
@@ -238,8 +261,19 @@
           :flow-loading="flowDataLoading"
         />
       </section>
+      </Transition>
 
-    <section v-else-if="activeTab === 'settings'" key="settings" class="page-section">
+    <Transition
+      :name="pageTransitionName"
+      @before-leave="measurePagePushDistance"
+      @before-enter="beginPageSwitch"
+    >
+    <section
+      v-if="mountedTabs.has('settings')"
+      v-show="activeTab === 'settings'"
+      key="settings"
+      class="page-section"
+    >
       <div class="settings-layout">
         <StoreSettingsPanel
           v-model="storeSettings"
@@ -269,8 +303,19 @@
         </div>
       </div>
     </section>
+    </Transition>
 
-    <section v-else-if="activeTab === 'firmware'" key="firmware" class="page-section">
+    <Transition
+      :name="pageTransitionName"
+      @before-leave="measurePagePushDistance"
+      @before-enter="beginPageSwitch"
+    >
+    <section
+      v-if="mountedTabs.has('firmware')"
+      v-show="activeTab === 'firmware'"
+      key="firmware"
+      class="page-section"
+    >
       <FirmwareManagePanel />
     </section>
     </Transition>
@@ -280,6 +325,8 @@
     v-if="showAddDeviceModal"
     :submitting="creating"
     :initial-data="pendingScannedDevice"
+    :zones="zoneDefinitions"
+    :devices="devices"
     @close="closeAddDeviceModal"
     @submit="handleCreateDevice"
   />
@@ -318,6 +365,7 @@ import type {
   DeviceCreatePayload,
   DeviceItem,
   DeviceOnlineItem,
+  GarmentState,
 } from '../types/device'
 import DurationQueryPanel from '../components/settings/DurationQueryPanel.vue'
 import ArmControlPanel from '../components/settings/ArmControlPanel.vue'
@@ -331,6 +379,27 @@ import { regions } from '../constants/china-region'
 import { STORE_STYLE_MAP } from '../constants/store'
 import { getErrorMessage } from '../utils/error'
 import { isLampDevice, normalizeDeviceType } from '../utils/device'
+import {
+  buildLampRealtimeUpdateEnvelope,
+  mergeLampRealtimeDeviceState,
+  normalizeGarmentState,
+} from '../utils/garmentRecognition'
+import {
+  FabricImageAssembler,
+  type CompletedFabricImage,
+} from '../utils/fabricImageBinary'
+import {
+  UNASSIGNED_ZONE_NAME,
+  deriveZoneDefinitions,
+  normalizeZoneName,
+  type ZoneDefinition,
+} from '../utils/deviceZones'
+import {
+  loadZoneDefinitions,
+  removeStoredZoneLayout,
+  saveZoneDefinitions,
+} from '../utils/deviceZoneStorage'
+import { migrateDevicesToZone, swapDeviceNumbers } from '../utils/deviceZoneMutations'
 import { formatDate } from '../utils/format'
 import { useToast } from '../composables/useToast'
 import { useShake } from '../composables/useShake'
@@ -350,8 +419,10 @@ function getInitialTab(): DashboardTab {
 }
 
 const activeTab = ref<DashboardTab>(getInitialTab())
+const mountedTabs = ref(new Set<DashboardTab>([activeTab.value]))
 const dashboardTabOrder: DashboardTab[] = ['main', 'flow', 'settings', 'firmware']
 const PAGE_PUSH_GAP_PX = 28
+const PAGE_SWITCH_CLEANUP_DELAY_MS = 500
 const pageTransitionName = ref('tab-page-next')
 const pageSwitching = ref(false)
 const pageNumberMotionReady = ref(true)
@@ -359,7 +430,17 @@ const pagePushDistance = ref(0)
 const pageSwitchHeight = ref(0)
 const tabScrollPositions = new Map<DashboardTab, number>()
 let pendingTabScrollTop = 0
+let pageSwitchCleanupTimer: number | null = null
+let pageSwitchGeneration = 0
 const devices = ref<DeviceItem[]>([])
+const initialDevicesLoaded = ref(false)
+const fabricImageCapabilityDeclared = ref(false)
+const assembler = new FabricImageAssembler()
+let fabricImageCleanupTimer: number | null = null
+const zoneDefinitions = ref<ZoneDefinition[]>(loadZoneDefinitions())
+const activeZoneId = ref('')
+const zoneManagementPending = ref(false)
+const deviceMutationPending = ref(false)
 const lightEffectState = ref<LightEffectState | null>(null)
 const loading = ref(false)
 const creating = ref(false)
@@ -539,6 +620,9 @@ async function loadCurrentStore() {
 }
 
 onMounted(async () => {
+  fabricImageCleanupTimer = window.setInterval(() => {
+    assembler.clearExpired()
+  }, 5_000)
   const ok = await loadCurrentStore()
   if (!ok) return
   window.addEventListener('person-flow-updated', handlePersonFlowUpdatedEvent)
@@ -703,7 +787,6 @@ const topBarWeatherIcon = computed<'clear' | 'partly' | 'cloudy' | 'rain' | 'sno
     'fog': 'fog',
     'thunder': 'thunder',
   }
-  // return 'thunder'
   return map[weatherIconType.value]
 })
 
@@ -861,6 +944,10 @@ watch(
   },
 )
 watch(activeTab, (tab, oldTab) => {
+  if (!mountedTabs.value.has(tab)) {
+    mountedTabs.value = new Set(mountedTabs.value).add(tab)
+  }
+
   const nextIndex = dashboardTabOrder.indexOf(tab)
   const oldIndex = dashboardTabOrder.indexOf(oldTab)
   pageTransitionName.value = oldIndex >= 0 && nextIndex < oldIndex ? 'tab-page-prev' : 'tab-page-next'
@@ -884,9 +971,30 @@ function beginPageSwitch(el: Element) {
     pagePushDistance.value = viewportDistance
   }
   pageSwitching.value = true
+  schedulePageSwitchCleanup()
+}
+
+function schedulePageSwitchCleanup() {
+  pageSwitchGeneration += 1
+  const generation = pageSwitchGeneration
+  if (pageSwitchCleanupTimer !== null) {
+    window.clearTimeout(pageSwitchCleanupTimer)
+    pageSwitchCleanupTimer = null
+  }
+  requestAnimationFrame(() => {
+    if (generation !== pageSwitchGeneration) return
+    requestAnimationFrame(() => {
+      if (generation !== pageSwitchGeneration) return
+      pageSwitchCleanupTimer = window.setTimeout(() => {
+        if (generation !== pageSwitchGeneration) return
+        endPageSwitch()
+      }, PAGE_SWITCH_CLEANUP_DELAY_MS)
+    })
+  })
 }
 
 function endPageSwitch() {
+  pageSwitchCleanupTimer = null
   pageSwitching.value = false
   pagePushDistance.value = 0
   pageSwitchHeight.value = 0
@@ -998,6 +1106,54 @@ function getDeviceKey(device: Partial<DeviceItem> & { deviceId?: string | number
   return ''
 }
 
+const garmentAiKeys: Array<keyof DeviceItem> = [
+  'resultVersion',
+  'clothDetected',
+  'segmentationFallback',
+  'outfitType',
+  'garments',
+  'fabric',
+  'label',
+  'mainColorRgb',
+]
+
+const normalizedGarmentKeys: Array<keyof DeviceItem> = [
+  'resultVersion',
+  'clothDetected',
+  'segmentationFallback',
+  'outfitType',
+  'garments',
+]
+
+function hasExplicitGarmentData(source: Partial<DeviceItem>): boolean {
+  return garmentAiKeys.some(key => Object.prototype.hasOwnProperty.call(source, key))
+}
+
+function normalizeGarmentIncoming<T extends Partial<DeviceItem>>(source: T): T & Partial<DeviceItem> {
+  if (!hasExplicitGarmentData(source)) return source
+
+  const incoming: Partial<DeviceItem> = { ...source }
+  for (const key of normalizedGarmentKeys) {
+    delete incoming[key]
+  }
+
+  return {
+    ...incoming,
+    ...normalizeGarmentState(source),
+  } as T & Partial<DeviceItem>
+}
+
+function syncZoneDefinitions() {
+  const next = deriveZoneDefinitions(zoneDefinitions.value, devices.value)
+  const unchanged = next.length === zoneDefinitions.value.length && next.every((zone, index) => (
+    zone.id === zoneDefinitions.value[index]?.id && zone.name === zoneDefinitions.value[index]?.name
+  ))
+  if (unchanged) return
+
+  zoneDefinitions.value = next
+  saveZoneDefinitions(next)
+}
+
 // ── 服务端全量列表合并（用于 loadDevices / silentRefreshDeviceList）──
 // 服务端返回的列表是权威的：不在列表中的设备会被移除，本地额外字段保留
 function mergeDeviceList(list: DeviceItem[]) {
@@ -1009,11 +1165,19 @@ function mergeDeviceList(list: DeviceItem[]) {
 
     // 查找本地已有设备，保留服务端可能不返回的字段
     const existing = devices.value.find(item => getDeviceKey(item) === key)
-    map.set(key, { ...(existing || {}), ...device })
+    map.set(key, { ...(existing || {}), ...normalizeGarmentIncoming(device) })
   }
 
   // 不在服务端列表中的旧设备自动移除
-  devices.value = Array.from(map.values())
+  const nextDevices = Array.from(map.values())
+  const nextKeys = new Set(nextDevices.map(device => getDeviceKey(device)))
+  devices.value.forEach(device => {
+    if (!nextKeys.has(getDeviceKey(device))) {
+      releaseFabricImageBlobUrl(device)
+    }
+  })
+  devices.value = nextDevices
+  syncZoneDefinitions()
 }
 
 // ── 单设备 upsert（用于 WebSocket 推送 / 添加设备）──
@@ -1028,6 +1192,7 @@ function upsertDevice(device: DeviceItem) {
   } else {
     devices.value.push(device)
   }
+  syncZoneDefinitions()
 }
 
 // ── 静默刷新：不显示 loading，不闪烁 ──
@@ -1047,6 +1212,14 @@ async function silentRefreshDeviceList() {
   } catch (error) {
     console.error('silentRefreshDeviceList error =', error)
   }
+}
+
+async function refreshDeviceListStrict() {
+  const [deviceList, onlineList] = await Promise.all([
+    getMyDeviceListApi(),
+    getOnlineList(),
+  ])
+  mergeDeviceList(mergeDeviceOnline(deviceList, onlineList))
 }
 
 function mergeDeviceOnline(deviceList: DeviceItem[], onlineList: DeviceOnlineItem[]) {
@@ -1088,6 +1261,7 @@ async function loadDevices() {
 
     // 静默合并，不清空列表，不闪烁
     mergeDeviceList(mergeDeviceOnline(deviceList, onlineList))
+    initialDevicesLoaded.value = true
 
     if (!scanning.value) {
       scanStatus.value = `已加载 ${devices.value.length} 台设备`
@@ -1327,39 +1501,52 @@ interface RealtimeUpdateState {
   lightControl?: boolean
 }
 
-const updateTimerMap = new Map<number, RealtimeUpdateState>()
+const updateTimerMap = new Map<string, RealtimeUpdateState>()
+const exclusivelyMutatingDeviceIds = new Set<string>()
 
-function handleRealtimeUpdate({
-  id,
-  payload,
-  lightControl,
-}: {
+type RealtimeUpdateRequest = {
   id: number
   payload: DeviceCreatePayload
+  garmentState?: GarmentState
   lightControl?: boolean
-}) {
-  const deviceIndex = devices.value.findIndex(item => String(item.id) === String(id))
-  if (deviceIndex >= 0) {
-    devices.value[deviceIndex] = {
-      ...devices.value[deviceIndex],
-      ...payload,
-    }
+}
+
+function handleRealtimeUpdate({ id, payload, garmentState, lightControl }: RealtimeUpdateRequest) {
+  const realtimeUpdate = buildLampRealtimeUpdateEnvelope({
+    id,
+    payload,
+    garmentState,
+    lightControl,
+  })
+  const safePayload = realtimeUpdate.payload
+  const deviceKey = String(id)
+  if (exclusivelyMutatingDeviceIds.has(String(id))) {
+    toast.show('设备信息正在更新，请稍后再试', 'error')
+    return
   }
 
-  let state = updateTimerMap.get(id)
+  const deviceIndex = devices.value.findIndex(item => String(item.id) === String(id))
+  if (deviceIndex >= 0) {
+    devices.value[deviceIndex] = mergeLampRealtimeDeviceState(
+      devices.value[deviceIndex],
+      realtimeUpdate,
+    )
+  }
+
+  let state = updateTimerMap.get(deviceKey)
   if (!state) {
     state = {
       version: 0,
       inFlight: false,
       flushAfterFlight: false,
-      payload,
+      payload: safePayload,
       lightControl,
     }
-    updateTimerMap.set(id, state)
+    updateTimerMap.set(deviceKey, state)
   }
 
   state.version += 1
-  state.payload = payload
+  state.payload = safePayload
   state.lightControl = lightControl
   state.flushAfterFlight = false
 
@@ -1373,8 +1560,9 @@ function handleRealtimeUpdate({
   }, REALTIME_UPDATE_DEBOUNCE_MS)
 }
 
-async function flushRealtimeUpdate(id: number, version: number) {
-  const state = updateTimerMap.get(id)
+async function flushRealtimeUpdate(id: number | string, version: number) {
+  const deviceKey = String(id)
+  const state = updateTimerMap.get(deviceKey)
   if (!state || version !== state.version) return
 
   state.timer = undefined
@@ -1416,8 +1604,159 @@ async function flushRealtimeUpdate(id: number, version: number) {
     }
 
     if (!state.timer) {
-      updateTimerMap.delete(id)
+      updateTimerMap.delete(deviceKey)
     }
+  }
+}
+
+type ZoneMutationTarget = {
+  zoneId: string
+  zoneName: string
+}
+
+type ZoneMoveRequest = ZoneMutationTarget & {
+  direction: -1 | 1
+}
+
+type DeviceNumberSwapRequest = {
+  firstDeviceId: string | number
+  secondDeviceId: string | number
+}
+
+function handleZoneAdd(value: string) {
+  const name = String(value || '').trim()
+  if (!name || name === UNASSIGNED_ZONE_NAME) return
+  if (zoneDefinitions.value.some(zone => normalizeZoneName(zone.name) === normalizeZoneName(name))) {
+    toast.show('分区名称已存在', 'error')
+    return
+  }
+
+  const zone = { id: `zone-${Date.now()}-${zoneDefinitions.value.length + 1}`, name }
+  zoneDefinitions.value = [...zoneDefinitions.value, zone]
+  saveZoneDefinitions(zoneDefinitions.value)
+  activeZoneId.value = zone.id
+}
+
+function handleZoneMove({ zoneId, direction }: ZoneMoveRequest) {
+  const currentIndex = zoneDefinitions.value.findIndex(zone => zone.id === zoneId)
+  const targetIndex = currentIndex + direction
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= zoneDefinitions.value.length) return
+
+  const next = [...zoneDefinitions.value]
+  const current = next[currentIndex]
+  next[currentIndex] = next[targetIndex]
+  next[targetIndex] = current
+  zoneDefinitions.value = next
+  saveZoneDefinitions(next)
+}
+
+function lockDeviceMutations(ids: Array<string | number>) {
+  ids.forEach(id => exclusivelyMutatingDeviceIds.add(String(id)))
+}
+
+function unlockDeviceMutations(ids: Array<string | number>) {
+  ids.forEach(id => exclusivelyMutatingDeviceIds.delete(String(id)))
+}
+
+async function flushRealtimeUpdatesFor(ids: Array<string | number>) {
+  const deviceKeys = [...new Set(ids.map(String))]
+
+  for (const deviceKey of deviceKeys) {
+    while (updateTimerMap.has(deviceKey)) {
+      const state = updateTimerMap.get(deviceKey)
+      if (!state) break
+
+      if (state.timer) {
+        window.clearTimeout(state.timer)
+        state.timer = undefined
+      }
+
+      if (state.inFlight) {
+        await new Promise(resolve => window.setTimeout(resolve, 16))
+        continue
+      }
+
+      await flushRealtimeUpdate(deviceKey, state.version)
+    }
+  }
+}
+
+async function handleZoneDelete({ zoneId, zoneName }: ZoneMutationTarget) {
+  if (zoneManagementPending.value || deviceMutationPending.value) return
+  if (normalizeZoneName(zoneName) === UNASSIGNED_ZONE_NAME) return
+  if (!window.confirm(`确认删除分区「${zoneName}」吗？该分区灯具将移至未分区。`)) return
+
+  const movingDevices = devices.value.filter(device => (
+    isLampDevice(device) && normalizeZoneName(device.displayName) === normalizeZoneName(zoneName)
+  ))
+  const movingIds = movingDevices.map(device => device.id)
+  zoneManagementPending.value = true
+  lockDeviceMutations(movingIds)
+
+  try {
+    await flushRealtimeUpdatesFor(movingIds)
+    const updatedDevices = await migrateDevicesToZone(
+      movingDevices,
+      devices.value,
+      UNASSIGNED_ZONE_NAME,
+      (id, payload) => updateDevice(id, payload),
+    )
+    updatedDevices.forEach(upsertDevice)
+
+    zoneDefinitions.value = zoneDefinitions.value.filter(zone => zone.id !== zoneId)
+    saveZoneDefinitions(zoneDefinitions.value)
+    removeStoredZoneLayout(zoneId)
+    activeZoneId.value = zoneDefinitions.value[0]?.id || ''
+    await silentRefreshDeviceList()
+  } catch (error) {
+    console.error('delete zone error =', error)
+    try {
+      await refreshDeviceListStrict()
+    } catch (refreshError) {
+      console.error('refresh after delete zone error =', refreshError)
+    }
+    toast.show(getErrorMessage(error, '删除分区失败'), 'error')
+  } finally {
+    unlockDeviceMutations(movingIds)
+    zoneManagementPending.value = false
+  }
+}
+
+async function handleDeviceNumberSwap({ firstDeviceId, secondDeviceId }: DeviceNumberSwapRequest) {
+  if (deviceMutationPending.value || zoneManagementPending.value) return
+
+  const first = devices.value.find(device => String(device.id) === String(firstDeviceId))
+  const second = devices.value.find(device => String(device.id) === String(secondDeviceId))
+  if (!first || !second || normalizeZoneName(first.displayName) !== normalizeZoneName(second.displayName)) return
+
+  const targetIds = [first.id, second.id]
+  const zoneDevices = devices.value.filter(device => (
+    isLampDevice(device) && normalizeZoneName(device.displayName) === normalizeZoneName(first.displayName)
+  ))
+  deviceMutationPending.value = true
+  lockDeviceMutations(targetIds)
+
+  try {
+    await flushRealtimeUpdatesFor(targetIds)
+    const updatedDevices = await swapDeviceNumbers(
+      first,
+      second,
+      zoneDevices,
+      (id, payload) => updateDevice(id, payload),
+    )
+    updatedDevices.forEach(upsertDevice)
+    await silentRefreshDeviceList()
+  } catch (error) {
+    console.error('swap device number error =', error)
+    try {
+      await refreshDeviceListStrict()
+    } catch (refreshError) {
+      console.error('refresh after device number swap error =', refreshError)
+    }
+    toast.show(getErrorMessage(error, '交换灯具编号失败'), 'error')
+  } finally {
+    unlockDeviceMutations(targetIds)
+    deviceMutationPending.value = false
   }
 }
 
@@ -1430,6 +1769,9 @@ async function handleDeleteDevice(id: number) {
 
   try {
     await deleteDevice(id)
+    if (deletedDevice) {
+      releaseFabricImageBlobUrl(deletedDevice)
+    }
     // 后台静默同步一次
     await silentRefreshDeviceList()
   } catch (error) {
@@ -1503,6 +1845,10 @@ function stripLampOnlyFields(device: Partial<DeviceItem>) {
     'confidence',
     'fabricConfidence',
     'mainColorRgb',
+    'resultVersion',
+    'segmentationFallback',
+    'outfitType',
+    'garments',
     'clothDetected',
     'clothX',
     'clothY',
@@ -1510,6 +1856,8 @@ function stripLampOnlyFields(device: Partial<DeviceItem>) {
     'clothH',
     'originalImageUrl',
     'annotatedImageUrl',
+    'annotatedImageBlobUrl',
+    'annotatedImageId',
     'combinedImageUrl',
     'lampClothState',
     'tofDistanceMm',
@@ -1525,6 +1873,42 @@ function findDeviceByChipId(chipId?: string) {
   const normalizedChipId = normalizeChipId(chipId)
   if (!normalizedChipId) return undefined
   return devices.value.find(item => normalizeChipId(item.chipId) === normalizedChipId)
+}
+
+function releaseFabricImageBlobUrl(device?: Partial<DeviceItem>) {
+  const url = device?.annotatedImageBlobUrl
+  if (url?.startsWith('blob:')) {
+    URL.revokeObjectURL(url)
+  }
+  if (device) {
+    device.annotatedImageBlobUrl = undefined
+    device.annotatedImageId = undefined
+  }
+}
+
+function applyCompletedFabricImage(image: CompletedFabricImage) {
+  const device = findDeviceByChipId(image.chipId)
+  if (!device || !isLampDevice(device) || device.annotatedImageId === image.imageId) {
+    return
+  }
+  const nextUrl = URL.createObjectURL(image.blob)
+  releaseFabricImageBlobUrl(device)
+  updateDeviceByIncoming({
+    chipId: image.chipId,
+    annotatedImageId: image.imageId,
+    annotatedImageBlobUrl: nextUrl,
+  })
+}
+
+function handleFabricImageBinary(frame: ArrayBuffer) {
+  try {
+    const image = assembler.accept(frame)
+    if (image) {
+      applyCompletedFabricImage(image)
+    }
+  } catch (error) {
+    console.warn('WS fabric image frame ignored:', error)
+  }
 }
 
 function hasOwnValue(source: any, key: string) {
@@ -1551,6 +1935,10 @@ function buildLampAiIncomingFromCaptureResult(data: any): Partial<DeviceItem> {
   const aiKeys: Array<keyof DeviceItem> = [
     'mainColorRgb',
     'recommendedBrightness',
+    'resultVersion',
+    'segmentationFallback',
+    'outfitType',
+    'garments',
     'recommendedTemp',
     'clothDetected',
     'clothX',
@@ -1570,7 +1958,7 @@ function buildLampAiIncomingFromCaptureResult(data: any): Partial<DeviceItem> {
     }
   }
 
-  return incoming
+  return normalizeGarmentIncoming(incoming)
 }
 
 function requestDurationSummaryRefresh() {
@@ -1593,7 +1981,7 @@ function handleWsMessage(message: any) {
   if (!message?.type) return
 
   if (message.type === 'state' && message.data) {
-    updateDeviceByIncoming(message.data)
+    updateDeviceByIncoming(normalizeGarmentIncoming(message.data))
     return
   }
 
@@ -1646,6 +2034,14 @@ function handleWsMessage(message: any) {
   if (message.type === 'deviceDeleted' && message.data) {
     const deletedId = message.data.id
     const deletedChipId = message.data.chipId
+    const deletedDevice = devices.value.find(item => {
+      if (deletedId != null && String(item.id) === String(deletedId)) return true
+      return Boolean(
+        deletedChipId
+        && normalizeChipId(item.chipId) === normalizeChipId(deletedChipId),
+      )
+    })
+    releaseFabricImageBlobUrl(deletedDevice)
 
     devices.value = devices.value.filter(item => {
       if (deletedId != null && String(item.id) === String(deletedId)) return false
@@ -1993,7 +2389,34 @@ function handleWsMessage(message: any) {
   }
 }
 
-const { connected } = useWebSocket(wsUrl, handleWsMessage, wsProtocol)
+const { connected, send } = useWebSocket(
+  wsUrl,
+  handleWsMessage,
+  wsProtocol,
+  handleFabricImageBinary,
+)
+
+watch(
+  [connected, initialDevicesLoaded],
+  ([isConnected, devicesLoaded]) => {
+    if (!isConnected) {
+      fabricImageCapabilityDeclared.value = false
+      assembler.reset()
+      return
+    }
+    if (!devicesLoaded || fabricImageCapabilityDeclared.value) return
+    if (send({
+      type: 'capabilities',
+      data: {
+        fabricImageBinary: true,
+        version: 1,
+      },
+    })) {
+      fabricImageCapabilityDeclared.value = true
+    }
+  },
+  { immediate: true },
+)
 
 const connectionStatusClass = computed(() => ({
   'ws-connected': connected.value,
@@ -2017,8 +2440,19 @@ watch(connected, (val) => {
 })
 
 onBeforeUnmount(() => {
+  pageSwitchGeneration += 1
+  if (pageSwitchCleanupTimer !== null) {
+    window.clearTimeout(pageSwitchCleanupTimer)
+    pageSwitchCleanupTimer = null
+  }
   window.removeEventListener('person-flow-updated', handlePersonFlowUpdatedEvent)
   clearScanTimers()
+  if (fabricImageCleanupTimer !== null) {
+    window.clearInterval(fabricImageCleanupTimer)
+    fabricImageCleanupTimer = null
+  }
+  assembler.reset()
+  devices.value.forEach(releaseFabricImageBlobUrl)
 
   updateTimerMap.forEach(state => {
     if (state.timer) {
@@ -2047,7 +2481,7 @@ onBeforeUnmount(() => {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -2;
+  z-index: 0;
   background-image: url('/backgrounds/bg-day.png');
   background-size: cover;
   background-position: center right;
@@ -2063,7 +2497,7 @@ onBeforeUnmount(() => {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   background:
     linear-gradient(
       90deg,
@@ -3439,6 +3873,8 @@ onBeforeUnmount(() => {
 }
 
 .main-content {
+  position: relative;
+  z-index: 2;
   min-height: 100vh;
   margin-left: 228px;
   width: auto;
@@ -3541,7 +3977,7 @@ onBeforeUnmount(() => {
     margin-left: 0;
     min-width: 0;
     max-width: 100%;
-    padding: 12px 18px;
+    padding: 10px clamp(10px, 3.5vw, 16px);
     box-sizing: border-box;
     overflow-x: hidden;
   }
@@ -3574,18 +4010,18 @@ onBeforeUnmount(() => {
 
   .env-layout {
     gap: 0;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
 
   .env-card {
     min-width: 0;
     flex: 1 1 100%;
-    padding: 12px 14px;
+    padding: 8px 12px;
   }
 
   .env-card:first-child {
     border-radius: 14px 14px 0 0;
-    padding-bottom: 8px;
+    padding-bottom: 5px;
   }
 
   .env-card:last-child {
@@ -3593,12 +4029,11 @@ onBeforeUnmount(() => {
     align-items: center;
     border-radius: 0 0 14px 14px;
     border-top: 1px solid rgba(203, 213, 225, 0.5);
-    padding-top: 8px;
-    padding-bottom: 8px;
+    padding: 5px 12px 7px;
   }
 
   .env-card h4 {
-    margin: 0 0 8px;
+    margin: 0 0 4px;
     font-size: 15px;
   }
 
@@ -3615,7 +4050,7 @@ onBeforeUnmount(() => {
   .stat-item {
     flex: 1 1 0;
     min-width: 0;
-    padding: 4px 8px;
+    padding: 2px 4px;
     border-right: 1px solid rgba(203, 213, 225, 0.52);
     text-align: center;
   }
@@ -3647,7 +4082,7 @@ onBeforeUnmount(() => {
 
   .meta-item {
     flex: 1 1 0;
-    padding: 4px 8px;
+    padding: 2px 4px;
     text-align: center;
     border-right: 1px solid rgba(203, 213, 225, 0.4);
   }
@@ -3655,7 +4090,7 @@ onBeforeUnmount(() => {
   .lux-display {
     flex: 1 1 0;
     margin-top: 0;
-    padding: 4px 8px;
+    padding: 2px 4px;
     min-height: 0;
     background: transparent;
     border-radius: 0;
@@ -3860,6 +4295,29 @@ onBeforeUnmount(() => {
     font-size: 15px;
     margin-bottom: 14px;
     padding-bottom: 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .settings-layout {
+    gap: 0;
+  }
+
+  .settings-group-grid {
+    gap: 10px;
+  }
+
+  .settings-group-card {
+    margin-top: 8px;
+  }
+
+  .settings-group-title {
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+  }
+
+  .settings-group-grid :deep(.smart-config-section .smart-card) {
+    padding: 10px 12px;
   }
 }
 

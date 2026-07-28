@@ -25,9 +25,14 @@
         <div class="form-extra">
           <label class="remember">
             <input v-model="rememberMe" type="checkbox" />
-            <span>记住我</span>
+            <span class="checkbox-box" aria-hidden="true">
+              <svg viewBox="0 0 12 12" focusable="false">
+                <path d="M2.5 6.2l2.2 2.3 4.8-5" />
+              </svg>
+            </span>
+            <span class="remember-text">记住我</span>
           </label>
-          <a href="javascript:void(0)">忘记密码？</a>
+          <a href="javascript:void(0)" class="forgot-link">忘记密码？</a>
         </div>
 
         <button class="primary-btn" type="submit" :disabled="loading">
@@ -52,6 +57,7 @@ import { loginApi } from '../api/auth'
 import { useToast } from '../composables/useToast'
 import { useShake } from '../composables/useShake'
 import AuthShell from '../components/auth/AuthShell.vue'
+import { playLoginBeamTransition } from '../components/auth/loginBeamTransition'
 import { persistAuthState } from '../utils/authStorage'
 
 const router = useRouter()
@@ -115,7 +121,7 @@ async function handleLogin() {
     if (data.storeConfigured === false) {
       router.push('/store-setup')
     } else {
-      router.push('/smartlightdashboard')
+      await playLoginBeamTransition(() => router.push('/smartlightdashboard'))
     }
   } catch (error: any) {
     console.error(error)
@@ -136,153 +142,12 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.auth-page {
-  min-height: 100vh;
-  position: relative;
-  isolation: isolate;
-  padding: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  background: #eef4fb;
-  overflow: hidden;
-}
+/* Layout / card / inputs / buttons are provided by AuthShell.
+   This block only styles LoginView-specific pieces. */
 
-.auth-page::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  background-image: url('/backgrounds/bg-day.png');
-  background-size: cover;
-  background-position: center right;
-  background-repeat: no-repeat;
-  opacity: 0.95;
-  filter: blur(8px);
-  transform: scale(1.02);
-}
-
-.auth-page::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background:
-    linear-gradient(90deg, rgba(245, 248, 252, 0.28) 0%, rgba(245, 248, 252, 0.14) 48%, rgba(245, 248, 252, 0.04) 100%);
-  pointer-events: none;
-}
-
-.auth-shell {
-  width: min(100%, 460px);
-}
-
-.auth-card {
-  width: 100%;
-  padding: 30px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.76);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.10);
-  backdrop-filter: blur(16px);
-  box-sizing: border-box;
-}
-
-.auth-brand-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 26px;
-}
-
-.brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(219, 234, 254, 0.72));
-  border: 1px solid rgba(191, 219, 254, 0.82);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brand-mark svg {
-  width: 26px;
-  height: 26px;
-  display: block;
-}
-
-.bulb-glow {
-  fill: rgba(96, 165, 250, 0.2);
-  stroke: #2563eb;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.bulb-line {
-  fill: none;
-  stroke: #1d4ed8;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.auth-brand-row strong {
-  color: #111827;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.form-header h2 {
-  margin: 0 0 8px;
-  font-size: 26px;
-  color: #111827;
-}
-
-.form-header p {
-  margin: 0 0 24px;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.form-item {
-  margin-bottom: 18px;
-}
-
-.form-item label {
-  display: block;
-  margin-bottom: 8px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.form-item input {
-  width: 100%;
-  height: 44px;
-  border-radius: 12px;
-  border: 1px solid rgba(203, 213, 225, 0.92);
-  padding: 0 14px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.88);
-  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-}
-
-.form-item input:focus {
-  border-color: #60a5fa;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
-}
-
+/* ===== Remember-me + forgot row ===== */
 .form-extra {
-  margin: 2px 0 22px;
+  margin: 4px 0 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -290,97 +155,103 @@ onMounted(() => {
 }
 
 .remember {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: #64748b;
+  gap: 9px;
+  color: #9ba8b8;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.18s ease;
 }
 
-.form-extra a,
-.form-footer a {
-  color: #2563eb;
+.remember:hover {
+  color: #c9d1dc;
+}
+
+/* Hide the native checkbox but keep it accessible */
+.remember input[type='checkbox'] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.checkbox-box {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1.5px solid #475569;
+  background: rgba(5, 9, 15, 0.72);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.checkbox-box svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 14;
+  stroke-dashoffset: 14;
+  transition: stroke-dashoffset 0.22s ease;
+}
+
+.remember:hover .checkbox-box {
+  border-color: #93c5fd;
+}
+
+.remember input[type='checkbox']:focus-visible + .checkbox-box {
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.28);
+}
+
+.remember input[type='checkbox']:checked + .checkbox-box {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.28);
+}
+
+.remember input[type='checkbox']:checked + .checkbox-box svg {
+  stroke-dashoffset: 0;
+}
+
+.remember-text {
+  line-height: 1;
+}
+
+/* ===== Forgot-password link ===== */
+.forgot-link {
+  color: #78aaf5;
   text-decoration: none;
   font-weight: 700;
 }
 
-.primary-btn {
-  width: 100%;
-  height: 44px;
-  border: 1px solid #2563eb;
-  border-radius: 12px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+.forgot-link:hover {
+  color: #a7c8ff;
 }
 
-.primary-btn:hover:not(:disabled) {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
+/* ===== Night mode ===== */
+:global(.app-container.night-mode) .checkbox-box,
+:global(body:has(.app-container.night-mode)) .checkbox-box {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(30, 41, 59, 0.7);
 }
 
-.primary-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.form-footer {
-  margin-top: 18px;
-  text-align: center;
-  color: #64748b;
-  font-size: 14px;
+:global(.app-container.night-mode) .remember,
+:global(body:has(.app-container.night-mode)) .remember {
+  color: #94a3b8;
 }
 
 @media (max-width: 640px) {
-  .auth-page {
-    padding: 16px;
-  }
-
-  .auth-card {
-    padding: 24px 20px;
-  }
-
-  .form-header h2 {
-    font-size: 20px;
-  }
-
-  .form-header p {
-    font-size: 12px;
-    margin-bottom: 20px;
-  }
-
-  .form-item {
-    margin-bottom: 14px;
-  }
-
-  .form-item label {
-    font-size: 12px;
-    margin-bottom: 6px;
-  }
-
-  .form-item input {
-    height: 42px;
-    font-size: 13px;
-    border-radius: 11px;
-  }
-
   .form-extra {
-    font-size: 11px;
-    margin-bottom: 16px;
-  }
-
-  .primary-btn {
-    height: 42px;
-    font-size: 14px;
-    border-radius: 11px;
-  }
-
-  .form-footer {
     font-size: 12px;
-    margin-top: 14px;
+    margin-bottom: 16px;
   }
 }
 </style>

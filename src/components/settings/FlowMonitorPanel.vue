@@ -879,12 +879,28 @@ function getDetectTime(device: DeviceItem) {
 }
 
 @media (max-width: 768px) {
+  .flow-monitor-panel {
+    padding: 12px;
+  }
+
   .settings-title {
+    margin-bottom: 10px;
     font-size: 16px;
+  }
+
+  .detect-upload-card {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .detect-upload-header {
+    margin-bottom: 8px;
   }
 
   .detect-upload-body {
     flex-direction: column;
+    gap: 8px;
   }
 
   .detect-preview-col {
@@ -893,13 +909,18 @@ function getDetectTime(device: DeviceItem) {
 
   .detect-placeholder {
     width: 100%;
-    height: 180px;
+    height: 120px;
+    gap: 4px;
+  }
+
+  .detect-placeholder-icon {
+    font-size: 26px;
   }
 
   .detect-image-preview img {
     width: 100%;
     height: auto;
-    max-height: 220px;
+    max-height: 160px;
   }
 
   .detect-result-grid {
@@ -907,11 +928,11 @@ function getDetectTime(device: DeviceItem) {
   }
 
   .detect-annotated-preview {
-    max-height: 220px;
+    max-height: 160px;
   }
 
   .detect-annotated-img {
-    max-height: 220px;
+    max-height: 160px;
   }
 
   .detect-lightbox-overlay {
