@@ -36,8 +36,14 @@ test('lamp card exposes default versus detected garment position control', () =>
     lampCardSource,
     /v-model="localForm\.garmentAimEnabled"[\s\S]{0,180}?@change="handleGarmentAimModeChange"/,
   )
-  assert.match(lampCardSource, /默认预设位置/)
-  assert.match(lampCardSource, /最新服装识别位置/)
+  assert.match(
+    lampCardSource,
+    /class="mode-switch-row"[\s\S]*?v-model="localForm\.autoMode"[\s\S]*?v-model="localForm\.garmentAimEnabled"/,
+  )
+  assert.equal((lampCardSource.match(/class="mode-switch-input"/g) || []).length, 2)
+  assert.equal((lampCardSource.match(/role="switch"/g) || []).length, 2)
+  assert.match(lampCardSource, /自动模式/)
+  assert.match(lampCardSource, /服装追随/)
   assert.match(lampCardSource, /garmentAimEnabled:\s*false/)
   assert.match(
     lampCardSource,
