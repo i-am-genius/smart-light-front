@@ -384,6 +384,7 @@ import {
   mergeLampRealtimeDeviceState,
   normalizeGarmentState,
 } from '../utils/garmentRecognition'
+import { mergeDeviceListSnapshot } from '../utils/deviceListMerge'
 import {
   FabricImageAssembler,
   type CompletedFabricImage,
@@ -1165,7 +1166,8 @@ function mergeDeviceList(list: DeviceItem[]) {
 
     // 查找本地已有设备，保留服务端可能不返回的字段
     const existing = devices.value.find(item => getDeviceKey(item) === key)
-    map.set(key, { ...(existing || {}), ...normalizeGarmentIncoming(device) })
+    const normalizedDevice = normalizeGarmentIncoming(device)
+    map.set(key, mergeDeviceListSnapshot(existing, device, normalizedDevice))
   }
 
   // 不在服务端列表中的旧设备自动移除
