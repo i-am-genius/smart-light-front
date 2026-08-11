@@ -288,6 +288,9 @@
             <ArmControlPanel
               :devices="devices"
             />
+            <GarmentAimCalibrationPanel
+              :devices="devices"
+            />
             <SmartConfigPanel />
           </div>
         </div>
@@ -369,6 +372,7 @@ import type {
 } from '../types/device'
 import DurationQueryPanel from '../components/settings/DurationQueryPanel.vue'
 import ArmControlPanel from '../components/settings/ArmControlPanel.vue'
+import GarmentAimCalibrationPanel from '../components/settings/GarmentAimCalibrationPanel.vue'
 import StoreSettingsPanel from '../components/settings/StoreSettingsPanel.vue'
 import type { StoreSettingsValue } from '../components/settings/StoreSettingsPanel.vue'
 import FlowOverview from '../components/flow/FlowOverview.vue'
