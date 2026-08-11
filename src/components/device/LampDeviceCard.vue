@@ -66,6 +66,17 @@
       自动模式
     </label>
 
+    <label class="checkbox-row garment-aim-mode-row">
+      <input
+        v-model="localForm.garmentAimEnabled"
+        type="checkbox"
+        @change="handleGarmentAimModeChange"
+      />
+      <span>
+        照射位置：{{ localForm.garmentAimEnabled ? '最新服装识别位置' : '默认预设位置' }}
+      </span>
+    </label>
+
     <section class="cloth-state-strip">
       <div>
         <span>服装状态</span>
@@ -575,6 +586,7 @@ const localForm = reactive<DeviceCreatePayload>({
   brightness: 50,
   temp: 4000,
   autoMode: false,
+  garmentAimEnabled: false,
   recommendedBrightness: 50,
   recommendedTemp: 4000,
   fabric: '',
@@ -1319,6 +1331,7 @@ function syncFromProps() {
     localForm.temp = props.device.temp ?? 4000
   }
   localForm.autoMode = props.device.autoMode ?? false
+  localForm.garmentAimEnabled = props.device.garmentAimEnabled ?? false
   localForm.recommendedBrightness = props.device.recommendedBrightness ?? 50
   localForm.recommendedTemp = props.device.recommendedTemp ?? 4000
   localForm.fabric = props.device.fabric || ''
@@ -1393,6 +1406,7 @@ function emitRealtimeUpdate(lightControl = false) {
       brightness: localForm.brightness ?? 50,
       temp: localForm.temp ?? 4000,
       autoMode: localForm.autoMode ?? false,
+      garmentAimEnabled: localForm.garmentAimEnabled ?? false,
       recommendedBrightness: localForm.recommendedBrightness ?? 50,
       recommendedTemp: localForm.recommendedTemp ?? 4000,
       fabric: localForm.fabric || '',
@@ -1420,6 +1434,10 @@ function handleTempInput(event: Event) {
 
 function handleAutoModeChange() {
   emitRealtimeUpdate(true)
+}
+
+function handleGarmentAimModeChange() {
+  emitRealtimeUpdate()
 }
 
 function openFabricUpload() {
@@ -2411,6 +2429,15 @@ const sliderTempValue = computed(() => {
   color: #606266;
 }
 
+.garment-aim-mode-row {
+  min-height: 32px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+
 .cloth-state-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2884,6 +2911,11 @@ const sliderTempValue = computed(() => {
 :global(.app-container.night-mode) .field-label,
 :global(.app-container.night-mode) .checkbox-row {
   color: rgba(203, 213, 225, 0.72);
+}
+
+:global(.app-container.night-mode) .garment-aim-mode-row {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(30, 41, 59, 0.72);
 }
 
 :global(.app-container.night-mode) .status-badge.online {
