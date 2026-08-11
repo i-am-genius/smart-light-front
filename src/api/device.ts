@@ -16,6 +16,8 @@ import type {
   FirmwareItem,
   FirmwareUploadResult,
   FirmwareChannel,
+  GarmentAimCalibrationSamplePayload,
+  GarmentAimCalibrationStatus,
   OtaCheckResult,
 } from '../types/device'
 
@@ -130,6 +132,35 @@ export async function sendArmPosition(
     type: 'arm_position',
     ...position,
   })
+  return res.data.data
+}
+
+export async function getGarmentAimCalibration(
+  lampChipId: string,
+): Promise<GarmentAimCalibrationStatus> {
+  const res = await http.get<CommonResult<GarmentAimCalibrationStatus>>(
+    `/admin/device/lamp/${encodeURIComponent(lampChipId)}/garment-aim-calibration`,
+  )
+  return res.data.data
+}
+
+export async function addGarmentAimCalibrationSample(
+  lampChipId: string,
+  payload: GarmentAimCalibrationSamplePayload,
+): Promise<GarmentAimCalibrationStatus> {
+  const res = await http.post<CommonResult<GarmentAimCalibrationStatus>>(
+    `/admin/device/lamp/${encodeURIComponent(lampChipId)}/garment-aim-calibration/samples`,
+    payload,
+  )
+  return res.data.data
+}
+
+export async function clearGarmentAimCalibration(
+  lampChipId: string,
+): Promise<GarmentAimCalibrationStatus> {
+  const res = await http.delete<CommonResult<GarmentAimCalibrationStatus>>(
+    `/admin/device/lamp/${encodeURIComponent(lampChipId)}/garment-aim-calibration`,
+  )
   return res.data.data
 }
 
