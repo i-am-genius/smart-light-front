@@ -227,6 +227,7 @@ import {
   colorTemperatureToHex,
   resolveDisplayedColorTemperature,
   resolveFiniteNumber,
+  resolveLayoutSpotIntensity,
 } from '../../utils/helpers'
 import {
   garmentSignature,
@@ -2041,7 +2042,7 @@ function updateLampVisuals(lamp: LampLayout) {
   applyLampAim(objects, beamDirection)
 
   const color = new THREE.Color(colorTemperatureToHex(lamp.temperature))
-  const intensity = 0.7 + lamp.brightness / 100 * 10.8
+  const intensity = resolveLayoutSpotIntensity(lamp.brightness)
   const opacity = 0.04 + lamp.brightness / 100 * 0.12
 
   objects.spot.color.copy(color)
