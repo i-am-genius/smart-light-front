@@ -18,10 +18,6 @@
       />
     </div>
 
-    <div v-if="selectedDevice" class="device-meta selected-meta">
-      当前类型：{{ selectedDeviceTypeText }}
-    </div>
-
     <div v-if="selectedDevice" class="gimbal-self-test" :class="gimbalSelfTestClass">
       <span>{{ gimbalSelfTestText }}</span>
       <small>{{ gimbalSelfTestDetail }}</small>
@@ -652,11 +648,6 @@ async function sendPreset(action: string) {
   flex: 0 0 88px;
   color: #606266;
   font-size: 14px;
-}
-
-.selected-meta {
-  margin-top: 8px;
-  padding-left: 100px;
 }
 
 .gimbal-self-test {
