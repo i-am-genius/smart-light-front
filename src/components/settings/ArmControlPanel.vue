@@ -182,6 +182,13 @@ import {
 } from '../../api/device'
 import type { DeviceItem } from '../../types/device'
 import { getErrorMessage } from '../../utils/error'
+import {
+  clearOfflineArmPositions,
+  createZeroArmPosition,
+  readDeviceArmPosition,
+  saveDeviceArmPosition,
+  type ArmPosition,
+} from '../../utils/armPositionState'
 import { normalizeDeviceType as normDeviceType } from '../../utils/device'
 import BaseSelect from '../common/BaseSelect.vue'
 import { useToast } from '../../composables/useToast'
@@ -222,11 +229,8 @@ const statusText = ref('拖动摇杆或点击精确模式开始控制')
 
 // 摇杆状态
 const isPrecisionMode = ref(false)
-const armPosition = reactive({
-  pan: 0,
-  tilt: 0,
-  slider: 0,
-})
+const armPositionsByDevice = new Map<string, ArmPosition>()
+const armPosition = reactive(createZeroArmPosition())
 
 // 真实摇杆
 const joystickBaseRef = ref<HTMLElement | null>(null)
@@ -367,7 +371,9 @@ const presetActions = computed(() => {
   return []
 })
 
-const isActionDisabled = computed(() => submitting.value || !selectedDevice.value)
+const isActionDisabled = computed(() =>
+  submitting.value || !selectedDevice.value || selectedDevice.value.online === false,
+)
 
 const precisionSliderMin = computed(() => SLIDER_MIN)
 const precisionSliderMax = computed(() => {
@@ -392,10 +398,26 @@ watch(
   { immediate: true },
 )
 
-// 切换设备时停止摇杆
-watch(selectedDeviceCode, () => {
-  stopJoystick()
+// 切换设备时停止旧设备的摇杆，并加载新设备自己的精确角度
+watch(selectedDeviceCode, (deviceCode, previousDeviceCode) => {
+  stopJoystick(previousDeviceCode)
+  syncArmPosition(deviceCode)
 })
+
+// 设备离线后清除其角度缓存；当前选中设备立即显示为零
+watch(
+  () => armDevices.value.map(device => ({
+    code: getDeviceCode(device),
+    online: device.online,
+  })),
+  (deviceStates) => {
+    const clearedDeviceCodes = clearOfflineArmPositions(armPositionsByDevice, deviceStates)
+    if (clearedDeviceCodes.includes(selectedDeviceCode.value)) {
+      syncArmPosition(selectedDeviceCode.value)
+    }
+  },
+  { immediate: true, deep: true },
+)
 
 // 组件卸载时停止
 onBeforeUnmount(() => {
@@ -412,6 +434,14 @@ function normalizeDeviceType(deviceType?: string): ArmDeviceType | '' {
 
 function getDeviceCode(device: Partial<DeviceItem> | any) {
   return String(device?.chipId || device?.deviceCode || '').trim()
+}
+
+function syncArmPosition(deviceCode: string) {
+  const device = armDevices.value.find(item => getDeviceCode(item) === deviceCode)
+  Object.assign(
+    armPosition,
+    readDeviceArmPosition(armPositionsByDevice, deviceCode, device?.online),
+  )
 }
 
 function buildDeviceLabel(device: DeviceItem) {
@@ -500,7 +530,7 @@ function moveJoystick(event: PointerEvent) {
 }
 
 // pointerup / pointercancel / lostpointercapture：停止
-function stopJoystick() {
+function stopJoystick(deviceCode = selectedDeviceCode.value) {
   if (!joystickActive.value) return
   joystickActive.value = false
 
@@ -511,8 +541,8 @@ function stopJoystick() {
   knobX.value = 0
   knobY.value = 0
 
-  if (selectedDeviceCode.value) {
-    sendArmStop(selectedDeviceCode.value).catch(() => {})
+  if (deviceCode) {
+    sendArmStop(deviceCode).catch(() => {})
   }
   statusText.value = '摇杆已停止'
 }
@@ -551,7 +581,12 @@ async function doSendPosition(pos: { pan?: number; tilt?: number; slider?: numbe
 }
 
 function onPrecisionChange(field: 'pan' | 'tilt' | 'slider') {
-  if (!selectedDeviceCode.value) return
+  if (
+    !selectedDeviceCode.value
+    || !selectedDevice.value
+    || selectedDevice.value.online === false
+  ) return
+  saveDeviceArmPosition(armPositionsByDevice, selectedDeviceCode.value, armPosition)
   const pos: Record<string, number> = {}
   pos[field] = armPosition[field]
   doSendPosition(pos)
