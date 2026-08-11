@@ -530,7 +530,10 @@ function moveJoystick(event: PointerEvent) {
 }
 
 // pointerup / pointercancel / lostpointercapture：停止
-function stopJoystick(deviceCode = selectedDeviceCode.value) {
+function stopJoystick(eventOrDeviceCode?: PointerEvent | string) {
+  const deviceCode = typeof eventOrDeviceCode === 'string'
+    ? eventOrDeviceCode
+    : selectedDeviceCode.value
   if (!joystickActive.value) return
   joystickActive.value = false
 
