@@ -434,7 +434,15 @@ async function clearSamples() {
     calibration.value = result
     syncSuggestedPosition(result, true)
     if (selectedLamp.value?.online && result.currentTargetValid) {
-      await sendArmPosition(selectedLampChipId.value, { ...position })
+      try {
+        await sendArmPosition(selectedLampChipId.value, { ...position })
+      } catch (error) {
+        toast.show(
+          `标定数据已清空，但默认位置下发失败：${getErrorMessage(error, '未知错误')}`,
+          'error',
+        )
+        return
+      }
     }
     toast.show('标定数据已清空，Lamp 将回退到默认坐标换算', 'success')
   } catch (error) {
