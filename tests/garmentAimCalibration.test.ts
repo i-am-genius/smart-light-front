@@ -18,6 +18,28 @@ test('settings page exposes the garment aiming calibration card', () => {
   assert.match(panelSource, /拍摄并识别新位置/)
 })
 
+test('settings cards stay aligned and SmartConfig is placed after data analysis', () => {
+  const deviceGridIndex = dashboardSource.indexOf('settings-device-grid')
+  const dataGridIndex = dashboardSource.indexOf('settings-data-grid')
+  const smartConfigIndex = dashboardSource.lastIndexOf('<SmartConfigPanel')
+
+  assert.ok(deviceGridIndex >= 0)
+  assert.ok(dataGridIndex > deviceGridIndex)
+  assert.ok(smartConfigIndex > dataGridIndex)
+  assert.match(dashboardSource, /\.settings-device-grid :deep\(\.settings-card\)[\s\S]*?height:\s*100%/)
+  assert.match(dashboardSource, /\.settings-data-grid[\s\S]*?grid-auto-rows:\s*clamp\(/)
+  assert.match(dashboardSource, /\.settings-duration-slot :deep\(\.result-block\)[\s\S]*?overflow:\s*auto/)
+})
+
+test('ROI status is hidden without hiding the people-flow chart', () => {
+  assert.match(dashboardSource, /\.flow-presence-list/)
+  assert.match(dashboardSource, /\.flow-roi-warning/)
+  assert.doesNotMatch(
+    dashboardSource,
+    /\.settings-flow-slot :deep\(\.flow-chart-box\)[^{]*\{[^}]*display:\s*none/s,
+  )
+})
+
 test('calibration flow records exact motor pose against latest recognition', () => {
   assert.match(panelSource, /addGarmentAimCalibrationSample/)
   assert.match(panelSource, /sendArmPosition/)
