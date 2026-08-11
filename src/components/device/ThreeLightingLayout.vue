@@ -222,7 +222,12 @@ import {
   normalizeZoneName,
   sortDevicesByNumber,
 } from '../../utils/deviceZones'
-import { clamp, colorTemperatureToHex, resolveFiniteNumber } from '../../utils/helpers'
+import {
+  clamp,
+  colorTemperatureToHex,
+  resolveDisplayedColorTemperature,
+  resolveFiniteNumber,
+} from '../../utils/helpers'
 import {
   garmentSignature,
   getDisplayGarments,
@@ -1881,11 +1886,12 @@ function resolveDeviceBrightness(device: DeviceLike, fallback: number) {
 }
 
 function resolveDeviceTemperature(device: DeviceLike, fallback: number) {
-  const autoMode = isTruthy(device.autoMode)
-  const value = autoMode
-    ? (device.recommendedTemp ?? device.temp)
-    : device.temp
-  return clamp(resolveFiniteNumber(value, fallback || 4000), 2700, 6500)
+  return resolveDisplayedColorTemperature(
+    device.temp,
+    device.recommendedTemp,
+    isTruthy(device.autoMode),
+    fallback || 4000,
+  )
 }
 
 function resolveDeviceColorValue(device: DeviceLike) {
