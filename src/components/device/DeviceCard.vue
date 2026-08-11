@@ -104,6 +104,9 @@ const firmwareVersionText = computed(() => {
 <style scoped>
 .unknown-device-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   overflow: hidden;
   padding: 20px;
   border: 1px solid rgba(226, 232, 240, 0.86);
@@ -180,10 +183,20 @@ const firmwareVersionText = computed(() => {
 .unknown-device-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 16px;
 }
 
 @media (max-width: 520px) {
+  .unknown-device-card {
+    height: auto;
+  }
+
+  .unknown-device-actions {
+    margin-top: 16px;
+    padding-top: 0;
+  }
+
   .unknown-device-grid {
     grid-template-columns: 1fr;
   }

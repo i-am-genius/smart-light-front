@@ -1630,6 +1630,11 @@ const sliderTempValue = computed(() => {
 </script>
 
 <style scoped>
+.device-card-wrapper {
+  height: 100%;
+  min-width: 0;
+}
+
 
 .card-header {
   display: flex;
@@ -2297,6 +2302,13 @@ const sliderTempValue = computed(() => {
     opacity 0.2s ease;
 }
 
+.lamp-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
 .lamp-card::after {
   content: '';
   position: absolute;
@@ -2336,6 +2348,8 @@ const sliderTempValue = computed(() => {
 
 .garment-details {
   display: grid;
+  align-content: center;
+  min-height: 66px;
   gap: 5px;
   margin-top: 12px;
 }
@@ -2406,6 +2420,9 @@ const sliderTempValue = computed(() => {
 }
 
 .garment-empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 110px;
   margin: 12px 0 0;
   padding: 9px 12px;
   border: 1px dashed #cbd5e1;
@@ -2597,8 +2614,9 @@ const sliderTempValue = computed(() => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: auto;
   margin-bottom: 4px;
+  padding-top: 12px;
 }
 
 .hidden-file-input {
@@ -3053,6 +3071,11 @@ const sliderTempValue = computed(() => {
 }
 
 @media (max-width: 768px) {
+  .device-card-wrapper,
+  .lamp-card {
+    height: auto;
+  }
+
   .lamp-card,
   .placeholder-card {
     padding: clamp(12px, 3.5vw, 16px);
@@ -3136,6 +3159,8 @@ const sliderTempValue = computed(() => {
   }
 
   .garment-details {
+    align-content: normal;
+    min-height: 0;
     gap: 4px;
     margin-top: 5px;
   }
@@ -3159,6 +3184,8 @@ const sliderTempValue = computed(() => {
   }
 
   .garment-empty-state {
+    display: block;
+    min-height: 0;
     margin-top: 5px;
   }
 
@@ -3169,6 +3196,10 @@ const sliderTempValue = computed(() => {
     gap: 6px;
     margin-top: 8px;
     margin-bottom: 0;
+  }
+
+  .ai-actions {
+    padding-top: 0;
   }
 
   .btn-ai,
