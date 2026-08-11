@@ -44,6 +44,8 @@
     <label class="field-label">色温：{{ displayTemp }}</label>
     <input
       :value="sliderTempValue"
+      class="temperature-slider"
+      :style="temperatureSliderStyle"
       type="range"
       min="2700"
       max="6500"
@@ -467,6 +469,7 @@ import {
   garmentTextColor,
 } from '../../utils/garmentRecognition'
 import { getErrorMessage } from '../../utils/error'
+import { clamp, colorTemperatureToHex } from '../../utils/helpers'
 import { isLampDevice, normalizeDeviceType } from '../../utils/device'
 import {
   buildZoneSelectOptions,
@@ -1627,6 +1630,17 @@ const sliderTempValue = computed(() => {
     : (localForm.temp ?? 4000)
 })
 
+const temperatureSliderStyle = computed<Record<string, string>>(() => {
+  const rawTemperature = Number(sliderTempValue.value)
+  const temperature = clamp(Number.isFinite(rawTemperature) ? rawTemperature : 4000, 2700, 6500)
+  const progress = (temperature - 2700) / (6500 - 2700) * 100
+
+  return {
+    '--temperature-color': colorTemperatureToHex(temperature),
+    '--temperature-progress': `${progress}%`,
+  }
+})
+
 </script>
 
 <style scoped>
@@ -1640,7 +1654,7 @@ const sliderTempValue = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 18px;
 }
 
 .device-title-block {
@@ -2303,6 +2317,8 @@ const sliderTempValue = computed(() => {
 }
 
 .lamp-card {
+  --lamp-divider: rgba(15, 23, 42, 0.06);
+
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -2350,8 +2366,8 @@ const sliderTempValue = computed(() => {
   display: grid;
   align-content: center;
   min-height: 66px;
-  gap: 5px;
-  margin-top: 12px;
+  gap: 0;
+  margin-top: 14px;
 }
 
 .garment-detail-row {
@@ -2360,12 +2376,16 @@ const sliderTempValue = computed(() => {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 7px 9px;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  background: #f8fafc;
+  padding: 8px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #475569;
   font-size: 12px;
+}
+
+.garment-detail-row + .garment-detail-row {
+  border-top: 1px solid var(--lamp-divider);
 }
 
 .garment-kind {
@@ -2423,11 +2443,11 @@ const sliderTempValue = computed(() => {
   display: grid;
   place-items: center;
   min-height: 110px;
-  margin: 12px 0 0;
-  padding: 9px 12px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 10px;
-  background: #f8fafc;
+  margin: 14px 0 0;
+  padding: 9px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #64748b;
   font-size: 12px;
   text-align: center;
@@ -2438,9 +2458,74 @@ const sliderTempValue = computed(() => {
   margin-top: 6px;
 }
 
+.temperature-slider {
+  --temperature-color: #ffe9cf;
+  --temperature-progress: 34.21%;
+
+  height: 22px;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  accent-color: var(--temperature-color);
+}
+
+.temperature-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid color-mix(in srgb, var(--temperature-color) 26%, #cbd5e1);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--temperature-color) 0 var(--temperature-progress),
+    color-mix(in srgb, var(--temperature-color) 24%, #e2e8f0) var(--temperature-progress) 100%
+  );
+}
+
+.temperature-slider::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--temperature-color);
+  box-shadow:
+    0 1px 4px rgba(15, 23, 42, 0.2),
+    0 0 0 3px color-mix(in srgb, var(--temperature-color) 22%, transparent);
+}
+
+.temperature-slider::-moz-range-track {
+  height: 6px;
+  border: 1px solid color-mix(in srgb, var(--temperature-color) 26%, #cbd5e1);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--temperature-color) 24%, #e2e8f0);
+}
+
+.temperature-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--temperature-color);
+}
+
+.temperature-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--temperature-color);
+  box-shadow:
+    0 1px 4px rgba(15, 23, 42, 0.2),
+    0 0 0 3px color-mix(in srgb, var(--temperature-color) 22%, transparent);
+}
+
 .lamp-card input[type='range']:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.lamp-card input.temperature-slider:disabled {
+  opacity: 0.76;
 }
 
 .field-label {
@@ -2454,8 +2539,10 @@ const sliderTempValue = computed(() => {
 .mode-switch-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 12px;
+  gap: 28px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--lamp-divider);
 }
 
 .mode-switch {
@@ -2463,13 +2550,13 @@ const sliderTempValue = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   min-height: 40px;
-  padding: 8px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #606266;
   font-size: 13px;
   cursor: pointer;
@@ -2532,16 +2619,26 @@ const sliderTempValue = computed(() => {
 .cloth-state-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 12px 0;
+  gap: 0;
+  margin: 14px 0 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--lamp-divider);
 }
 
 .cloth-state-strip div {
   min-width: 0;
-  padding: 8px;
-  border-radius: 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.cloth-state-strip div:nth-child(odd) {
+  border-right: 1px solid var(--lamp-divider);
+}
+
+.cloth-state-strip div:nth-child(n + 3) {
+  border-top: 1px solid var(--lamp-divider);
 }
 
 .cloth-state-strip span,
@@ -2567,7 +2664,9 @@ const sliderTempValue = computed(() => {
 .card-actions {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--lamp-divider);
   flex-wrap: wrap;
 }
 
@@ -2988,6 +3087,8 @@ const sliderTempValue = computed(() => {
 
 :global(.app-container.night-mode) .lamp-card,
 :global(.app-container.night-mode) .placeholder-card {
+  --lamp-divider: rgba(148, 163, 184, 0.12);
+
   background: rgba(15, 23, 42, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.18);
   color: rgba(226, 232, 240, 0.88);
@@ -3005,9 +3106,36 @@ const sliderTempValue = computed(() => {
 }
 
 :global(.app-container.night-mode) .mode-switch {
-  border-color: rgba(148, 163, 184, 0.2);
-  background: rgba(30, 41, 59, 0.72);
+  border-color: transparent;
+  background: transparent;
   color: rgba(226, 232, 240, 0.86);
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-webkit-slider-runnable-track {
+  border-color: color-mix(in srgb, var(--temperature-color) 34%, #475569);
+  background: linear-gradient(
+    to right,
+    var(--temperature-color) 0 var(--temperature-progress),
+    color-mix(in srgb, var(--temperature-color) 28%, #334155) var(--temperature-progress) 100%
+  );
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-webkit-slider-thumb {
+  border-color: #0f172a;
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-moz-range-track {
+  border-color: color-mix(in srgb, var(--temperature-color) 34%, #475569);
+  background: color-mix(in srgb, var(--temperature-color) 28%, #334155);
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-moz-range-progress {
+  background: var(--temperature-color);
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-moz-range-thumb {
+  border-color: #0f172a;
+  background: var(--temperature-color);
 }
 
 :global(.app-container.night-mode) .mode-switch-track {
@@ -3050,9 +3178,17 @@ const sliderTempValue = computed(() => {
 
 :global(.app-container.night-mode) .garment-detail-row,
 :global(.app-container.night-mode) .garment-empty-state {
-  background: rgba(15, 23, 42, 0.62);
-  border-color: rgba(148, 163, 184, 0.28);
+  background: transparent;
+  border-color: var(--lamp-divider);
   color: rgba(203, 213, 225, 0.78);
+}
+
+:global(.app-container.night-mode) .cloth-state-strip span {
+  color: rgba(148, 163, 184, 0.86);
+}
+
+:global(.app-container.night-mode) .cloth-state-strip strong {
+  color: rgba(248, 250, 252, 0.94);
 }
 
 :global(.app-container.night-mode) .garment-kind {
@@ -3084,7 +3220,7 @@ const sliderTempValue = computed(() => {
 
   .card-header {
     gap: 10px;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
 
   .lamp-card h3 {
@@ -3129,25 +3265,28 @@ const sliderTempValue = computed(() => {
   }
 
   .mode-switch-row {
-    margin-top: 4px;
+    gap: 16px;
+    margin-top: 12px;
+    padding-top: 12px;
   }
 
   .mode-switch {
     min-height: 36px;
-    padding: 6px 8px;
+    padding: 2px 0;
     font-size: 13px;
   }
 
   .cloth-state-strip {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 5px;
-    margin: 6px 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    margin: 12px 0 0;
+    padding-bottom: 12px;
   }
 
   .cloth-state-strip div {
-    padding: 6px 4px;
-    border-radius: 8px;
-    text-align: center;
+    padding: 8px 6px;
+    border-radius: 0;
+    text-align: left;
   }
 
   .cloth-state-strip span {
@@ -3161,14 +3300,14 @@ const sliderTempValue = computed(() => {
   .garment-details {
     align-content: normal;
     min-height: 0;
-    gap: 4px;
-    margin-top: 5px;
+    gap: 0;
+    margin-top: 12px;
   }
 
   .garment-detail-row {
     grid-template-columns: minmax(48px, 0.65fr) minmax(0, 1.35fr) auto;
     gap: 5px;
-    padding: 6px 7px;
+    padding: 7px 2px;
     font-size: 11px;
   }
 
@@ -3186,7 +3325,7 @@ const sliderTempValue = computed(() => {
   .garment-empty-state {
     display: block;
     min-height: 0;
-    margin-top: 5px;
+    margin-top: 12px;
   }
 
   .ai-actions,
@@ -3200,6 +3339,11 @@ const sliderTempValue = computed(() => {
 
   .ai-actions {
     padding-top: 0;
+  }
+
+  .card-actions {
+    margin-top: 12px;
+    padding-top: 12px;
   }
 
   .btn-ai,
