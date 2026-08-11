@@ -1426,7 +1426,7 @@ function createWarmRetailLighting() {
   key.shadow.camera.top = 4
   key.shadow.camera.bottom = -1
 
-  const neutralFill = new THREE.AmbientLight('#d8dcde', 0.55)
+  const neutralFill = new THREE.AmbientLight('#e7e4de', 0.42)
   neutralFill.castShadow = false
   scene.add(ambient, key, neutralFill)
 }
