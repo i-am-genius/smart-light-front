@@ -2983,6 +2983,76 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
+@media (min-width: 901px) {
+  .settings-device-grid :deep(.settings-card) {
+    padding: 18px;
+  }
+
+  .settings-device-grid :deep(.panel-desc) {
+    margin-top: 3px;
+    line-height: 1.35;
+  }
+
+  .settings-device-grid :deep(.form-row) {
+    margin-top: 10px;
+  }
+
+  .settings-device-grid :deep(.gimbal-self-test) {
+    margin-top: 8px;
+    padding: 8px 10px;
+  }
+
+  .settings-device-grid :deep(.joystick-section) {
+    margin-top: 8px;
+  }
+
+  .settings-device-grid :deep(.gimbal-control-row) {
+    grid-template-columns: 230px minmax(0, 1fr);
+    column-gap: 20px;
+    margin: 6px 0 0;
+  }
+
+  .settings-device-grid :deep(.device-pair-grid) {
+    gap: 9px 10px;
+    margin-top: 11px;
+  }
+
+  .settings-device-grid :deep(.calibration-progress),
+  .settings-device-grid :deep(.target-card),
+  .settings-device-grid :deep(.motor-card),
+  .settings-device-grid :deep(.sample-list) {
+    margin-top: 9px;
+    padding: 10px;
+  }
+
+  .settings-device-grid :deep(.workflow-grid) {
+    gap: 10px;
+  }
+
+  .settings-device-grid :deep(.target-plane) {
+    height: 112px;
+    margin-top: 8px;
+  }
+
+  .settings-device-grid :deep(.empty-hint) {
+    min-height: 112px;
+  }
+
+  .settings-device-grid :deep(.motor-row) {
+    margin-top: 8px;
+  }
+
+  .settings-device-grid :deep(.calibration-actions) {
+    margin-top: 9px;
+  }
+
+  .settings-device-grid :deep(.sample-list) {
+    max-height: 126px;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
 .settings-data-grid {
   grid-auto-rows: clamp(560px, 58vh, 680px);
 }
