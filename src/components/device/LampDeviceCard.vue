@@ -57,25 +57,38 @@
       @change="endSliderInteraction('temp')"
     />
 
-    <label class="checkbox-row">
-      <input
-        v-model="localForm.autoMode"
-        type="checkbox"
-        @change="handleAutoModeChange"
-      />
-      自动模式
-    </label>
+    <div class="mode-switch-row">
+      <label class="mode-switch">
+        <span class="mode-switch-text">自动模式</span>
+        <input
+          v-model="localForm.autoMode"
+          class="mode-switch-input"
+          type="checkbox"
+          role="switch"
+          @change="handleAutoModeChange"
+        />
+        <span class="mode-switch-track" aria-hidden="true">
+          <span class="mode-switch-thumb"></span>
+        </span>
+      </label>
 
-    <label class="checkbox-row garment-aim-mode-row">
-      <input
-        v-model="localForm.garmentAimEnabled"
-        type="checkbox"
-        @change="handleGarmentAimModeChange"
-      />
-      <span>
-        照射位置：{{ localForm.garmentAimEnabled ? '最新服装识别位置' : '默认预设位置' }}
-      </span>
-    </label>
+      <label
+        class="mode-switch"
+        :title="localForm.garmentAimEnabled ? '使用最新服装识别位置' : '使用默认预设位置'"
+      >
+        <span class="mode-switch-text">服装追随</span>
+        <input
+          v-model="localForm.garmentAimEnabled"
+          class="mode-switch-input"
+          type="checkbox"
+          role="switch"
+          @change="handleGarmentAimModeChange"
+        />
+        <span class="mode-switch-track" aria-hidden="true">
+          <span class="mode-switch-thumb"></span>
+        </span>
+      </label>
+    </div>
 
     <section class="cloth-state-strip">
       <div>
@@ -2421,21 +2434,82 @@ const sliderTempValue = computed(() => {
   color: #606266;
 }
 
-.checkbox-row {
-  display: flex;
-  align-items: center;
+.mode-switch-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-top: 12px;
-  color: #606266;
 }
 
-.garment-aim-mode-row {
-  min-height: 32px;
+.mode-switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
   padding: 8px 10px;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   background: #f8fafc;
+  color: #606266;
   font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mode-switch-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mode-switch-track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.16);
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.mode-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+  transition: transform 180ms ease;
+}
+
+.mode-switch-input:checked + .mode-switch-track {
+  background: #3b82f6;
+  box-shadow: inset 0 1px 2px rgba(29, 78, 216, 0.3);
+}
+
+.mode-switch-input:checked + .mode-switch-track .mode-switch-thumb {
+  transform: translateX(16px);
+}
+
+.mode-switch-input:focus-visible + .mode-switch-track {
+  outline: 3px solid rgba(59, 130, 246, 0.24);
+  outline-offset: 2px;
 }
 
 .cloth-state-strip {
@@ -2908,14 +2982,22 @@ const sliderTempValue = computed(() => {
 }
 
 :global(.app-container.night-mode) .last-seen-under-name,
-:global(.app-container.night-mode) .field-label,
-:global(.app-container.night-mode) .checkbox-row {
+:global(.app-container.night-mode) .field-label {
   color: rgba(203, 213, 225, 0.72);
 }
 
-:global(.app-container.night-mode) .garment-aim-mode-row {
+:global(.app-container.night-mode) .mode-switch {
   border-color: rgba(148, 163, 184, 0.2);
   background: rgba(30, 41, 59, 0.72);
+  color: rgba(226, 232, 240, 0.86);
+}
+
+:global(.app-container.night-mode) .mode-switch-track {
+  background: rgba(100, 116, 139, 0.76);
+}
+
+:global(.app-container.night-mode) .mode-switch-input:checked + .mode-switch-track {
+  background: #3b82f6;
 }
 
 :global(.app-container.night-mode) .status-badge.online {
@@ -3023,9 +3105,13 @@ const sliderTempValue = computed(() => {
     margin-top: 0;
   }
 
-  .checkbox-row {
-    min-height: 36px;
+  .mode-switch-row {
     margin-top: 4px;
+  }
+
+  .mode-switch {
+    min-height: 36px;
+    padding: 6px 8px;
     font-size: 13px;
   }
 
