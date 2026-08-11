@@ -188,6 +188,7 @@ const lampDeviceUpdatePayloadKeys = [
   'brightness',
   'temp',
   'autoMode',
+  'garmentAimEnabled',
   'recommendedBrightness',
   'recommendedTemp',
   'fabric',
