@@ -17,7 +17,7 @@ function optionalFiniteNumber(value: unknown): number | undefined {
   return Number.isFinite(numeric) ? numeric : undefined
 }
 
-/** Prefer the applied temperature and only fall back to the auto recommendation. */
+/** Resolve the temperature represented by the layout's current control mode. */
 export function resolveDisplayedColorTemperature(
   actualTemp: unknown,
   recommendedTemp: unknown,
@@ -25,19 +25,20 @@ export function resolveDisplayedColorTemperature(
   fallback = 4000,
 ): number {
   const actual = optionalFiniteNumber(actualTemp)
-  const recommended = autoMode
-    ? optionalFiniteNumber(recommendedTemp)
-    : undefined
-  return clamp(actual ?? recommended ?? fallback, 2700, 6500)
+  const recommended = optionalFiniteNumber(recommendedTemp)
+  const value = autoMode
+    ? (recommended ?? actual)
+    : actual
+  return clamp(value ?? fallback, 2700, 6500)
 }
 
 /** Restrained display stops for warm-white through cool-white retail lighting. */
 const COLOR_TEMP_STOPS: Array<[number, [number, number, number]]> = [
-  [2700, [255, 192, 132]],
-  [3500, [255, 218, 178]],
-  [4500, [255, 240, 220]],
-  [5500, [248, 250, 255]],
-  [6500, [235, 242, 255]],
+  [2700, [255, 176, 106]],
+  [3500, [255, 207, 158]],
+  [4500, [255, 233, 210]],
+  [5500, [244, 248, 255]],
+  [6500, [226, 237, 255]],
 ]
 
 /** Convert color temperature (Kelvin) to a hex color string with smooth interpolation. */
