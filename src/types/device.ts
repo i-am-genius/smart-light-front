@@ -39,6 +39,7 @@ export interface DeviceItem {
   brightness?: number
   temp?: number
   autoMode?: boolean
+  garmentAimEnabled?: boolean
   recommendedBrightness?: number
   recommendedTemp?: number
   fabric?: string
@@ -55,6 +56,8 @@ export interface DeviceItem {
   clothY?: number
   clothW?: number
   clothH?: number
+  imageWidth?: number
+  imageHeight?: number
   originalImageUrl?: string
   annotatedImageUrl?: string
   annotatedImageBlobUrl?: string
@@ -119,6 +122,7 @@ export interface DeviceCreatePayload {
   brightness?: number
   temp?: number
   autoMode?: boolean
+  garmentAimEnabled?: boolean
   recommendedBrightness?: number
   recommendedTemp?: number
   fabric?: string
@@ -265,6 +269,8 @@ export interface CamCaptureTaskResult {
   clothY?: number
   clothW?: number
   clothH?: number
+  imageWidth?: number
+  imageHeight?: number
   aiResult?: Partial<DeviceItem>
   fabricResult?: Partial<DeviceItem>
   recognizeResult?: Partial<DeviceItem>
