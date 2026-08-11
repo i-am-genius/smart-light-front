@@ -31,6 +31,13 @@ test('settings cards stay aligned and SmartConfig is placed after data analysis'
   assert.match(dashboardSource, /\.settings-duration-slot :deep\(\.result-block\)[\s\S]*?overflow:\s*auto/)
 })
 
+test('device cards use compact desktop spacing without the redundant device type row', () => {
+  assert.match(dashboardSource, /@media \(min-width:\s*901px\)/)
+  assert.match(dashboardSource, /\.settings-device-grid :deep\(\.target-plane\)[\s\S]*?height:\s*112px/)
+  assert.doesNotMatch(dashboardSource, /\.settings-device-grid :deep\(\.joystick-container\)/)
+  assert.doesNotMatch(panelSource, /当前类型：/)
+})
+
 test('ROI status is hidden without hiding the people-flow chart', () => {
   assert.match(dashboardSource, /\.flow-presence-list/)
   assert.match(dashboardSource, /\.flow-roi-warning/)
