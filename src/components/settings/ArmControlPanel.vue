@@ -253,8 +253,8 @@ const knobStyle = computed(() => ({
   `
 }))
 
-const PAN_MIN = -45
-const PAN_MAX = 45
+const PAN_MIN = -90
+const PAN_MAX = 90
 const TILT_MIN = -90
 const TILT_MAX = 90
 const SLIDER_MIN = 0
