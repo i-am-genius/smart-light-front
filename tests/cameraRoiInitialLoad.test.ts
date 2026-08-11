@@ -31,3 +31,14 @@ test('opening camera details can still refresh ROI explicitly', () => {
     /function openDetailModal\(\) \{[\s\S]*?void loadRoiConfig\(\)/,
   )
 })
+
+test('last capture summary names the selected lamp instead of exposing an ROI index', () => {
+  assert.match(
+    cameraCardSource,
+    /const lastCaptureSummaryText = computed\([\s\S]*?capture\.targetChipId[\s\S]*?getTargetLabelByChipId/,
+  )
+  assert.doesNotMatch(
+    cameraCardSource,
+    /const lastCaptureSummaryText = computed\([\s\S]*?`区域 \$\{capture\.targetIndex\}`/,
+  )
+})

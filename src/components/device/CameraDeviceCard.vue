@@ -679,8 +679,11 @@ const flowDetectTimeText = computed(() => {
 const lastCaptureSummaryText = computed(() => {
   const capture = props.device.camLastCapture
   if (!capture) return '暂无'
-  const targetIndex = capture.targetIndex ? `区域 ${capture.targetIndex}` : '目标灯'
-  return `${targetIndex} · ${getCamWorkStatusText(capture.status || '')}`
+  const fallbackIndex = Number(capture.targetIndex) || 1
+  const targetLabel = capture.targetChipId
+    ? getTargetLabelByChipId(capture.targetChipId, fallbackIndex)
+    : `灯具-${fallbackIndex}`
+  return `${targetLabel} · ${getCamWorkStatusText(capture.status || '')}`
 })
 
 const isLastCaptureError = computed(() => {
@@ -1663,17 +1666,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.device-card-wrapper {
-  height: 100%;
-  min-width: 0;
-}
-
 .camera-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  height: 100%;
   overflow: hidden;
   background: var(--card-bg);
   border: 1px solid rgba(226, 232, 240, 0.86);
@@ -1936,7 +1930,6 @@ onBeforeUnmount(() => {
 }
 
 .camera-preview {
-  flex: 1 1 auto;
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid #dbe3ef;
@@ -2924,11 +2917,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .device-card-wrapper,
-  .camera-card {
-    height: auto;
-  }
-
   .camera-card {
     padding: clamp(12px, 3.5vw, 16px);
     border-radius: 14px;
@@ -3001,7 +2989,6 @@ onBeforeUnmount(() => {
   }
 
   .camera-preview {
-    flex: none;
     border-radius: 10px;
   }
 
