@@ -34,9 +34,15 @@ export function mergeDeviceListSnapshot(
   }
 
   if (source.clothDetected === false) {
-    for (const key of garmentSnapshotKeys) {
-      if (!hasOwn(normalizedSource, key)) delete merged[key]
+    for (const key of garmentSnapshotKeys) delete merged[key]
+    if (normalizedSource.resultVersion != null) {
+      merged.resultVersion = normalizedSource.resultVersion
     }
+    if (normalizedSource.segmentationFallback != null) {
+      merged.segmentationFallback = normalizedSource.segmentationFallback
+    }
+    merged.clothDetected = false
+    merged.garments = []
     return merged
   }
 
