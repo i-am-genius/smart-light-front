@@ -18,6 +18,15 @@ test('settings page exposes the garment aiming calibration card', () => {
   assert.match(panelSource, /拍摄并识别新位置/)
 })
 
+test('calibration captures one full-frame garment after automatic camera alignment', () => {
+  assert.match(panelSource, /Camera 自动移动到目标 Lamp 同一垂线/)
+  assert.match(panelSource, /完整画面/)
+  assert.match(panelSource, /targetChipId:\s*selectedLampChipId\.value/)
+  assert.doesNotMatch(panelSource, /Camera 目标区域/)
+  assert.doesNotMatch(panelSource, /targetIndex/)
+  assert.doesNotMatch(panelSource, /targetOptions/)
+})
+
 test('settings cards stay aligned and SmartConfig is placed after data analysis', () => {
   const deviceGridIndex = dashboardSource.indexOf('settings-device-grid')
   const dataGridIndex = dashboardSource.indexOf('settings-data-grid')
