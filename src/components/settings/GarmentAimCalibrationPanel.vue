@@ -4,7 +4,7 @@
       <div>
         <h2 class="settings-title">🧭 服装照射标定</h2>
         <p class="panel-desc">
-          移动服装并重新拍摄，手动把灯调准后确认。样本会自动拟合图像位置到电机位置。
+          Camera 自动移动到目标 Lamp 同一垂线，再用完整画面拍摄单件服装；手动把灯调准后确认。
         </p>
       </div>
       <span class="model-badge" :class="{ ready: calibration?.modelReady }">
@@ -29,10 +29,10 @@
           placeholder="选择 Lamp"
         />
       </label>
-      <label>
-        <span>Camera 目标区域</span>
-        <BaseSelect v-model="targetIndex" :options="targetOptions" />
-      </label>
+      <div class="capture-alignment-note">
+        <strong>自动对位拍摄</strong>
+        <span>根据所选 Lamp 自动调用 Camera 拍摄预设，不使用 ROI 区域裁剪</span>
+      </div>
       <button
         type="button"
         class="btn-secondary capture-btn"
@@ -193,7 +193,6 @@ const toast = useToast()
 
 const selectedCamChipId = ref('')
 const selectedLampChipId = ref('')
-const targetIndex = ref('1')
 const calibration = ref<GarmentAimCalibrationStatus | null>(null)
 const loading = ref(false)
 const captureLoading = ref(false)
@@ -236,8 +235,6 @@ const lampOptions = computed(() => lampDevices.value.map(device => ({
   label: deviceLabel(device),
   value: device.chipId,
 })))
-
-const targetOptions = [1, 2, 3].map(value => ({ label: `区域 ${value}`, value: String(value) }))
 
 const selectedCamera = computed(() => cameraDevices.value.find(
   device => device.chipId === selectedCamChipId.value,
@@ -337,9 +334,8 @@ async function captureNewPosition() {
     await createCamCaptureTask({
       camChipId: selectedCamChipId.value,
       targetChipId: selectedLampChipId.value,
-      targetIndex: Number(targetIndex.value),
     })
-    toast.show('拍摄任务已下发，请等待识别完成', 'success')
+    toast.show('Camera 对位拍摄任务已下发，请等待完整画面识别完成', 'success')
     recognitionPollCount = 0
     recognitionPoll = setInterval(async () => {
       recognitionPollCount += 1
@@ -530,6 +526,30 @@ function formatTime(value: string) {
 
 .capture-btn {
   align-self: end;
+}
+
+.capture-alignment-note {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #eff6ff;
+}
+
+.capture-alignment-note strong {
+  color: #2563eb;
+  font-size: 12px;
+}
+
+.capture-alignment-note span {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .calibration-progress,
@@ -763,6 +783,11 @@ input:disabled {
 :global(.app-container.night-mode) .coordinate-text,
 :global(.app-container.night-mode) .sample-row {
   color: rgba(203, 213, 225, 0.84);
+}
+
+:global(.app-container.night-mode) .capture-alignment-note {
+  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(30, 64, 175, 0.16);
 }
 
 @media (max-width: 768px) {
