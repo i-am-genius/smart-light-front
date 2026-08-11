@@ -2524,6 +2524,10 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   cursor: not-allowed;
 }
 
+.lamp-card input.temperature-slider:disabled {
+  opacity: 0.76;
+}
+
 .field-label {
   display: block;
   margin-top: 12px;
@@ -3105,6 +3109,33 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   border-color: transparent;
   background: transparent;
   color: rgba(226, 232, 240, 0.86);
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-webkit-slider-runnable-track {
+  border-color: color-mix(in srgb, var(--temperature-color) 34%, #475569);
+  background: linear-gradient(
+    to right,
+    var(--temperature-color) 0 var(--temperature-progress),
+    color-mix(in srgb, var(--temperature-color) 28%, #334155) var(--temperature-progress) 100%
+  );
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-webkit-slider-thumb {
+  border-color: #0f172a;
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-moz-range-track {
+  border-color: color-mix(in srgb, var(--temperature-color) 34%, #475569);
+  background: color-mix(in srgb, var(--temperature-color) 28%, #334155);
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-moz-range-progress {
+  background: var(--temperature-color);
+}
+
+:global(body:has(.app-container.night-mode)) .temperature-slider::-moz-range-thumb {
+  border-color: #0f172a;
+  background: var(--temperature-color);
 }
 
 :global(.app-container.night-mode) .mode-switch-track {
