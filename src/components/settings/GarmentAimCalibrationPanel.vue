@@ -395,6 +395,7 @@ async function confirmSample() {
   sampleLoading.value = true
   normalizePosition()
   try {
+    await sendArmPosition(selectedLampChipId.value, { ...position })
     const result = await addGarmentAimCalibrationSample(
       selectedLampChipId.value,
       { ...position },
@@ -429,7 +430,12 @@ async function clearSamples() {
   if (!window.confirm('确定清空这盏 Lamp 的全部标定样本和拟合模型吗？')) return
   clearLoading.value = true
   try {
-    calibration.value = await clearGarmentAimCalibration(selectedLampChipId.value)
+    const result = await clearGarmentAimCalibration(selectedLampChipId.value)
+    calibration.value = result
+    syncSuggestedPosition(result, true)
+    if (selectedLamp.value?.online && result.currentTargetValid) {
+      await sendArmPosition(selectedLampChipId.value, { ...position })
+    }
     toast.show('标定数据已清空，Lamp 将回退到默认坐标换算', 'success')
   } catch (error) {
     toast.show(getErrorMessage(error, '清空标定数据失败'), 'error')
