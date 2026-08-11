@@ -284,25 +284,36 @@
 
         <div class="settings-group-card">
           <h2 class="settings-group-title">设备功能</h2>
-          <div class="settings-group-grid">
-            <ArmControlPanel
-              :devices="devices"
-            />
-            <GarmentAimCalibrationPanel
-              :devices="devices"
-            />
-            <SmartConfigPanel />
+          <div class="settings-group-grid settings-device-grid">
+            <div class="settings-panel-slot">
+              <ArmControlPanel
+                :devices="devices"
+              />
+            </div>
+            <div class="settings-panel-slot">
+              <GarmentAimCalibrationPanel
+                :devices="devices"
+              />
+            </div>
           </div>
         </div>
 
         <div class="settings-group-card">
           <h2 class="settings-group-title">数据分析</h2>
-          <div class="settings-group-grid">
-            <FlowMonitorPanel
-              :devices="devices"
-            />
-            <DurationQueryPanel />
+          <div class="settings-group-grid settings-data-grid">
+            <div class="settings-panel-slot settings-flow-slot">
+              <FlowMonitorPanel
+                :devices="devices"
+              />
+            </div>
+            <div class="settings-panel-slot settings-duration-slot">
+              <DurationQueryPanel />
+            </div>
           </div>
+        </div>
+
+        <div class="settings-smartconfig-bottom">
+          <SmartConfigPanel />
         </div>
       </div>
     </section>
@@ -2959,35 +2970,75 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
 }
 
-.settings-group-grid > * {
+.settings-panel-slot {
+  min-width: 0;
+  height: 100%;
+}
+
+.settings-device-grid :deep(.settings-card) {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.settings-data-grid {
+  grid-auto-rows: clamp(560px, 58vh, 680px);
+}
+
+.settings-data-grid .settings-panel-slot {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.settings-data-grid :deep(.settings-card) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.settings-flow-slot :deep(.flow-list) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.settings-flow-slot :deep(.empty-flow) {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ROI 区域状态暂未接入本页，保留并显示人流图形区域。 */
+.settings-flow-slot :deep(.flow-presence-list),
+.settings-flow-slot :deep(.flow-roi-warning) {
+  display: none;
+}
+
+.settings-duration-slot :deep(.result-block) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.settings-duration-slot :deep(.empty-block) {
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.settings-smartconfig-bottom {
+  width: 100%;
   min-width: 0;
 }
 
-.settings-group-grid :deep(.smart-config-section) {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-radius: 0;
-}
-
-.settings-group-grid :deep(.smart-config-section .smart-card) {
-  max-width: none;
-  margin: 0;
-  padding: 20px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+.settings-smartconfig-bottom :deep(.smart-config-section) {
+  margin: 4px 0 32px;
 }
 
 .night-mode {
@@ -4280,6 +4331,29 @@ onBeforeUnmount(() => {
     gap: 14px;
   }
 
+  .settings-data-grid {
+    grid-auto-rows: auto;
+  }
+
+  .settings-data-grid .settings-panel-slot {
+    height: auto;
+    overflow: visible;
+  }
+
+  .settings-data-grid :deep(.settings-card) {
+    height: auto;
+    overflow: visible;
+  }
+
+  .settings-flow-slot :deep(.flow-list) {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .settings-duration-slot :deep(.result-block) {
+    max-height: 360px;
+  }
+
   .settings-group-card {
     margin-top: 18px;
     padding: 0;
@@ -4324,8 +4398,8 @@ onBeforeUnmount(() => {
     padding-bottom: 6px;
   }
 
-  .settings-group-grid :deep(.smart-config-section .smart-card) {
-    padding: 10px 12px;
+  .settings-smartconfig-bottom :deep(.smart-config-section) {
+    margin-top: 8px;
   }
 }
 
