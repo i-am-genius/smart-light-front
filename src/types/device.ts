@@ -297,6 +297,49 @@ export interface TrackingStatusState {
   timestamp?: string | number
 }
 
+export interface GarmentAimCalibrationSample {
+  id: string
+  centerX: number
+  centerY: number
+  pan: number
+  tilt: number
+  slider: number
+  recognizedAt?: string
+  createdAt?: string
+}
+
+export interface GarmentAimCalibrationStatus {
+  lampChipId: string
+  sampleCount: number
+  minimumSampleCount: number
+  recommendedSampleCount: number
+  modelReady: boolean
+  statusCode: string
+  statusMessage: string
+  horizontalCoverage: number
+  verticalCoverage: number
+  rmsePan?: number
+  rmseTilt?: number
+  rmseSlider?: number
+  currentTargetValid: boolean
+  currentTargetSampled: boolean
+  currentCenterX?: number
+  currentCenterY?: number
+  currentRecognizedAt?: string
+  suggestedPan?: number
+  suggestedTilt?: number
+  suggestedSlider?: number
+  suggestionSource?: 'calibrated' | 'default' | string
+  updatedAt?: string
+  samples: GarmentAimCalibrationSample[]
+}
+
+export interface GarmentAimCalibrationSamplePayload {
+  pan: number
+  tilt: number
+  slider: number
+}
+
 export interface OtaCheckResult {
   chipId: string
   deviceType?: string
