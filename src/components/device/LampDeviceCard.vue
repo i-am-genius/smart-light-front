@@ -1654,7 +1654,7 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .device-title-block {
@@ -2367,7 +2367,7 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   align-content: center;
   min-height: 66px;
   gap: 0;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .garment-detail-row {
@@ -2443,7 +2443,7 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   display: grid;
   place-items: center;
   min-height: 110px;
-  margin: 14px 0 0;
+  margin: 12px 0 0;
   padding: 9px 2px;
   border: 0;
   border-radius: 0;
@@ -2540,8 +2540,8 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 28px;
-  margin-top: 18px;
-  padding-top: 18px;
+  margin-top: 14px;
+  padding-top: 14px;
   border-top: 1px solid var(--lamp-divider);
 }
 
@@ -2620,14 +2620,14 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
-  margin: 14px 0 0;
-  padding-bottom: 14px;
+  margin: 12px 0 0;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--lamp-divider);
 }
 
 .cloth-state-strip div {
   min-width: 0;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -2664,8 +2664,8 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
 .card-actions {
   display: flex;
   gap: 8px;
-  margin-top: 14px;
-  padding-top: 14px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--lamp-divider);
   flex-wrap: wrap;
 }
