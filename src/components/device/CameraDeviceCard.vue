@@ -612,6 +612,7 @@ const roiReady = computed(() => {
 
 const roiWarningText = computed(() => {
   if (!props.device.online) return ''
+  if (roiLoading.value) return ''
   if (!roiReady.value) return '区域未配置，请在详情中完成区域标定'
   if (!isCenterMonitoringStatus.value) return '非中心监测位，ROI 判断暂停'
   return ''
@@ -1583,6 +1584,16 @@ watch(
     syncFromProps()
   },
   { immediate: true, deep: true },
+)
+
+watch(
+  () => [props.device.chipId, props.device.online] as const,
+  ([chipId, isOnline]) => {
+    if (chipId && isOnline) {
+      void loadRoiConfig()
+    }
+  },
+  { immediate: true },
 )
 
 watch(
