@@ -32,11 +32,15 @@ export function resolveDisplayedColorTemperature(
   return clamp(value ?? fallback, 2700, 6500)
 }
 
-/** Restrained display stops for warm-white through cool-white retail lighting. */
+/**
+ * Render-compensated display stops for warm-white through cool-white retail lighting.
+ * The warm end is intentionally more chromatic so ACES tone mapping and neutral fill
+ * do not wash a 2700K spotlight back to near-white on pale garments and walls.
+ */
 const COLOR_TEMP_STOPS: Array<[number, [number, number, number]]> = [
-  [2700, [255, 176, 106]],
-  [3500, [255, 207, 158]],
-  [4500, [255, 233, 210]],
+  [2700, [255, 174, 70]],
+  [3500, [255, 207, 137]],
+  [4500, [255, 233, 207]],
   [5500, [244, 248, 255]],
   [6500, [226, 237, 255]],
 ]
@@ -60,4 +64,10 @@ export function colorTemperatureToHex(temp: number): string {
 
   const [, lastColor] = COLOR_TEMP_STOPS[COLOR_TEMP_STOPS.length - 1]
   return `#${lastColor[0].toString(16).padStart(2, '0')}${lastColor[1].toString(16).padStart(2, '0')}${lastColor[2].toString(16).padStart(2, '0')}`
+}
+
+/** Keep bright simulated spots readable without clipping their color temperature to white. */
+export function resolveLayoutSpotIntensity(brightness: unknown): number {
+  const normalized = clamp(resolveFiniteNumber(brightness, 0), 0, 100) / 100
+  return 0.7 + normalized * 9.2
 }
