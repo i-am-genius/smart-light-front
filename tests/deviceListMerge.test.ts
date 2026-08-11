@@ -72,12 +72,20 @@ describe('device list garment-state merge', () => {
       outfitType: 'upper_only',
       garments: [recognizedUpper],
     })
-    const source = device({ clothDetected: false, garments: [] })
+    const source = device({
+      clothDetected: false,
+      outfitType: 'upper_only',
+      garments: [recognizedUpper],
+      fabric: 'cotton',
+      mainColorRgb: '204, 51, 51',
+    })
 
     const merged = mergeDeviceListSnapshot(existing, source, source)
 
     assert.equal(merged.clothDetected, false)
     assert.deepEqual(merged.garments, [])
     assert.equal(merged.outfitType, undefined)
+    assert.equal(merged.fabric, undefined)
+    assert.equal(merged.mainColorRgb, undefined)
   })
 })
