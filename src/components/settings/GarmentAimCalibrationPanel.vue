@@ -29,18 +29,6 @@
           placeholder="选择 Lamp"
         />
       </label>
-      <div class="capture-alignment-note">
-        <strong>自动对位拍摄</strong>
-        <span>根据所选 Lamp 自动调用 Camera 拍摄预设，不使用 ROI 区域裁剪</span>
-      </div>
-      <button
-        type="button"
-        class="btn-secondary capture-btn"
-        :disabled="!canCapture || captureLoading"
-        @click="captureNewPosition"
-      >
-        {{ captureLoading ? '等待识别...' : '拍摄并识别新位置' }}
-      </button>
     </div>
 
     <div class="calibration-progress">
@@ -134,6 +122,14 @@
     </div>
 
     <div class="calibration-actions">
+      <button
+        type="button"
+        class="btn-secondary"
+        :disabled="!canCapture || captureLoading"
+        @click="captureNewPosition"
+      >
+        {{ captureLoading ? '等待识别...' : '拍摄并识别新位置' }}
+      </button>
       <button
         type="button"
         class="btn-primary"
@@ -524,34 +520,6 @@ function formatTime(value: string) {
   font-weight: 700;
 }
 
-.capture-btn {
-  align-self: end;
-}
-
-.capture-alignment-note {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  min-height: 38px;
-  padding: 8px 10px;
-  border: 1px solid #dbeafe;
-  border-radius: 10px;
-  background: #eff6ff;
-}
-
-.capture-alignment-note strong {
-  color: #2563eb;
-  font-size: 12px;
-}
-
-.capture-alignment-note span {
-  color: #64748b;
-  font-size: 11px;
-  line-height: 1.35;
-}
-
 .calibration-progress,
 .target-card,
 .motor-card,
@@ -783,11 +751,6 @@ input:disabled {
 :global(.app-container.night-mode) .coordinate-text,
 :global(.app-container.night-mode) .sample-row {
   color: rgba(203, 213, 225, 0.84);
-}
-
-:global(.app-container.night-mode) .capture-alignment-note {
-  border-color: rgba(96, 165, 250, 0.24);
-  background: rgba(30, 64, 175, 0.16);
 }
 
 @media (max-width: 768px) {
