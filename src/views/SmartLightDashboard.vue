@@ -732,7 +732,7 @@ function hasRequiredFlowCache() {
   const hasDuration = flowCache.value.durationSummary != null
   const hasLux = flowCache.value.luxTrend != null
   const hasChipTrend = !chipId || flowCache.value.tempPeopleTrend != null
-  const hasStrategy = !chipId || flowCache.value.strategyCompare != null
+  const hasStrategy = flowCache.value.strategyCompare != null
   return hasDuration && hasLux && hasChipTrend && hasStrategy
 }
 
@@ -755,7 +755,7 @@ async function preloadFlowData(force = false) {
         getDurationSummary(range.startDate, range.endDate),
         needLux ? getMultiLux() : Promise.resolve(flowCache.value.luxTrend),
         chipId ? getTempPeopleTrend(chipId) : Promise.resolve(null),
-        chipId ? getStrategyCompare(chipId) : Promise.resolve(null),
+        getStrategyCompare(chipId),
       ])
 
       if (durRes.status === 'fulfilled' && durRes.value) flowCache.value.durationSummary = durRes.value

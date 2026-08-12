@@ -15,9 +15,7 @@
       />
 
       <StrategyCompareCard
-        :labels="strategyLabels"
-        :fixed-series="fixedSeries"
-        :smart-series="smartSeries"
+        :data="strategyData"
       />
 
       <PersonFlowOverviewCard />
@@ -42,6 +40,7 @@ import StrategyCompareCard from './StrategyCompareCard.vue'
 import PersonFlowOverviewCard from './PersonFlowOverviewCard.vue'
 import type { DeviceItem } from '../../types/device'
 import type { DurationSummaryItem } from '../../types/duration'
+import type { StrategyCompareData } from '../../types/analytics'
 import { isLampDevice } from '../../utils/device'
 
 const props = defineProps<{
@@ -58,7 +57,7 @@ const props = defineProps<{
 const durationRows = ref<DurationSummaryItem[]>([])
 const luxTrendData = ref<any>(null)
 const tempPeopleData = ref<any>(null)
-const strategyData = ref<any>(null)
+const strategyData = ref<StrategyCompareData | null>(null)
 
 function applyCache() {
   if (!props.flowCache) return
@@ -76,10 +75,6 @@ const luxDatasets = computed(() => luxTrendData.value?.datasets || [])
 const tempPeopleLabels = computed(() => tempPeopleData.value?.labels || [])
 const tempSeries = computed(() => tempPeopleData.value?.tempSeries || [])
 const peopleSeries = computed(() => tempPeopleData.value?.peopleSeries || [])
-
-const strategyLabels = computed(() => strategyData.value?.labels || [])
-const fixedSeries = computed(() => strategyData.value?.fixedSeries || [])
-const smartSeries = computed(() => strategyData.value?.smartSeries || [])
 
 const onlineCount = computed(() => {
   return props.devices.filter(item => item.online).length

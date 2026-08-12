@@ -10,7 +10,19 @@ export interface TempPeopleTrendData {
 }
 
 export interface StrategyCompareData {
-  labels: string[]
-  fixedSeries: number[]
-  smartSeries: number[]
+  hasData: boolean
+  estimated: boolean
+  todaySavingRatePercent: number | null
+  baselineEnergyKwh: number | null
+  smartEnergyKwh: number | null
+  savedEnergyKwh: number | null
+  lampCount: number | null
+  autoDimmingDeviceCount: number | null
+  averageBrightnessPercent: number | null
+  averageBrightnessReductionPercent: number | null
+  dataCoveragePercent: number | null
+  ratedPowerWatts: number | null
+  operatingHours: number | null
+  calculationBasis: string | null
+  emptyReason: string | null
 }
