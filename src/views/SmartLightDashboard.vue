@@ -122,7 +122,7 @@
           </div>
         </div>
 
-        <h1>智能灯控</h1>
+        <h1>视界随光</h1>
 
         <div id="controls" :class="{ shake: shakingControls }">
           <button :disabled="scanning" @click="handleScan">

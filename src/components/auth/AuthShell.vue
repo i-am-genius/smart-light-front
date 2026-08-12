@@ -10,7 +10,7 @@
               <path class="bulb-line" d="M10.25 20.5h7.5M11.25 23.25h5.5M12.4 25.5h3.2M14 7.25v3.5M10.95 11.2l2.05 2.05M17.05 11.2 15 13.25" />
             </svg>
           </span>
-          <strong>智能灯控</strong>
+          <strong>视界随光</strong>
         </div>
 
         <div class="form-header">
