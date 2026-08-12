@@ -122,29 +122,55 @@
       <div class="precision-card">
         <div class="precision-row">
           <label>Pan 水平：<strong>{{ armPosition.pan }}°</strong></label>
-          <input
-            v-model.number="armPosition.pan"
-            class="precision-slider"
-            type="range"
-            :min="PAN_MIN"
-            :max="PAN_MAX"
-            :step="1"
-            :disabled="isActionDisabled"
-            @change="onPrecisionChange('pan')"
-          />
+          <div class="precision-slider-wrap">
+            <input
+              v-model.number="armPosition.pan"
+              class="precision-slider"
+              type="range"
+              :min="PAN_MIN"
+              :max="PAN_MAX"
+              :step="1"
+              :disabled="isActionDisabled"
+              @change="onPrecisionChange('pan')"
+            />
+            <button
+              class="precision-zero-marker"
+              type="button"
+              aria-label="Pan 回到 0°"
+              title="Pan 回到 0°"
+              :disabled="isActionDisabled"
+              @click="resetPrecisionAxis('pan')"
+            >
+              <span aria-hidden="true"></span>
+              0°
+            </button>
+          </div>
         </div>
         <div class="precision-row">
           <label>Tilt 俯仰：<strong>{{ armPosition.tilt }}°</strong></label>
-          <input
-            v-model.number="armPosition.tilt"
-            class="precision-slider"
-            type="range"
-            :min="TILT_MIN"
-            :max="TILT_MAX"
-            :step="1"
-            :disabled="isActionDisabled"
-            @change="onPrecisionChange('tilt')"
-          />
+          <div class="precision-slider-wrap">
+            <input
+              v-model.number="armPosition.tilt"
+              class="precision-slider"
+              type="range"
+              :min="TILT_MIN"
+              :max="TILT_MAX"
+              :step="1"
+              :disabled="isActionDisabled"
+              @change="onPrecisionChange('tilt')"
+            />
+            <button
+              class="precision-zero-marker"
+              type="button"
+              aria-label="Tilt 回到 0°"
+              title="Tilt 回到 0°"
+              :disabled="isActionDisabled"
+              @click="resetPrecisionAxis('tilt')"
+            >
+              <span aria-hidden="true"></span>
+              0°
+            </button>
+          </div>
         </div>
         <div class="precision-row">
           <label>Slider 滑轨：<strong>{{ armPosition.slider }} mm</strong></label>
@@ -592,6 +618,18 @@ function onPrecisionChange(field: 'pan' | 'tilt' | 'slider') {
   statusText.value = `精确：${field}=${armPosition[field]}°${field === 'slider' ? ' mm' : ''}`
 }
 
+function resetPrecisionAxis(field: 'pan' | 'tilt') {
+  if (
+    !selectedDeviceCode.value
+    || !selectedDevice.value
+    || selectedDevice.value.online === false
+  ) return
+  armPosition[field] = 0
+  saveDeviceArmPosition(armPositionsByDevice, selectedDeviceCode.value, armPosition)
+  doSendPosition({ [field]: 0 })
+  statusText.value = `精确：${field}=0°`
+}
+
 // ===== 预设动作 (保留兼容) =====
 async function sendPreset(action: string) {
   errorText.value = ''
@@ -978,8 +1016,65 @@ async function sendPreset(action: string) {
 }
 
 .precision-slider {
+  display: block;
   width: 100%;
   accent-color: #2563eb;
+}
+
+.precision-slider-wrap {
+  position: relative;
+  padding-bottom: 24px;
+}
+
+.precision-zero-marker {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  transform: translateX(-50%);
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease;
+}
+
+.precision-zero-marker::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 1px;
+  height: 7px;
+  background: rgba(37, 99, 235, 0.4);
+  transform: translateX(-50%);
+}
+
+.precision-zero-marker span {
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid #2563eb;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.precision-zero-marker:hover,
+.precision-zero-marker:focus-visible {
+  outline: none;
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+}
+
+.precision-zero-marker:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* 预设动作卡片 */
@@ -1212,6 +1307,15 @@ async function sendPreset(action: string) {
 :global(.app-container.night-mode) .preset-card strong,
 :global(.app-container.night-mode) .precision-row label {
   color: rgba(248, 250, 252, 0.96);
+}
+
+:global(.app-container.night-mode) .precision-zero-marker {
+  color: rgba(203, 213, 225, 0.72);
+}
+
+:global(.app-container.night-mode) .precision-zero-marker span {
+  background: #1e293b;
+  border-color: #60a5fa;
 }
 
 :global(.app-container.night-mode) .speed-tab.active {
