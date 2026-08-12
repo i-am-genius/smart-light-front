@@ -91,8 +91,12 @@ describe('camera ROI helpers', () => {
     ])
   })
 
-  it('uses only the simplified ROI controls and new preset names', () => {
+  it('uses one slider preset and a dedicated slider lamp binding', () => {
     const source = readFileSync(new URL('../src/components/device/CameraDeviceCard.vue', import.meta.url), 'utf8')
+    const globalConfig = source.slice(
+      source.indexOf('<div class="roi-editor-item roi-global-config">'),
+      source.indexOf('<div class="roi-calibration-layout">'),
+    )
     const roiEditor = source.slice(
       source.indexOf('<div class="roi-editor-list">'),
       source.indexOf('<p v-if="roiMessage"'),
@@ -110,11 +114,19 @@ describe('camera ROI helpers', () => {
     ]) {
       assert.equal(roiEditor.includes(removedText), false, `still renders removed control: ${removedText}`)
     }
-    assert.match(roiEditor, /Pan 水平/)
-    assert.match(roiEditor, /Tilt 俯仰/)
+    assert.match(globalConfig, /滑轨控制灯/)
+    assert.match(globalConfig, /roiDraft\.sliderLampChipId/)
+    assert.equal(roiEditor.includes('拍摄预设'), false)
+    assert.equal(roiEditor.includes('追踪预设'), false)
+    assert.equal(roiEditor.includes('Pan 水平'), false)
+    assert.equal(roiEditor.includes('Tilt 俯仰'), false)
     assert.match(roiEditor, /Slider 滑轨/)
+    assert.match(roiEditor, /roiDraft\.sliderPresets\[roi\.targetIndex\]/)
     assert.equal(roiEditor.includes('.yaw'), false)
     assert.equal(roiEditor.includes('.pitch'), false)
     assert.equal(roiEditor.includes('.roll'), false)
+    assert.match(source, /waiting_motion: '滑轨对位中'/)
+    assert.match(source, /'滑轨控制灯未绑定'/)
+    assert.match(source, /'滑轨控制灯离线'/)
   })
 })
