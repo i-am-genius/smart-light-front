@@ -40,6 +40,10 @@ export interface DeviceItem {
   temp?: number
   autoMode?: boolean
   garmentAimEnabled?: boolean
+  garmentDefaultPan?: number
+  garmentDefaultTilt?: number
+  personDefaultPan?: number
+  personDefaultTilt?: number
   recommendedBrightness?: number
   recommendedTemp?: number
   fabric?: string
@@ -123,6 +127,10 @@ export interface DeviceCreatePayload {
   temp?: number
   autoMode?: boolean
   garmentAimEnabled?: boolean
+  garmentDefaultPan?: number
+  garmentDefaultTilt?: number
+  personDefaultPan?: number
+  personDefaultTilt?: number
   recommendedBrightness?: number
   recommendedTemp?: number
   fabric?: string
@@ -302,7 +310,6 @@ export interface GarmentAimCalibrationSample {
   centerY: number
   pan: number
   tilt: number
-  slider: number
   recognizedAt?: string
   createdAt?: string
 }
@@ -319,7 +326,6 @@ export interface GarmentAimCalibrationStatus {
   verticalCoverage: number
   rmsePan?: number
   rmseTilt?: number
-  rmseSlider?: number
   currentTargetValid: boolean
   currentTargetSampled: boolean
   currentCenterX?: number
@@ -327,7 +333,6 @@ export interface GarmentAimCalibrationStatus {
   currentRecognizedAt?: string
   suggestedPan?: number
   suggestedTilt?: number
-  suggestedSlider?: number
   suggestionSource?: 'calibrated' | 'default' | string
   updatedAt?: string
   samples: GarmentAimCalibrationSample[]
@@ -336,7 +341,6 @@ export interface GarmentAimCalibrationStatus {
 export interface GarmentAimCalibrationSamplePayload {
   pan: number
   tilt: number
-  slider: number
 }
 
 export interface OtaCheckResult {
