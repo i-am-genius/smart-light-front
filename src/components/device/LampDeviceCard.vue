@@ -260,29 +260,6 @@
               </div>
             </section>
 
-            <section class="aim-preset-section">
-              <h4>默认照射角度</h4>
-              <p class="modal-hint">服装追随和照人追踪结束后，分别回到对应的默认 Pan / Tilt。</p>
-              <div class="device-overview-grid">
-                <label class="device-info-cell editable">
-                  <span>默认服装 Pan</span>
-                  <input v-model.number="localForm.garmentDefaultPan" type="number" min="-90" max="90" step="1" />
-                </label>
-                <label class="device-info-cell editable">
-                  <span>默认服装 Tilt</span>
-                  <input v-model.number="localForm.garmentDefaultTilt" type="number" min="-90" max="90" step="1" />
-                </label>
-                <label class="device-info-cell editable">
-                  <span>默认照人 Pan</span>
-                  <input v-model.number="localForm.personDefaultPan" type="number" min="-90" max="90" step="1" />
-                </label>
-                <label class="device-info-cell editable">
-                  <span>默认照人 Tilt</span>
-                  <input v-model.number="localForm.personDefaultTilt" type="number" min="-90" max="90" step="1" />
-                </label>
-              </div>
-            </section>
-
             <section class="firmware-section">
               <h4>固件升级</h4>
 
@@ -346,6 +323,98 @@
                 >
                   {{ otaStarting ? '下发中...' : '确认更新' }}
                 </button>
+              </div>
+            </section>
+
+            <section class="aim-preset-section">
+              <div class="aim-preset-heading">
+                <div>
+                  <h4>默认照射角度</h4>
+                  <p>追随结束后，灯具会回到对应场景的默认位置。</p>
+                </div>
+                <span class="aim-preset-badge">追踪回位</span>
+              </div>
+
+              <div class="aim-preset-list">
+                <div class="aim-preset-row garment-preset">
+                  <div class="aim-preset-meta">
+                    <span class="aim-preset-icon" aria-hidden="true">衣</span>
+                    <div>
+                      <strong>服装默认位</strong>
+                      <small>服装追随结束后回位</small>
+                    </div>
+                  </div>
+                  <div class="aim-axis-grid">
+                    <label class="aim-axis-field">
+                      <span>Pan</span>
+                      <span class="aim-angle-input">
+                        <input
+                          v-model.number="localForm.garmentDefaultPan"
+                          aria-label="默认服装 Pan"
+                          type="number"
+                          min="-90"
+                          max="90"
+                          step="1"
+                        />
+                        <em>°</em>
+                      </span>
+                    </label>
+                    <label class="aim-axis-field">
+                      <span>Tilt</span>
+                      <span class="aim-angle-input">
+                        <input
+                          v-model.number="localForm.garmentDefaultTilt"
+                          aria-label="默认服装 Tilt"
+                          type="number"
+                          min="-90"
+                          max="90"
+                          step="1"
+                        />
+                        <em>°</em>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="aim-preset-row person-preset">
+                  <div class="aim-preset-meta">
+                    <span class="aim-preset-icon" aria-hidden="true">人</span>
+                    <div>
+                      <strong>照人默认位</strong>
+                      <small>照人追踪结束后回位</small>
+                    </div>
+                  </div>
+                  <div class="aim-axis-grid">
+                    <label class="aim-axis-field">
+                      <span>Pan</span>
+                      <span class="aim-angle-input">
+                        <input
+                          v-model.number="localForm.personDefaultPan"
+                          aria-label="默认照人 Pan"
+                          type="number"
+                          min="-90"
+                          max="90"
+                          step="1"
+                        />
+                        <em>°</em>
+                      </span>
+                    </label>
+                    <label class="aim-axis-field">
+                      <span>Tilt</span>
+                      <span class="aim-angle-input">
+                        <input
+                          v-model.number="localForm.personDefaultTilt"
+                          aria-label="默认照人 Tilt"
+                          type="number"
+                          min="-90"
+                          max="90"
+                          step="1"
+                        />
+                        <em>°</em>
+                      </span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -2067,12 +2136,164 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   margin-top: 20px;
 }
 
-.firmware-section {
+.firmware-section,
+.aim-preset-section {
   margin: 12px 0;
   padding: 14px;
   border-radius: 14px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
+}
+
+.aim-preset-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.aim-preset-heading h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.aim-preset-heading p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.aim-preset-badge {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.aim-preset-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.aim-preset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 0;
+}
+
+.aim-preset-row + .aim-preset-row {
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.aim-preset-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.aim-preset-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 10px;
+  background: #eef4ff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.person-preset .aim-preset-icon {
+  background: #eefbf3;
+  color: #16a34a;
+}
+
+.aim-preset-meta strong,
+.aim-preset-meta small {
+  display: block;
+}
+
+.aim-preset-meta strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.aim-preset-meta small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.aim-axis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.aim-axis-field {
+  min-width: 0;
+}
+
+.aim-axis-field > span:first-child {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.aim-angle-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #dbe3ee;
+  border-radius: 9px;
+  background: #ffffff;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.aim-angle-input:focus-within {
+  border-color: #409eff;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.12);
+}
+
+.aim-angle-input input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: right;
+}
+
+.aim-angle-input em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .self-test-section {
@@ -2165,6 +2386,15 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
   .device-overview-grid,
   .self-test-grid {
     grid-template-columns: 1fr;
+  }
+
+  .aim-preset-row {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .aim-axis-grid {
+    padding-left: 42px;
   }
 }
 
@@ -2952,6 +3182,7 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
 
 :global(body:has(.app-container.night-mode)) .detail-modal-header h3,
 :global(body:has(.app-container.night-mode)) .firmware-section h4,
+:global(body:has(.app-container.night-mode)) .aim-preset-heading h4,
 :global(body:has(.app-container.night-mode)) .detail-value,
 :global(body:has(.app-container.night-mode)) .firmware-info-item strong {
   color: rgba(248, 250, 252, 0.96);
@@ -2961,6 +3192,9 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
 :global(body:has(.app-container.night-mode)) .detail-label,
 :global(body:has(.app-container.night-mode)) .modal-label,
 :global(body:has(.app-container.night-mode)) .modal-hint,
+:global(body:has(.app-container.night-mode)) .aim-preset-heading p,
+:global(body:has(.app-container.night-mode)) .aim-preset-meta small,
+:global(body:has(.app-container.night-mode)) .aim-axis-field > span:first-child,
 :global(body:has(.app-container.night-mode)) .firmware-info-item span {
   color: rgba(203, 213, 225, 0.72);
 }
@@ -2973,6 +3207,7 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
 :global(body:has(.app-container.night-mode)) .device-info-section,
 :global(body:has(.app-container.night-mode)) .device-info-cell,
 :global(body:has(.app-container.night-mode)) .firmware-section,
+:global(body:has(.app-container.night-mode)) .aim-preset-section,
 :global(body:has(.app-container.night-mode)) .self-test-section,
 :global(body:has(.app-container.night-mode)) .self-test-row,
 :global(body:has(.app-container.night-mode)) .firmware-info-item {
@@ -2983,6 +3218,7 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
 :global(body:has(.app-container.night-mode)) .self-test-head h4,
 :global(body:has(.app-container.night-mode)) .device-info-head h4,
 :global(body:has(.app-container.night-mode)) .device-info-cell strong,
+:global(body:has(.app-container.night-mode)) .aim-preset-meta strong,
 :global(body:has(.app-container.night-mode)) .self-test-summary strong {
   color: rgba(248, 250, 252, 0.96);
 }
@@ -2996,6 +3232,34 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
 
 :global(body:has(.app-container.night-mode)) .device-info-cell input {
   color: rgba(248, 250, 252, 0.96);
+}
+
+:global(body:has(.app-container.night-mode)) .aim-preset-row + .aim-preset-row {
+  border-top-color: rgba(148, 163, 184, 0.16);
+}
+
+:global(body:has(.app-container.night-mode)) .aim-preset-badge,
+:global(body:has(.app-container.night-mode)) .aim-preset-icon {
+  background: rgba(37, 99, 235, 0.22);
+  color: #bfdbfe;
+}
+
+:global(body:has(.app-container.night-mode)) .person-preset .aim-preset-icon {
+  background: rgba(22, 163, 74, 0.2);
+  color: #bbf7d0;
+}
+
+:global(body:has(.app-container.night-mode)) .aim-angle-input {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(30, 41, 59, 0.78);
+}
+
+:global(body:has(.app-container.night-mode)) .aim-angle-input input {
+  color: rgba(248, 250, 252, 0.96);
+}
+
+:global(body:has(.app-container.night-mode)) .aim-angle-input em {
+  color: rgba(203, 213, 225, 0.72);
 }
 
 :global(body:has(.app-container.night-mode)) .zone-cell-select :deep(.select-trigger) {

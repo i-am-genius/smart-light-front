@@ -74,6 +74,21 @@ test('lamp defaults are persisted and editable from the detail modal', () => {
   assert.match(lampCardSource, /默认照人 Tilt/)
 })
 
+test('default aiming presets use two purpose-led rows below firmware upgrade', () => {
+  const firmwareIndex = lampCardSource.indexOf('class="firmware-section"')
+  const presetIndex = lampCardSource.indexOf('class="aim-preset-section"')
+  const selfTestIndex = lampCardSource.indexOf('class="self-test-section"')
+
+  assert.ok(firmwareIndex >= 0, 'firmware section should exist')
+  assert.ok(presetIndex > firmwareIndex, 'default aiming presets should follow firmware upgrade')
+  assert.ok(selfTestIndex > presetIndex, 'device self-test should remain after default aiming presets')
+  assert.match(lampCardSource, /class="aim-preset-row garment-preset"/)
+  assert.match(lampCardSource, /class="aim-preset-row person-preset"/)
+  assert.match(lampCardSource, /服装默认位/)
+  assert.match(lampCardSource, /照人默认位/)
+  assert.equal((lampCardSource.match(/class="aim-axis-field"/g) || []).length, 4)
+})
+
 test('camera devices strip the lamp-only aiming mode', () => {
   assert.match(
     dashboardSource,
