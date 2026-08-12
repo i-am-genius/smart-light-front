@@ -280,6 +280,18 @@
                     <span>{{ roiReady ? '已配置' : '请先完成区域标定' }}</span>
                   </div>
 
+                  <div class="roi-editor-item roi-global-config">
+                    <div class="roi-editor-title">滑轨控制</div>
+                    <label>
+                      <span>滑轨控制灯</span>
+                      <BaseSelect
+                        v-model="roiDraft.sliderLampChipId"
+                        :options="targetSelectOptions"
+                        placeholder="选择实际连接滑轨电机的灯具"
+                      />
+                    </label>
+                  </div>
+
                   <div class="roi-calibration-layout">
                     <div
                       ref="roiCanvasRef"
@@ -329,52 +341,12 @@
                           <input v-model.trim="roi.areaName" type="text" placeholder="如 新品展示区" />
                         </label>
                         <div class="roi-preset-group">
-                          <div class="roi-preset-title">拍摄预设</div>
+                          <div class="roi-preset-title">滑轨预设</div>
                           <div class="roi-preset-grid">
-                            <label>
-                              <span>Pan 水平：</span>
-                              <div class="roi-preset-input">
-                                <input v-model.number="roiDraft.capturePresets[roi.targetIndex].pan" type="number" min="-90" max="90" step="1" />
-                                <small>°</small>
-                              </div>
-                            </label>
-                            <label>
-                              <span>Tilt 俯仰：</span>
-                              <div class="roi-preset-input">
-                                <input v-model.number="roiDraft.capturePresets[roi.targetIndex].tilt" type="number" min="-45" max="45" step="1" />
-                                <small>°</small>
-                              </div>
-                            </label>
                             <label>
                               <span>Slider 滑轨：</span>
                               <div class="roi-preset-input">
-                                <input v-model.number="roiDraft.capturePresets[roi.targetIndex].slider" type="number" min="0" max="1200" step="1" />
-                                <small>mm</small>
-                              </div>
-                            </label>
-                          </div>
-                        </div>
-                        <div class="roi-preset-group">
-                          <div class="roi-preset-title">追踪预设</div>
-                          <div class="roi-preset-grid">
-                            <label>
-                              <span>Pan 水平：</span>
-                              <div class="roi-preset-input">
-                                <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].pan" type="number" min="-90" max="90" step="1" />
-                                <small>°</small>
-                              </div>
-                            </label>
-                            <label>
-                              <span>Tilt 俯仰：</span>
-                              <div class="roi-preset-input">
-                                <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].tilt" type="number" min="-45" max="45" step="1" />
-                                <small>°</small>
-                              </div>
-                            </label>
-                            <label>
-                              <span>Slider 滑轨：</span>
-                              <div class="roi-preset-input">
-                                <input v-model.number="roiDraft.trackingPresets[roi.targetIndex].slider" type="number" min="0" max="1200" step="1" />
+                                <input v-model.number="roiDraft.sliderPresets[roi.targetIndex]" type="number" min="0" max="1200" step="1" />
                                 <small>mm</small>
                               </div>
                             </label>
@@ -442,8 +414,6 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import BaseSelect from '../common/BaseSelect.vue'
 import type {
   CamPresenceArea,
-  CamPresetMap,
-  CamPtzPreset,
   CamRoiConfig,
   CamRoiItem,
   CamWorkStatus,
@@ -465,7 +435,7 @@ import {
   stopCamTracking,
 } from '../../api/device'
 import { getPersonFlowImageObjectUrl } from '../../api/personFlow'
-import { applyTargetDeviceToRoi, getTargetDeviceLabel, normalizeCamPreset, pickCamRoiFields } from '../../utils/cameraRoi'
+import { applyTargetDeviceToRoi, getTargetDeviceLabel, pickCamRoiFields } from '../../utils/cameraRoi'
 import { getErrorMessage } from '../../utils/error'
 
 const props = defineProps<{
@@ -628,6 +598,8 @@ const normalizedWorkStatus = computed(() => {
   if (trackingStatus === 'tracking') return 'tracking'
   if (trackingStatus === 'lost' || trackingStatus === 'timeout') return 'lost'
   if (trackingStatus === 'error') return 'error'
+  const captureStatus = String(props.device.camLastCapture?.status || '').trim().toLowerCase()
+  if (['waiting_motion', 'capturing', 'uploading'].includes(captureStatus)) return captureStatus
   const status = normalizeCamWorkStatus(props.device.camWorkStatus || props.device.camPresence?.workStatus || 'monitoring')
   if (localCapturePending.value && ['monitoring', 'presence'].includes(status)) return 'capturing'
   return status
@@ -687,7 +659,15 @@ const lastCaptureSummaryText = computed(() => {
 })
 
 const isLastCaptureError = computed(() => {
-  return ['timeout', 'upload_failed', 'photo_saved_ai_failed', 'error'].includes(String(props.device.camLastCapture?.status || ''))
+  return [
+    'motion_timeout',
+    'camera_offline',
+    'camera_command_failed',
+    'timeout',
+    'upload_failed',
+    'photo_saved_ai_failed',
+    'error',
+  ].includes(String(props.device.camLastCapture?.status || ''))
 })
 
 const canRetryLastCapture = computed(() => {
@@ -700,7 +680,7 @@ const canRetryLastCapture = computed(() => {
 })
 
 const isCamBusy = computed(() => {
-  return ['capturing', 'uploading', 'returning_center', 'ready_tracking', 'tracking'].includes(normalizedWorkStatus.value)
+  return ['waiting_motion', 'capturing', 'uploading', 'returning_center', 'ready_tracking', 'tracking'].includes(normalizedWorkStatus.value)
 })
 
 const presenceRows = computed(() => {
@@ -950,6 +930,7 @@ function getCamWorkStatusText(status: CamWorkStatus) {
   const map: Record<string, string> = {
     monitoring: '顾客感知中',
     presence: '有人靠近',
+    waiting_motion: '滑轨对位中',
     capturing: '正在拍摄服装',
     uploading: '上传照片中',
     returning_center: '回中心中',
@@ -957,6 +938,9 @@ function getCamWorkStatusText(status: CamWorkStatus) {
     tracking: '追踪中',
     lost: '目标丢失',
     stopped: '回中心中',
+    motion_timeout: '滑轨对位超时',
+    camera_offline: '摄像头离线',
+    camera_command_failed: '拍摄指令失败',
     timeout: '目标丢失',
     ready: '准备追踪',
     offline: '离线',
@@ -968,20 +952,16 @@ function getCamWorkStatusText(status: CamWorkStatus) {
 function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
   return {
     camChipId,
+    sliderLampChipId: '',
     configured: false,
-    capturePresets: createDefaultPresetMap(),
-    trackingPresets: createDefaultPresetMap(),
+    sliderPresets: createDefaultSliderPresetMap(),
     rois: [1, 2, 3].map(createDefaultRoi),
   }
 }
 
-function createDefaultPreset(): CamPtzPreset {
-  return normalizeCamPreset(null)
-}
-
-function createDefaultPresetMap(): CamPresetMap {
-  return [1, 2, 3].reduce<CamPresetMap>((map, index) => {
-    map[String(index)] = createDefaultPreset()
+function createDefaultSliderPresetMap(): Record<string, number> {
+  return [1, 2, 3].reduce<Record<string, number>>((map, index) => {
+    map[String(index)] = 0
     return map
   }, {})
 }
@@ -1008,19 +988,31 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
   })
   return {
     camChipId,
+    sliderLampChipId: String(value?.sliderLampChipId || '').trim(),
     configured: Boolean(value?.configured) || rois.every(isRoiReady),
-    capturePresets: normalizePresetMap(value?.capturePresets),
-    trackingPresets: normalizePresetMap(value?.trackingPresets),
+    sliderPresets: normalizeSliderPresetMap(value),
     rois,
   }
 }
 
-function normalizePresetMap(value: unknown): CamPresetMap {
-  const arrayValue = Array.isArray(value) ? value : null
-  const objectValue = isPlainObject(value) ? value : {}
-  return [1, 2, 3].reduce<CamPresetMap>((map, index) => {
-    const source = arrayValue ? arrayValue[index - 1] : objectValue[String(index)]
-    map[String(index)] = normalizeCamPreset(source)
+function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefined): Record<string, number> {
+  const source = isPlainObject(value?.sliderPresets) ? value.sliderPresets : {}
+  const legacyValue = value as (Partial<CamRoiConfig> & {
+    capturePresets?: unknown
+    trackingPresets?: unknown
+  }) | null | undefined
+  const legacyCapture = isPlainObject(legacyValue?.capturePresets)
+    ? legacyValue.capturePresets
+    : {}
+  const legacyTracking = isPlainObject(legacyValue?.trackingPresets)
+    ? legacyValue.trackingPresets
+    : {}
+  return [1, 2, 3].reduce<Record<string, number>>((map, index) => {
+    const key = String(index)
+    const legacyCapturePreset = isPlainObject(legacyCapture[key]) ? legacyCapture[key] : {}
+    const legacyTrackingPreset = isPlainObject(legacyTracking[key]) ? legacyTracking[key] : {}
+    const numeric = Number(source[key] ?? legacyCapturePreset.slider ?? legacyTrackingPreset.slider ?? 0)
+    map[key] = Math.round(Math.max(0, Math.min(1200, Number.isFinite(numeric) ? numeric : 0)))
     return map
   }, {})
 }
@@ -1140,6 +1132,11 @@ function getTargetButtonDisabledReason(target: TargetButton) {
   if (aimLoading.value) return '任务创建中'
   if (!props.device.online) return '摄像头离线'
   if (isCamBusy.value) return '摄像头忙碌中'
+  const sliderLampChipId = roiDraft.value.sliderLampChipId
+  if (!sliderLampChipId) return '滑轨控制灯未绑定'
+  const sliderLamp = findTargetDevice(sliderLampChipId)
+  if (!sliderLamp) return '滑轨控制灯不存在'
+  if (!sliderLamp.online) return '滑轨控制灯离线'
   if (!target.targetChipId) return '目标灯未绑定'
   if (target.targetMissing) return '目标灯不存在'
   return ''
@@ -1174,6 +1171,12 @@ function isTrackingButtonDisabled(target: TargetButton) {
 function getTrackingButtonDisabledReason(target: TargetButton) {
   if (trackingActionIndex.value != null) return '正在下发'
   if (!props.device.online) return '摄像头离线'
+
+  const sliderLampChipId = roiDraft.value.sliderLampChipId
+  if (!sliderLampChipId) return '滑轨控制灯未绑定'
+  const sliderLamp = findTargetDevice(sliderLampChipId)
+  if (!sliderLamp) return '滑轨控制灯不存在'
+  if (!sliderLamp.online) return '滑轨控制灯离线'
 
   const targetChipId = getTrackingTargetChipId(target)
   if (!targetChipId) return '目标灯未配置'
@@ -1356,8 +1359,15 @@ async function handleSaveRoiConfig() {
   try {
     const result = await saveCamRoiConfig(props.device.chipId, payload)
     roiDraft.value = normalizeRoiConfig(result, props.device.chipId)
-    roiMessage.value = payload.configured ? 'ROI 配置已保存' : 'ROI 已保存，但仍有区域未绑定目标灯'
-    roiMessageIsError.value = !payload.configured
+    if (!payload.configured) {
+      roiMessage.value = 'ROI 已保存，但仍有区域未绑定目标灯'
+      roiMessageIsError.value = true
+    } else if (!payload.sliderLampChipId) {
+      roiMessage.value = 'ROI 已保存，但还未绑定滑轨控制灯'
+      roiMessageIsError.value = true
+    } else {
+      roiMessage.value = 'ROI 与滑轨配置已保存'
+    }
   } catch (error) {
     roiMessage.value = getErrorMessage(error, 'ROI 配置保存失败')
     roiMessageIsError.value = true

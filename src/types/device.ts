@@ -173,6 +173,7 @@ export interface CamTrackingControlResult {
 export type CamWorkStatus =
   | 'monitoring'
   | 'presence'
+  | 'waiting_motion'
   | 'capturing'
   | 'uploading'
   | 'returning_center'
@@ -199,13 +200,11 @@ export interface CamPtzPreset {
   slider: number
 }
 
-export type CamPresetMap = Record<string, CamPtzPreset>
-
 export interface CamRoiConfig {
   camChipId: string
+  sliderLampChipId?: string
   configured?: boolean
-  capturePresets: CamPresetMap
-  trackingPresets: CamPresetMap
+  sliderPresets: Record<string, number>
   rois: CamRoiItem[]
 }
 
