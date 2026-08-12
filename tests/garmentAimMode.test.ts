@@ -59,9 +59,24 @@ test('lamp card exposes default versus detected garment position control', () =>
   )
 })
 
+test('lamp defaults are persisted and editable from the detail modal', () => {
+  for (const field of [
+    'garmentDefaultPan',
+    'garmentDefaultTilt',
+    'personDefaultPan',
+    'personDefaultTilt',
+  ]) {
+    assert.match(typesSource, new RegExp(`${field}\\?: number`))
+    assert.match(helperSource, new RegExp(`['"]${field}['"]`))
+    assert.match(lampCardSource, new RegExp(`localForm\\.${field}`))
+  }
+  assert.match(lampCardSource, /默认服装 Pan/)
+  assert.match(lampCardSource, /默认照人 Tilt/)
+})
+
 test('camera devices strip the lamp-only aiming mode', () => {
   assert.match(
     dashboardSource,
-    /const lampOnlyKeys[\s\S]*?['"]garmentAimEnabled['"]/,
+    /const lampOnlyKeys[\s\S]*?['"]garmentAimEnabled['"][\s\S]*?['"]garmentDefaultPan['"][\s\S]*?['"]personDefaultTilt['"]/,
   )
 })

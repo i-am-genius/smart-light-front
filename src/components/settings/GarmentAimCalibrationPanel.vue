@@ -158,7 +158,6 @@
         <span>图像 {{ format(sample.centerX, 2) }}, {{ format(sample.centerY, 2) }}</span>
         <span>Pan {{ format(sample.pan, 1) }}°</span>
         <span>Tilt {{ format(sample.tilt, 1) }}°</span>
-        <span>滑轨 {{ format(sample.slider, 0) }} mm</span>
       </div>
     </div>
   </div>
@@ -182,7 +181,7 @@ import { getErrorMessage } from '../../utils/error'
 import { useToast } from '../../composables/useToast'
 import BaseSelect from '../common/BaseSelect.vue'
 
-type AxisKey = 'pan' | 'tilt' | 'slider'
+type AxisKey = 'pan' | 'tilt'
 
 const props = defineProps<{ devices: DeviceItem[] }>()
 const toast = useToast()
@@ -194,7 +193,7 @@ const loading = ref(false)
 const captureLoading = ref(false)
 const sampleLoading = ref(false)
 const clearLoading = ref(false)
-const position = reactive<Record<AxisKey, number>>({ pan: 0, tilt: 20, slider: 0 })
+const position = reactive<Record<AxisKey, number>>({ pan: 0, tilt: 20 })
 let recognitionPoll: ReturnType<typeof setInterval> | null = null
 let recognitionPollCount = 0
 let lastSyncedRecognition = ''
@@ -209,7 +208,6 @@ const axes: Array<{
 }> = [
   { key: 'pan', label: 'Pan 水平', unit: '°', min: -90, max: 90, step: 1 },
   { key: 'tilt', label: 'Tilt 俯仰', unit: '°', min: -90, max: 90, step: 1 },
-  { key: 'slider', label: 'Slider 滑轨', unit: 'mm', min: 0, max: 1200, step: 10 },
 ]
 
 const cameraDevices = computed(() => props.devices.filter((device) => {
@@ -277,6 +275,8 @@ watch(lampOptions, (options) => {
 
 watch(selectedLampChipId, () => {
   lastSyncedRecognition = ''
+  position.pan = Math.round(selectedLamp.value?.garmentDefaultPan ?? 0)
+  position.tilt = Math.round(selectedLamp.value?.garmentDefaultTilt ?? 20)
   void loadCalibration(true)
 })
 
@@ -317,7 +317,6 @@ function syncSuggestedPosition(result: GarmentAimCalibrationStatus, force: boole
   if (!force && recognition === lastSyncedRecognition) return
   if (result.suggestedPan != null) position.pan = Math.round(result.suggestedPan)
   if (result.suggestedTilt != null) position.tilt = Math.round(result.suggestedTilt)
-  if (result.suggestedSlider != null) position.slider = Math.round(result.suggestedSlider / 10) * 10
   lastSyncedRecognition = recognition
 }
 
@@ -408,11 +407,9 @@ async function confirmSample() {
 
 async function testPrediction() {
   const value = calibration.value
-  if (!value || value.suggestedPan == null || value.suggestedTilt == null
-      || value.suggestedSlider == null) return
+  if (!value || value.suggestedPan == null || value.suggestedTilt == null) return
   position.pan = Math.round(value.suggestedPan)
   position.tilt = Math.round(value.suggestedTilt)
-  position.slider = Math.round(value.suggestedSlider / 10) * 10
   await sendCurrentPosition()
   toast.show('已下发当前识别点的拟合位置', 'success')
 }

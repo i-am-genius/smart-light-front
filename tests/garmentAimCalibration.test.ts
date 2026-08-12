@@ -56,11 +56,16 @@ test('ROI status is hidden without hiding the people-flow chart', () => {
   )
 })
 
-test('calibration flow records exact motor pose against latest recognition', () => {
+test('calibration records only Pan and Tilt relative to the configured garment default', () => {
   assert.match(panelSource, /addGarmentAimCalibrationSample/)
   assert.match(panelSource, /sendArmPosition/)
   assert.match(panelSource, /currentTargetSampled/)
+  assert.match(panelSource, /selectedLamp\.value\?\.garmentDefaultPan/)
+  assert.match(panelSource, /selectedLamp\.value\?\.garmentDefaultTilt/)
   assert.match(panelSource, /照射正确，确认本次样本/)
+  assert.doesNotMatch(panelSource, /Slider 滑轨/)
+  assert.doesNotMatch(panelSource, /position\.slider/)
+  assert.doesNotMatch(panelSource, /sample\.slider/)
 })
 
 test('frontend API supports status, sample creation and reset', () => {

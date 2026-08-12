@@ -260,6 +260,29 @@
               </div>
             </section>
 
+            <section class="aim-preset-section">
+              <h4>默认照射角度</h4>
+              <p class="modal-hint">服装追随和照人追踪结束后，分别回到对应的默认 Pan / Tilt。</p>
+              <div class="device-overview-grid">
+                <label class="device-info-cell editable">
+                  <span>默认服装 Pan</span>
+                  <input v-model.number="localForm.garmentDefaultPan" type="number" min="-90" max="90" step="1" />
+                </label>
+                <label class="device-info-cell editable">
+                  <span>默认服装 Tilt</span>
+                  <input v-model.number="localForm.garmentDefaultTilt" type="number" min="-90" max="90" step="1" />
+                </label>
+                <label class="device-info-cell editable">
+                  <span>默认照人 Pan</span>
+                  <input v-model.number="localForm.personDefaultPan" type="number" min="-90" max="90" step="1" />
+                </label>
+                <label class="device-info-cell editable">
+                  <span>默认照人 Tilt</span>
+                  <input v-model.number="localForm.personDefaultTilt" type="number" min="-90" max="90" step="1" />
+                </label>
+              </div>
+            </section>
+
             <section class="firmware-section">
               <h4>固件升级</h4>
 
@@ -603,6 +626,10 @@ const localForm = reactive<DeviceCreatePayload>({
   temp: 4000,
   autoMode: false,
   garmentAimEnabled: false,
+  garmentDefaultPan: 0,
+  garmentDefaultTilt: 20,
+  personDefaultPan: 0,
+  personDefaultTilt: -30,
   recommendedBrightness: 50,
   recommendedTemp: 4000,
   fabric: '',
@@ -1348,6 +1375,10 @@ function syncFromProps() {
   }
   localForm.autoMode = props.device.autoMode ?? false
   localForm.garmentAimEnabled = props.device.garmentAimEnabled ?? false
+  localForm.garmentDefaultPan = props.device.garmentDefaultPan ?? 0
+  localForm.garmentDefaultTilt = props.device.garmentDefaultTilt ?? 20
+  localForm.personDefaultPan = props.device.personDefaultPan ?? 0
+  localForm.personDefaultTilt = props.device.personDefaultTilt ?? -30
   localForm.recommendedBrightness = props.device.recommendedBrightness ?? 50
   localForm.recommendedTemp = props.device.recommendedTemp ?? 4000
   localForm.fabric = props.device.fabric || ''
@@ -1423,6 +1454,10 @@ function emitRealtimeUpdate(lightControl = false) {
       temp: localForm.temp ?? 4000,
       autoMode: localForm.autoMode ?? false,
       garmentAimEnabled: localForm.garmentAimEnabled ?? false,
+      garmentDefaultPan: localForm.garmentDefaultPan ?? 0,
+      garmentDefaultTilt: localForm.garmentDefaultTilt ?? 20,
+      personDefaultPan: localForm.personDefaultPan ?? 0,
+      personDefaultTilt: localForm.personDefaultTilt ?? -30,
       recommendedBrightness: localForm.recommendedBrightness ?? 50,
       recommendedTemp: localForm.recommendedTemp ?? 4000,
       fabric: localForm.fabric || '',
