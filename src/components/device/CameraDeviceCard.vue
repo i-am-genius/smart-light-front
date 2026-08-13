@@ -365,13 +365,30 @@
                         <div class="roi-preset-group">
                           <div class="roi-preset-title">滑轨预设</div>
                           <div class="roi-preset-grid">
-                            <label>
+                            <label class="roi-slider-position-field">
                               <span>Slider 滑轨：</span>
                               <div class="roi-preset-input">
-                                <input v-model.number="roiDraft.sliderPresets[roi.targetIndex]" type="number" min="0" max="1200" step="1" />
+                                <input v-model.number="roiDraft.sliderPresets[roi.targetIndex]" type="number" min="0" max="2500" step="1" />
                                 <small>mm</small>
                               </div>
                             </label>
+                            <div class="roi-move-times-field">
+                              <span>移动时间（0 → Slider）：</span>
+                              <div class="roi-move-times-inputs">
+                                <label v-for="speed in sliderSpeedOptions" :key="speed.value">
+                                  <small>{{ speed.label }}</small>
+                                  <input
+                                    v-model.number="roiDraft.sliderMoveTimes[roi.targetIndex][speed.value]"
+                                    type="number"
+                                    min="0"
+                                    max="3600"
+                                    step="0.1"
+                                    inputmode="decimal"
+                                  />
+                                  <small>s</small>
+                                </label>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -439,6 +456,7 @@ import type {
   CamCaptureTaskResult,
   CamRoiConfig,
   CamRoiItem,
+  CamSliderMoveTimes,
   CamWorkStatus,
   DeviceCreatePayload,
   DeviceItem,
@@ -569,6 +587,12 @@ const flowImageUrl = ref('')
 const firmwareChannelOptions = [
   { label: '正式版', value: 'stable' },
   { label: '测试版', value: 'test' },
+]
+
+const sliderSpeedOptions: { label: string; value: keyof CamSliderMoveTimes }[] = [
+  { label: '慢', value: 'slow' },
+  { label: '中', value: 'normal' },
+  { label: '快', value: 'fast' },
 ]
 
 const displayNameText = computed(() => {
@@ -1023,8 +1047,16 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
     sliderLampChipId: '',
     configured: false,
     sliderPresets: createDefaultSliderPresetMap(),
+    sliderMoveTimes: createDefaultSliderMoveTimeMap(),
     rois: [1, 2, 3].map(createDefaultRoi),
   }
+}
+
+function createDefaultSliderMoveTimeMap(): Record<string, CamSliderMoveTimes> {
+  return [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((map, index) => {
+    map[String(index)] = { slow: 0, normal: 0, fast: 0 }
+    return map
+  }, {})
 }
 
 function createDefaultSliderPresetMap(): Record<string, number> {
@@ -1059,6 +1091,7 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
     sliderLampChipId: String(value?.sliderLampChipId || '').trim(),
     configured: Boolean(value?.configured) || rois.every(isRoiReady),
     sliderPresets: normalizeSliderPresetMap(value),
+    sliderMoveTimes: normalizeSliderMoveTimeMap(value),
     rois,
   }
 }
@@ -1080,9 +1113,32 @@ function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefine
     const legacyCapturePreset = isPlainObject(legacyCapture[key]) ? legacyCapture[key] : {}
     const legacyTrackingPreset = isPlainObject(legacyTracking[key]) ? legacyTracking[key] : {}
     const numeric = Number(source[key] ?? legacyCapturePreset.slider ?? legacyTrackingPreset.slider ?? 0)
-    map[key] = Math.round(Math.max(0, Math.min(1200, Number.isFinite(numeric) ? numeric : 0)))
+    map[key] = Math.round(Math.max(0, Math.min(2500, Number.isFinite(numeric) ? numeric : 0)))
     return map
   }, {})
+}
+
+function normalizeSliderMoveTimeMap(
+  value: Partial<CamRoiConfig> | null | undefined,
+): Record<string, CamSliderMoveTimes> {
+  const source = isPlainObject(value?.sliderMoveTimes) ? value.sliderMoveTimes : {}
+  return [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((map, index) => {
+    const key = String(index)
+    const rawTimes = source[key]
+    const sourceTimes: Record<string, unknown> = isPlainObject(rawTimes) ? rawTimes : {}
+    map[key] = {
+      slow: normalizeSliderMoveTime(sourceTimes.slow),
+      normal: normalizeSliderMoveTime(sourceTimes.normal),
+      fast: normalizeSliderMoveTime(sourceTimes.fast),
+    }
+    return map
+  }, {})
+}
+
+function normalizeSliderMoveTime(value: unknown) {
+  const numeric = Number(value)
+  const clamped = Math.max(0, Math.min(3600, Number.isFinite(numeric) ? numeric : 0))
+  return Math.round(clamped * 1000) / 1000
 }
 
 function normalizeRoi(value: Partial<CamRoiItem> | undefined, targetIndex: number): CamRoiItem {
@@ -2603,8 +2659,9 @@ onBeforeUnmount(() => {
 
 .roi-preset-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(320px, 1.3fr);
+  align-items: end;
+  gap: 12px;
 }
 
 .roi-preset-input {
@@ -2619,6 +2676,40 @@ onBeforeUnmount(() => {
   color: #64748b;
   font-size: 12px;
   font-weight: 700;
+}
+
+.roi-move-times-field {
+  display: grid;
+  gap: 6px;
+}
+
+.roi-move-times-field > span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roi-move-times-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.roi-move-times-inputs label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.roi-move-times-inputs small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.roi-move-times-inputs input {
+  min-width: 0;
 }
 
 .device-info-head {
@@ -3115,6 +3206,10 @@ onBeforeUnmount(() => {
   .roi-number-grid,
   .roi-preset-grid,
   .ptz-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .roi-move-times-inputs {
     grid-template-columns: 1fr;
   }
 }
