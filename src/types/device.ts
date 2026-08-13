@@ -99,6 +99,7 @@ export interface DeviceItem {
   camActiveTargetIndex?: number
   camActiveTargetChipId?: string
   camLastCapture?: CamCaptureTaskResult
+  camCaptureTasks?: CamCaptureTaskResult[]
   camPresence?: CamPresenceState
   camRoiConfig?: CamRoiConfig
   lampClothState?: LampClothState
@@ -251,8 +252,24 @@ export interface CamCaptureTaskPayload {
   targetIndex?: number
 }
 
+export interface CamCaptureBatchPayload {
+  camChipId: string
+}
+
+export interface CamCaptureBatchResult {
+  batchId: string
+  camChipId: string
+  status?: string
+  message?: string
+  tasks: CamCaptureTaskResult[]
+  createTime?: string
+}
+
 export interface CamCaptureTaskResult {
   taskId: string
+  batchId?: string
+  sequence?: number
+  createTime?: string
   camChipId: string
   targetChipId?: string
   targetIndex?: number

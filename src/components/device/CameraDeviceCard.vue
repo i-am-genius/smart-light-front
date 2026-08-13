@@ -30,6 +30,15 @@
         <div class="camera-work-row">
           <span class="camera-work-label">当前状态</span>
           <strong class="camera-work-status" :class="workStatusClass">{{ workStatusText }}</strong>
+          <button
+            type="button"
+            class="batch-capture-btn"
+            :disabled="Boolean(batchCaptureDisabledReason)"
+            :title="batchCaptureDisabledReason || '按滑轨位置从小到大拍摄三个区域'"
+            @click.stop="handleBatchCapture"
+          >
+            {{ batchCaptureLoading ? '创建中...' : '全区域拍摄' }}
+          </button>
         </div>
         <p v-if="roiWarningText" class="camera-roi-warning">{{ roiWarningText }}</p>
         <div class="presence-grid">
@@ -65,6 +74,19 @@
               <small>{{ getTrackingButtonStatusText(area.targetButton) }}</small>
             </button>
           </div>
+        </div>
+        <div v-if="displayCaptureTasks.length" class="capture-task-strip">
+          <template v-for="(task, index) in displayCaptureTasks" :key="task.taskId">
+            <span v-if="index > 0" class="capture-task-divider" aria-hidden="true"></span>
+            <div
+              class="capture-task-item"
+              :class="{ error: isCaptureTaskError(task.status) }"
+              :title="`TaskID：${task.taskId}`"
+            >
+              <span>任务{{ task.sequence || index + 1 }} · {{ shortCaptureTaskId(task.taskId) }}</span>
+              <strong>{{ getCaptureTaskStatusText(task.status) }}</strong>
+            </div>
+          </template>
         </div>
         <p v-if="aimMessage" class="camera-message error">{{ aimMessage }}</p>
         <p v-if="trackingMessage" class="camera-message" :class="{ error: trackingMessageIsError }">
@@ -414,6 +436,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import BaseSelect from '../common/BaseSelect.vue'
 import type {
   CamPresenceArea,
+  CamCaptureTaskResult,
   CamRoiConfig,
   CamRoiItem,
   CamWorkStatus,
@@ -426,6 +449,7 @@ import type {
 } from '../../types/device'
 import {
   checkFirmwareUpdate,
+  createCamCaptureBatch,
   createCamCaptureTask,
   getCamRoiConfig,
   saveCamRoiConfig,
@@ -437,6 +461,11 @@ import {
 import { getPersonFlowImageObjectUrl } from '../../api/personFlow'
 import { applyTargetDeviceToRoi, getTargetDeviceLabel, pickCamRoiFields } from '../../utils/cameraRoi'
 import { getErrorMessage } from '../../utils/error'
+import {
+  getCaptureTaskStatusText,
+  mergeCaptureTask,
+  shortCaptureTaskId,
+} from '../../utils/cameraCaptureTasks'
 
 const props = defineProps<{
   device: DeviceItem
@@ -515,7 +544,9 @@ const ptzLoading = ref(false)
 const ptzMessage = ref('')
 const ptzStep = ref(5)
 const aimLoading = ref(false)
+const batchCaptureLoading = ref(false)
 const aimMessage = ref('')
+const localCaptureTasks = ref<CamCaptureTaskResult[]>([])
 const trackingActionIndex = ref<number | null>(null)
 const manualTrackingTargetIndex = ref<number | null>(null)
 const trackingMessage = ref('')
@@ -680,7 +711,42 @@ const canRetryLastCapture = computed(() => {
 })
 
 const isCamBusy = computed(() => {
-  return ['waiting_motion', 'capturing', 'uploading', 'returning_center', 'ready_tracking', 'tracking'].includes(normalizedWorkStatus.value)
+  const batchHasPhysicalWork = displayCaptureTasks.value.some(task =>
+    ['queued', 'waiting_motion', 'capturing', 'uploading'].includes(String(task.status || '')),
+  )
+  return batchHasPhysicalWork || [
+    'waiting_motion',
+    'capturing',
+    'uploading',
+    'returning_center',
+    'returning_target_2',
+    'ready_tracking',
+    'tracking',
+  ].includes(normalizedWorkStatus.value)
+})
+
+const displayCaptureTasks = computed(() => {
+  const tasks = localCaptureTasks.value.length
+    ? localCaptureTasks.value
+    : (props.device.camCaptureTasks || [])
+  return [...tasks].sort((left, right) =>
+    (Number(left.sequence) || 99) - (Number(right.sequence) || 99),
+  )
+})
+
+const batchCaptureDisabledReason = computed(() => {
+  if (batchCaptureLoading.value || aimLoading.value) return '任务创建中'
+  if (!props.device.online) return '摄像头离线'
+  if (isCamBusy.value) return '摄像头忙碌中'
+  if (!roiReady.value || targetButtons.value.some(target => !target.targetChipId || target.targetMissing)) {
+    return '三个区域尚未完整配置'
+  }
+  const sliderLampChipId = roiDraft.value.sliderLampChipId
+  if (!sliderLampChipId) return '滑轨控制灯未绑定'
+  const sliderLamp = findTargetDevice(sliderLampChipId)
+  if (!sliderLamp) return '滑轨控制灯不存在'
+  if (!sliderLamp.online) return '滑轨控制灯离线'
+  return ''
 })
 
 const presenceRows = computed(() => {
@@ -934,6 +1000,8 @@ function getCamWorkStatusText(status: CamWorkStatus) {
     capturing: '正在拍摄服装',
     uploading: '上传照片中',
     returning_center: '回中心中',
+    returning_target_2: '返回区域 2',
+    batch_complete: '批量拍摄完成',
     ready_tracking: '准备追踪',
     tracking: '追踪中',
     lost: '目标丢失',
@@ -1238,6 +1306,37 @@ async function handleAimTarget(target: TargetButton) {
   }
 
   await createCaptureTaskForTarget(target.targetIndex, target.targetChipId)
+}
+
+async function handleBatchCapture() {
+  if (!props.device.chipId || batchCaptureDisabledReason.value) {
+    aimMessage.value = batchCaptureDisabledReason.value || '摄像头缺少 chipId，无法创建批量拍摄任务'
+    return
+  }
+
+  batchCaptureLoading.value = true
+  aimMessage.value = ''
+  try {
+    const result = await createCamCaptureBatch({ camChipId: props.device.chipId })
+    localCaptureTasks.value = Array.isArray(result?.tasks) ? [...result.tasks] : []
+    beginLocalCapturePending()
+  } catch (error) {
+    aimMessage.value = getErrorMessage(error, '三个区域批量拍摄任务创建失败')
+  } finally {
+    batchCaptureLoading.value = false
+  }
+}
+
+function isCaptureTaskError(status?: string) {
+  return [
+    'motion_command_failed',
+    'motion_timeout',
+    'camera_offline',
+    'camera_command_failed',
+    'upload_failed',
+    'timeout',
+    'photo_saved_ai_failed',
+  ].includes(String(status || ''))
 }
 
 async function createCaptureTaskForTarget(targetIndex: number, targetChipId?: string) {
@@ -1649,6 +1748,19 @@ watch(
 )
 
 watch(
+  () => props.device.camCaptureTasks,
+  (tasks) => {
+    if (!Array.isArray(tasks)) return
+    let merged: CamCaptureTaskResult[] = []
+    for (const task of tasks) {
+      merged = mergeCaptureTask(merged, task)
+    }
+    localCaptureTasks.value = merged
+  },
+  { immediate: true, deep: true },
+)
+
+watch(
   () => props.device.camLastCapture?.imageName,
   (imageName) => {
     void loadCaptureImage(imageName)
@@ -1856,7 +1968,6 @@ onBeforeUnmount(() => {
 .camera-work-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
 
@@ -1867,9 +1978,81 @@ onBeforeUnmount(() => {
 }
 
 .camera-work-status {
+  margin-left: auto;
   color: #1677ff;
   font-size: 13px;
   font-weight: 800;
+}
+
+.batch-capture-btn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1677ff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.batch-capture-btn:hover:not(:disabled) {
+  border-color: #60a5fa;
+  background: #dbeafe;
+}
+
+.batch-capture-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.capture-task-strip {
+  display: flex;
+  align-items: stretch;
+  margin-top: 8px;
+  padding: 7px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  overflow-x: auto;
+}
+
+.capture-task-item {
+  flex: 1 0 0;
+  min-width: 92px;
+  padding: 0 8px;
+  text-align: center;
+}
+
+.capture-task-item span,
+.capture-task-item strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capture-task-item span {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.capture-task-item strong {
+  margin-top: 2px;
+  color: #1677ff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.capture-task-item.error strong {
+  color: #dc2626;
+}
+
+.capture-task-divider {
+  width: 1px;
+  flex: 0 0 1px;
+  align-self: stretch;
+  background: rgba(100, 116, 139, 0.2);
 }
 
 .camera-work-status.busy {
