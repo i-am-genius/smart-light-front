@@ -373,12 +373,16 @@
                               </div>
                             </label>
                             <div class="roi-move-times-field">
-                              <span>移动时间（0 → Slider）：</span>
-                              <div class="roi-move-times-inputs">
-                                <label v-for="speed in sliderSpeedOptions" :key="speed.value">
-                                  <small>{{ speed.label }}</small>
+                              <span title="从 0 mm 移动到当前 Slider 预设位置的实测时间">移动时间：</span>
+                              <div class="roi-move-time-row">
+                                <BaseSelect
+                                  v-model="sliderSpeedSelection[roi.targetIndex]"
+                                  class="roi-speed-select"
+                                  :options="sliderSpeedOptions"
+                                />
+                                <div class="roi-preset-input">
                                   <input
-                                    v-model.number="roiDraft.sliderMoveTimes[roi.targetIndex][speed.value]"
+                                    v-model.number="roiDraft.sliderMoveTimes[roi.targetIndex][sliderSpeedSelection[roi.targetIndex]]"
                                     type="number"
                                     min="0"
                                     max="3600"
@@ -386,7 +390,7 @@
                                     inputmode="decimal"
                                   />
                                   <small>s</small>
-                                </label>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -590,10 +594,16 @@ const firmwareChannelOptions = [
 ]
 
 const sliderSpeedOptions: { label: string; value: keyof CamSliderMoveTimes }[] = [
-  { label: '慢', value: 'slow' },
-  { label: '中', value: 'normal' },
-  { label: '快', value: 'fast' },
+  { label: '慢速', value: 'slow' },
+  { label: '中速', value: 'normal' },
+  { label: '快速', value: 'fast' },
 ]
+
+const sliderSpeedSelection = reactive<Record<number, keyof CamSliderMoveTimes>>({
+  1: 'normal',
+  2: 'normal',
+  3: 'normal',
+})
 
 const displayNameText = computed(() => {
   const index = Number.isFinite(props.camIndex) && Number(props.camIndex) > 0
@@ -2659,9 +2669,9 @@ onBeforeUnmount(() => {
 
 .roi-preset-grid {
   display: grid;
-  grid-template-columns: minmax(150px, 0.7fr) minmax(320px, 1.3fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
-  gap: 12px;
+  gap: 8px;
 }
 
 .roi-preset-input {
@@ -2689,26 +2699,15 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.roi-move-times-inputs {
+.roi-move-time-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(72px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
   gap: 6px;
 }
 
-.roi-move-times-inputs label {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px;
-}
-
-.roi-move-times-inputs small {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.roi-move-times-inputs input {
+.roi-speed-select,
+.roi-move-time-row input {
   min-width: 0;
 }
 
@@ -3209,9 +3208,6 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .roi-move-times-inputs {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 768px) {
