@@ -1948,10 +1948,18 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
 .detail-modal-body {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 0 22px 16px;
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   overscroll-behavior: contain;
+}
+
+.detail-modal-body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .detail-modal-footer {
