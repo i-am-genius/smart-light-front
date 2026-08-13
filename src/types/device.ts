@@ -209,11 +209,18 @@ export interface CamPtzPreset {
   slider: number
 }
 
+export interface CamSliderMoveTimes {
+  slow: number
+  normal: number
+  fast: number
+}
+
 export interface CamRoiConfig {
   camChipId: string
   sliderLampChipId?: string
   configured?: boolean
   sliderPresets: Record<string, number>
+  sliderMoveTimes: Record<string, CamSliderMoveTimes>
   rois: CamRoiItem[]
 }
 

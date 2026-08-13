@@ -67,7 +67,7 @@ export function normalizeCamPreset(value: unknown): CamPtzPreset {
   return {
     pan: clampNumber(panValue, 0, -90, 90),
     tilt: clampNumber(source.tilt ?? source.pitch, 0, -45, 45),
-    slider: clampNumber(source.slider, 0, 0, 1200),
+    slider: clampNumber(source.slider, 0, 0, 2500),
   }
 }
 
