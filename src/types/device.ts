@@ -25,6 +25,7 @@ export interface GarmentState {
 }
 
 export type DeviceType = 'lamp' | 'camlamp' | 'cam' | string
+export type GarmentDetectionStatus = 'not_detected' | 'detecting' | 'detected' | string
 
 export interface DeviceItem {
   id: number
@@ -103,7 +104,8 @@ export interface DeviceItem {
   camPresence?: CamPresenceState
   camRoiConfig?: CamRoiConfig
   lampClothState?: LampClothState
-  tofDistanceMm?: number
+  lampProximityState?: LampProximityState
+  garmentDetectionStatus?: GarmentDetectionStatus
   lastTakenAt?: string | number
   tracking?: boolean
   trackingStatus?: TrackingStatusState
@@ -116,6 +118,10 @@ export interface DeviceOnlineItem {
   online: boolean
   lastSeen?: number
   lastSeenAt?: string
+  garmentDetectionStatus?: GarmentDetectionStatus
+  nearby?: boolean
+  lastTakenAt?: string | number
+  trackingStatus?: string
 }
 
 export interface DeviceCreatePayload {
@@ -312,9 +318,14 @@ export type LampClothStatus = 'on_rack' | 'taken' | 'unknown' | string
 export interface LampClothState {
   chipId: string
   clothStatus?: LampClothStatus
-  tofDistanceMm?: number
   lastTakenAt?: string | number
   tracking?: boolean
+  updateTime?: string | number
+}
+
+export interface LampProximityState {
+  chipId: string
+  nearby?: boolean
   updateTime?: string | number
 }
 
@@ -323,7 +334,7 @@ export interface TrackingStatusState {
   camChipId?: string
   targetChipId?: string
   targetIndex?: number
-  status?: 'ready' | 'tracking' | 'lost' | 'stopped' | 'timeout' | 'error' | string
+  status?: 'waiting_motion' | 'ready' | 'tracking' | 'lost' | 'stopped' | 'monitoring' | 'timeout' | 'error' | string
   message?: string
   timestamp?: string | number
 }
