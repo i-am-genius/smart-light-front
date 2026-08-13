@@ -6,6 +6,8 @@ import type {
   CameraAimTargetPayload,
   CamCaptureTaskPayload,
   CamCaptureTaskResult,
+  CamCaptureBatchPayload,
+  CamCaptureBatchResult,
   CamPresenceState,
   CamRoiConfig,
   CamStatusState,
@@ -231,6 +233,16 @@ export async function createCamCaptureTask(
 ): Promise<CamCaptureTaskResult> {
   const res = await http.post<CommonResult<CamCaptureTaskResult>>(
     '/admin/device/cam/capture-task',
+    payload,
+  )
+  return res.data.data
+}
+
+export async function createCamCaptureBatch(
+  payload: CamCaptureBatchPayload,
+): Promise<CamCaptureBatchResult> {
+  const res = await http.post<CommonResult<CamCaptureBatchResult>>(
+    '/admin/device/cam/capture-batch',
     payload,
   )
   return res.data.data

@@ -374,6 +374,7 @@ import type { LightEffectState } from '../api/lightEffect'
 import { getCurrentStoreApi } from '../api/store'
 import { getCurrentWeather } from '../api/weather'
 import { getPersonFlowRecent } from '../api/personFlow'
+import { mergeCaptureTask } from '../utils/cameraCaptureTasks'
 import type {
   DashboardTab,
   DeviceCreatePayload,
@@ -2253,14 +2254,22 @@ function handleWsMessage(message: any) {
   if (message.type === 'cameraCaptureTask' && message.data) {
     const camChipId = String(message.data.camChipId ?? '').trim()
     if (!camChipId) return
+    const currentDevice = findDeviceByChipId(camChipId)
+    const captureStatus = String(message.data.status || '')
+    const captureTasks = message.data.batchId
+      ? mergeCaptureTask(currentDevice?.camCaptureTasks || [], message.data)
+      : currentDevice?.camCaptureTasks
 
     updateDeviceByIncoming({
       chipId: camChipId,
-      camWorkStatus: 'capturing',
+      camWorkStatus: ['waiting_motion', 'capturing', 'uploading'].includes(captureStatus)
+        ? captureStatus
+        : (currentDevice?.camWorkStatus || 'capturing'),
       camStatusMessage: message.data.message || 'capture task created',
       camActiveTargetIndex: message.data.targetIndex,
       camActiveTargetChipId: message.data.targetChipId,
       camLastCapture: message.data,
+      ...(captureTasks ? { camCaptureTasks: captureTasks } : {}),
     })
     return
   }
@@ -2269,8 +2278,14 @@ function handleWsMessage(message: any) {
     const camChipId = String(message.data.camChipId ?? '').trim()
     if (!camChipId) return
     const captureStatus = String(message.data.status || '')
-    const camWorkStatus = ['success', 'ai_done', 'photo_saved_ai_failed'].includes(captureStatus)
-      ? 'returning_center'
+    const currentDevice = findDeviceByChipId(camChipId)
+    const captureTasks = message.data.batchId
+      ? mergeCaptureTask(currentDevice?.camCaptureTasks || [], message.data)
+      : currentDevice?.camCaptureTasks
+    const aiOnlyStatus = ['image_received', 'ai_processing', 'ai_done', 'photo_saved_ai_failed']
+      .includes(captureStatus)
+    const camWorkStatus = aiOnlyStatus
+      ? (currentDevice?.camWorkStatus || 'monitoring')
       : (['timeout', 'upload_failed'].includes(captureStatus) ? 'error' : (captureStatus || 'error'))
 
     updateDeviceByIncoming({
@@ -2280,6 +2295,7 @@ function handleWsMessage(message: any) {
       camActiveTargetIndex: message.data.targetIndex,
       camActiveTargetChipId: message.data.targetChipId,
       camLastCapture: message.data,
+      ...(captureTasks ? { camCaptureTasks: captureTasks } : {}),
     })
 
     const targetChipId = String(message.data.targetChipId ?? message.data.lampChipId ?? '').trim()
