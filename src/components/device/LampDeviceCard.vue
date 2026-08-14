@@ -98,8 +98,8 @@
         <strong>{{ clothStateText }}</strong>
       </div>
       <div>
-        <span>ToF 距离</span>
-        <strong>{{ tofDistanceText }}</strong>
+        <span>人员靠近</span>
+        <strong>{{ proximityStateText }}</strong>
       </div>
       <div>
         <span>最近取下</span>
@@ -563,6 +563,11 @@ import {
 import { getErrorMessage } from '../../utils/error'
 import { clamp, colorTemperatureToHex } from '../../utils/helpers'
 import { isLampDevice, normalizeDeviceType } from '../../utils/device'
+import {
+  garmentDetectionStatusText,
+  lampProximityStatusText,
+  lampTrackingStatusText,
+} from '../../utils/lampRuntimeStatus'
 import {
   buildZoneSelectOptions,
   findSmallestAvailableDeviceNo,
@@ -1327,7 +1332,7 @@ const selfTestRows = computed(() => {
     { label: 'WebSocket', text: statusText(data.ws), okClass: statusClass(data.ws) },
     { label: '文件系统', text: statusText(data.fs), okClass: statusClass(data.fs) },
     { label: 'BH1750 光照', text: statusText(data.bh1750), okClass: statusClass(data.bh1750) },
-    { label: 'ToF 距离', text: statusText(data.tof), okClass: statusClass(data.tof) },
+    { label: 'ToF 传感器', text: statusText(data.tof), okClass: statusClass(data.tof) },
     { label: 'Nano 通讯', text: statusText(data.nano), okClass: statusClass(data.nano) },
     { label: '云台寻零', text: statusText(data.nanoHoming), okClass: statusClass(data.nanoHoming) },
     { label: '霍尔读取', text: statusText(data.nanoHallStatus), okClass: statusClass(data.nanoHallStatus) },
@@ -1682,19 +1687,14 @@ const isLamp = computed(() => normalizedDeviceType.value === 'lamp')
 const isCamLamp = computed(() => normalizedDeviceType.value === 'camlamp')
 
 const clothStateText = computed(() => {
-  const status = props.device.lampClothState?.clothStatus || 'unknown'
-  const map: Record<string, string> = {
-    on_rack: '在架上',
-    taken: '已取下',
-    unknown: '未检测',
-  }
-  return map[String(status)] || String(status)
+  return garmentDetectionStatusText(props.device.garmentDetectionStatus)
 })
 
-const tofDistanceText = computed(() => {
-  const distance = props.device.lampClothState?.tofDistanceMm ?? props.device.tofDistanceMm
-  if (distance == null || !Number.isFinite(Number(distance))) return '暂无'
-  return `${Number(distance)} mm`
+const proximityStateText = computed(() => {
+  return lampProximityStatusText(
+    props.device.online === true,
+    props.device.lampProximityState?.nearby,
+  )
 })
 
 const lastTakenAtText = computed(() => {
@@ -1703,11 +1703,8 @@ const lastTakenAtText = computed(() => {
 })
 
 const trackingText = computed(() => {
-  const tracking = props.device.lampClothState?.tracking ?? props.device.tracking
-  if (tracking) return '跟随中'
-  const status = props.device.trackingStatus?.status
-  if (status) return String(status)
-  return '未跟随'
+  if (props.device.online !== true) return '未跟随'
+  return lampTrackingStatusText(props.device.trackingStatus?.status)
 })
 
 const displayBrightness = computed(() => {

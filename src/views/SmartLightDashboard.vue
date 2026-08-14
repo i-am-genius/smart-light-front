@@ -1262,6 +1262,18 @@ function mergeDeviceOnline(deviceList: DeviceItem[], onlineList: DeviceOnlineIte
       ip: onlineInfo?.ip || device.ip,
       selfTestJson: online ? device.selfTestJson : undefined,
       selfTestTime: online ? device.selfTestTime : undefined,
+      garmentDetectionStatus: onlineInfo?.garmentDetectionStatus ?? device.garmentDetectionStatus,
+      lampProximityState: online && onlineInfo?.nearby != null
+        ? { chipId: device.chipId, nearby: onlineInfo.nearby }
+        : undefined,
+      lastTakenAt: onlineInfo?.lastTakenAt ?? device.lastTakenAt,
+      trackingStatus: onlineInfo?.trackingStatus
+        ? {
+            ...device.trackingStatus,
+            chipId: device.chipId,
+            status: onlineInfo.trackingStatus,
+          }
+        : device.trackingStatus,
     }
   })
 }
@@ -1889,7 +1901,8 @@ function stripLampOnlyFields(device: Partial<DeviceItem>) {
     'annotatedImageId',
     'combinedImageUrl',
     'lampClothState',
-    'tofDistanceMm',
+    'lampProximityState',
+    'garmentDetectionStatus',
     'lastTakenAt',
   ]
 
@@ -2025,11 +2038,52 @@ function handleWsMessage(message: any) {
       ip: message.data.ip,
       online: message.data.online,
       lastSeen: message.data.lastSeen,
+      garmentDetectionStatus: message.data.garmentDetectionStatus,
+      lampProximityState: message.data.online === true && message.data.nearby != null
+        ? {
+            chipId: message.data.chipId,
+            nearby: Boolean(message.data.nearby),
+            updateTime: message.data.updateTime,
+          }
+        : undefined,
+      lastTakenAt: message.data.lastTakenAt,
+      trackingStatus: message.data.trackingStatus
+        ? {
+            chipId: message.data.chipId,
+            status: message.data.trackingStatus,
+            timestamp: message.data.updateTime,
+          }
+        : undefined,
     }
     if (message.data.lastSeenAt != null) {
       incoming.lastSeenAt = message.data.lastSeenAt
     }
     updateDeviceByIncoming(incoming)
+    return
+  }
+
+  if (message.type === 'garmentDetectionStatus' && message.data) {
+    const status = message.data.status ?? message.data.garmentDetectionStatus
+    devices.value
+      .filter(device => isLampDevice(device))
+      .forEach(device => updateDeviceByIncoming({
+        chipId: device.chipId,
+        garmentDetectionStatus: status,
+      }))
+    return
+  }
+
+  if (message.type === 'lampProximityState' && message.data) {
+    const chipId = String(message.data.chipId ?? '').trim()
+    if (!chipId) return
+    updateDeviceByIncoming({
+      chipId,
+      lampProximityState: {
+        chipId,
+        nearby: Boolean(message.data.nearby),
+        updateTime: message.data.updateTime ?? message.data.timestamp,
+      },
+    })
     return
   }
 
@@ -2174,13 +2228,28 @@ function handleWsMessage(message: any) {
     const camChipId = String(message.data.camChipId ?? message.data.chipId ?? '').trim()
     if (!camChipId) return
 
+    const currentCam = findDeviceByChipId(camChipId)
+    const nextWorkStatus = message.data.workStatus ?? message.data.status
+    const recoveredFromTerminalTracking = ['monitoring', 'stopped', 'returning_center']
+      .includes(String(nextWorkStatus || '').toLowerCase())
+      && ['lost', 'timeout'].includes(String(currentCam?.trackingStatus?.status || '').toLowerCase())
     const incoming: Partial<DeviceItem> = {
       chipId: camChipId,
-      camWorkStatus: message.data.workStatus ?? message.data.status,
+      camWorkStatus: nextWorkStatus,
       camStatusMessage: message.data.message,
       camActiveTargetIndex: message.data.targetIndex ?? message.data.activeTargetIndex,
       camActiveTargetChipId: message.data.targetChipId ?? message.data.activeTargetChipId,
       detectTime: message.data.detectTime ?? message.data.timestamp ?? message.data.updateTime,
+      ...(recoveredFromTerminalTracking
+        ? {
+            tracking: false,
+            trackingStatus: {
+              ...currentCam?.trackingStatus,
+              status: 'monitoring',
+              timestamp: message.data.timestamp ?? message.data.updateTime,
+            },
+          }
+        : {}),
     }
 
     if (message.data.personCount != null) {
@@ -2197,6 +2266,19 @@ function handleWsMessage(message: any) {
     }
 
     updateDeviceByIncoming(incoming)
+
+    const recoveredTargetChipId = currentCam?.trackingStatus?.targetChipId
+    if (recoveredFromTerminalTracking && recoveredTargetChipId) {
+      updateDeviceByIncoming({
+        chipId: recoveredTargetChipId,
+        tracking: false,
+        trackingStatus: {
+          ...currentCam?.trackingStatus,
+          status: 'monitoring',
+          timestamp: message.data.timestamp ?? message.data.updateTime,
+        },
+      })
+    }
 
     if (message.data.personCount != null) {
       window.dispatchEvent(new CustomEvent('person-flow-updated', {
@@ -2327,12 +2409,10 @@ function handleWsMessage(message: any) {
       lampClothState: {
         chipId,
         clothStatus: message.data.clothStatus ?? message.data.clothState,
-        tofDistanceMm: message.data.tofDistanceMm,
         lastTakenAt: message.data.lastTakenAt,
         tracking: message.data.tracking,
         updateTime: message.data.updateTime ?? message.data.timestamp,
       },
-      tofDistanceMm: message.data.tofDistanceMm,
       lastTakenAt: message.data.lastTakenAt,
       tracking: message.data.tracking,
     })
