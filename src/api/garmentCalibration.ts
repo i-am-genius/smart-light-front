@@ -100,12 +100,22 @@ export async function startCaptureLighting(
   lampChipId: string,
   sessionId?: string,
 ): Promise<string> {
-  const res = await http.post<CommonResult<string>>(
-    `/admin/device/lamp/${encodeURIComponent(lampChipId)}/capture-lighting/start`,
-    undefined,
-    { params: sessionId ? { sessionId } : undefined },
-  )
-  return res.data.data
+  const requestedSessionId = sessionId || createCaptureLightingSessionId('PHONE')
+  try {
+    const res = await http.post<CommonResult<string>>(
+      `/admin/device/lamp/${encodeURIComponent(lampChipId)}/capture-lighting/start`,
+      undefined,
+      { params: { sessionId: requestedSessionId } },
+    )
+    return res.data.data || requestedSessionId
+  } catch (error) {
+    try {
+      await stopCaptureLighting(lampChipId, requestedSessionId)
+    } catch (stopError) {
+      console.warn('[capture-lighting] cleanup after start failure failed', stopError)
+    }
+    throw error
+  }
 }
 
 export async function stopCaptureLighting(
