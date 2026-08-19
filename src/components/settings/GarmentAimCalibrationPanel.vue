@@ -4,6 +4,7 @@
       ref="phoneInputRef"
       type="file"
       accept="image/*"
+      capture="environment"
       class="hidden-file-input"
       @change="handlePhoneFileChange"
       @cancel="handlePhonePickerCancel"
@@ -13,7 +14,7 @@
       <div>
         <h2 class="settings-title">🧭 服装照射标定</h2>
         <p class="panel-desc">
-          按拍摄设备分别保存识别点和标定模型；Camera 保持原自动对位拍摄流程，手机使用人工图片上传。
+          按拍摄设备分别保存识别点和标定模型；Camera 保持原自动对位拍摄流程，手机直接调用后置相机拍摄并上传识别。
         </p>
       </div>
       <span class="model-badge" :class="{ ready: calibration?.modelReady }">
