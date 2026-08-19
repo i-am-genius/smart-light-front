@@ -31,6 +31,7 @@
 import { computed } from 'vue'
 import DeviceCard from './DeviceCard.vue'
 import SmartLightingButton from './SmartLightingButton.vue'
+import './SmartLightingButtonVisual.css'
 import type { DeviceItem } from '../../types/device'
 import type { LampRealtimeUpdateEnvelope } from '../../utils/garmentRecognition'
 import { sortBoundDevices, type ZoneDefinition } from '../../utils/deviceZones'
