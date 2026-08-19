@@ -88,3 +88,17 @@ export async function copyGarmentAimCalibration(
   )
   return res.data.data
 }
+
+export async function startCaptureLighting(lampChipId: string): Promise<boolean> {
+  const res = await http.post<CommonResult<boolean>>(
+    `/admin/device/lamp/${encodeURIComponent(lampChipId)}/capture-lighting/start`,
+  )
+  return res.data.data
+}
+
+export async function stopCaptureLighting(lampChipId: string): Promise<boolean> {
+  const res = await http.post<CommonResult<boolean>>(
+    `/admin/device/lamp/${encodeURIComponent(lampChipId)}/capture-lighting/stop`,
+  )
+  return res.data.data
+}
