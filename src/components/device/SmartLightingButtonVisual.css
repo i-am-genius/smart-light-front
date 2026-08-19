@@ -221,6 +221,17 @@
   }
 }
 
+@media (min-width: 769px) {
+  #controls .smart-lighting-launcher {
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  #controls #scanStatus.ws-status-pill {
+    margin-left: 0;
+  }
+}
+
 @media (max-width: 768px) {
   #controls .smart-lighting-launcher .smart-lighting-button {
     min-height: 46px;
