@@ -32,6 +32,13 @@ export function cameraSourceKey(camChipId: string): GarmentCaptureSourceKey {
   return `CAMERA:${camChipId}`
 }
 
+export function createCaptureLightingSessionId(prefix = 'PHONE'): string {
+  const uuid = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return `${prefix}:${uuid}`
+}
+
 export async function getSourceGarmentAimCalibration(
   lampChipId: string,
   sourceKey: GarmentCaptureSourceKey,
@@ -89,9 +96,14 @@ export async function copyGarmentAimCalibration(
   return res.data.data
 }
 
-export async function startCaptureLighting(lampChipId: string): Promise<string> {
+export async function startCaptureLighting(
+  lampChipId: string,
+  sessionId?: string,
+): Promise<string> {
   const res = await http.post<CommonResult<string>>(
     `/admin/device/lamp/${encodeURIComponent(lampChipId)}/capture-lighting/start`,
+    undefined,
+    { params: sessionId ? { sessionId } : undefined },
   )
   return res.data.data
 }
