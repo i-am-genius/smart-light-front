@@ -182,6 +182,9 @@ let recognitionPoll: ReturnType<typeof setInterval> | null = null
 let recognitionPollCount = 0
 let lastSyncedRecognition = ''
 let phoneCaptureLightingLamp = ''
+let phoneCaptureLightingSession = ''
+let phonePickerFocusHandler: (() => void) | null = null
+let phonePickerReturnTimer: ReturnType<typeof setTimeout> | null = null
 
 const axes = [
   { key: 'pan' as const, label: 'Pan 水平', unit: '°', min: -90, max: 90, step: 1 },
@@ -219,14 +222,18 @@ watch(lampOptions, (options) => {
   if (!options.some(option => option.value === selectedLampChipId.value)) selectedLampChipId.value = options[0]?.value || ''
 }, { immediate: true })
 watch([selectedLampChipId, selectedCaptureDevice], () => {
-  stopRecognitionPoll(); void releasePhoneCaptureLighting()
+  stopRecognitionPoll(); clearPhonePickerReturnFallback(); void releasePhoneCaptureLighting()
   copyTargetLampIds.value = []; lastSyncedRecognition = ''
   position.pan = Math.round(selectedLamp.value?.garmentDefaultPan ?? 0)
   position.tilt = Math.round(selectedLamp.value?.garmentDefaultTilt ?? 20)
   void loadCalibration(true)
 })
 watch(() => selectedLamp.value?.updateTime, (value, previous) => { if (value && value !== previous) void loadCalibration(false) })
-onBeforeUnmount(() => { stopRecognitionPoll(); void releasePhoneCaptureLighting() })
+onBeforeUnmount(() => {
+  stopRecognitionPoll()
+  clearPhonePickerReturnFallback()
+  void releasePhoneCaptureLighting()
+})
 
 function deviceLabel(device: DeviceItem) {
   const name = device.displayName || '未分区'; const no = device.deviceNo ? `-${device.deviceNo}` : ''
@@ -256,10 +263,23 @@ async function captureNewPosition() {
   if (selectedCaptureDevice.value === 'PHONE') {
     captureLoading.value = true
     try {
-      await startCaptureLighting(selectedLampChipId.value)
-      phoneCaptureLightingLamp = selectedLampChipId.value
-      phoneInputRef.value?.click()
+      clearPhonePickerReturnFallback()
+      await releasePhoneCaptureLighting()
+      const lampChipId = selectedLampChipId.value
+      const sessionId = await startCaptureLighting(lampChipId)
+      phoneCaptureLightingLamp = lampChipId
+      phoneCaptureLightingSession = sessionId
+      if (!phoneInputRef.value) {
+        await releasePhoneCaptureLighting()
+        captureLoading.value = false
+        return
+      }
+      phoneInputRef.value.value = ''
+      armPhonePickerReturnFallback()
+      phoneInputRef.value.click()
     } catch (error) {
+      clearPhonePickerReturnFallback()
+      await releasePhoneCaptureLighting()
       captureLoading.value = false
       toast.show(getErrorMessage(error, '启用拍摄标准光照失败'), 'error')
     }
@@ -275,6 +295,7 @@ async function captureNewPosition() {
   } catch (error) { captureLoading.value = false; toast.show(getErrorMessage(error, '创建拍摄任务失败'), 'error') }
 }
 async function handlePhoneFileChange(event: Event) {
+  clearPhonePickerReturnFallback()
   const input = event.target as HTMLInputElement; const file = input.files?.[0]; input.value = ''
   await releasePhoneCaptureLighting()
   if (!file || !selectedLampChipId.value) { captureLoading.value = false; return }
@@ -286,11 +307,39 @@ async function handlePhoneFileChange(event: Event) {
     toast.show('手机图片识别完成', 'success')
   } catch (error) { captureLoading.value = false; toast.show(getErrorMessage(error, '手机图片识别失败'), 'error') }
 }
-async function handlePhonePickerCancel() { await releasePhoneCaptureLighting(); captureLoading.value = false }
+async function handlePhonePickerCancel() {
+  clearPhonePickerReturnFallback()
+  await releasePhoneCaptureLighting()
+  captureLoading.value = false
+}
+function armPhonePickerReturnFallback() {
+  clearPhonePickerReturnFallback()
+  phonePickerFocusHandler = () => {
+    if (phonePickerReturnTimer) clearTimeout(phonePickerReturnTimer)
+    phonePickerReturnTimer = setTimeout(() => {
+      phonePickerReturnTimer = null
+      void handlePhonePickerCancel()
+    }, 300)
+  }
+  window.addEventListener('focus', phonePickerFocusHandler, { once: true })
+}
+function clearPhonePickerReturnFallback() {
+  if (phonePickerFocusHandler) {
+    window.removeEventListener('focus', phonePickerFocusHandler)
+    phonePickerFocusHandler = null
+  }
+  if (phonePickerReturnTimer) {
+    clearTimeout(phonePickerReturnTimer)
+    phonePickerReturnTimer = null
+  }
+}
 async function releasePhoneCaptureLighting() {
-  const lampChipId = phoneCaptureLightingLamp; phoneCaptureLightingLamp = ''
-  if (!lampChipId) return
-  try { await stopCaptureLighting(lampChipId) } catch (error) { console.warn('[garment-calibration] capture lighting stop failed', error) }
+  const lampChipId = phoneCaptureLightingLamp
+  const sessionId = phoneCaptureLightingSession
+  phoneCaptureLightingLamp = ''
+  phoneCaptureLightingSession = ''
+  if (!lampChipId || !sessionId) return
+  try { await stopCaptureLighting(lampChipId, sessionId) } catch (error) { console.warn('[garment-calibration] capture lighting stop failed', error) }
 }
 function startRecognitionPoll(previousRecognition: string, timeoutMessage: string) {
   recognitionPollCount = 0
