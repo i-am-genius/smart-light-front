@@ -1,6 +1,6 @@
 <template>
   <div class="device-grid">
-    <Teleport to="#controls">
+    <Teleport defer to="#controls">
       <SmartLightingButton :devices="devices" />
     </Teleport>
 
