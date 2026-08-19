@@ -153,6 +153,7 @@
       type="file"
       accept="image/*"
       @change="handleFabricFileChange"
+      @cancel="handleFabricPickerCancel"
     />
 
     <button
@@ -546,6 +547,11 @@ import type {
 } from '../../types/device'
 import { fabricRecognize } from '../../api/ai'
 import {
+  createCaptureLightingSessionId,
+  startCaptureLighting,
+  stopCaptureLighting,
+} from '../../api/garmentCalibration'
+import {
   setFlowUpload,
   locateDevice,
   checkFirmwareUpdate,
@@ -721,6 +727,10 @@ const displayGarments = computed(() => getDisplayGarments({
 const showDetailModal = ref(false)
 const fabricInputRef = ref<HTMLInputElement | null>(null)
 const fabricLoading = ref(false)
+let fabricCaptureLightingLamp = ''
+let fabricCaptureLightingSession = ''
+let fabricPickerFocusHandler: (() => void) | null = null
+let fabricPickerReturnTimer: ReturnType<typeof setTimeout> | null = null
 const flowLoading = ref(false)
 const flowEnabled = ref(false)
 const annotatedImageBase64 = ref('')
@@ -1507,6 +1517,8 @@ onBeforeUnmount(() => {
   }
   clearSliderInteractionTimer('brightness')
   clearSliderInteractionTimer('temp')
+  clearFabricPickerReturnFallback()
+  void releaseFabricCaptureLighting()
 })
 
 function resetForm() {
@@ -1565,17 +1577,92 @@ function handleGarmentAimModeChange() {
   emitRealtimeUpdate()
 }
 
-function openFabricUpload() {
-  fabricInputRef.value?.click()
+async function openFabricUpload() {
+  if (fabricLoading.value || fabricCaptureLightingSession) return
+  const lampChipId = localForm.chipId || props.device.chipId
+  if (!lampChipId) {
+    toast.show('设备缺少 chipId，无法开启拍摄标准光照', 'error')
+    shakeAiActions()
+    return
+  }
+
+  clearFabricPickerReturnFallback()
+  await releaseFabricCaptureLighting()
+  const sessionId = createCaptureLightingSessionId('PHONE')
+  fabricCaptureLightingLamp = lampChipId
+  fabricCaptureLightingSession = sessionId
+
+  try {
+    await startCaptureLighting(lampChipId, sessionId)
+    if (!fabricInputRef.value) {
+      await releaseFabricCaptureLighting()
+      return
+    }
+    fabricInputRef.value.value = ''
+    armFabricPickerReturnFallback()
+    fabricInputRef.value.click()
+  } catch (error) {
+    clearFabricPickerReturnFallback()
+    await releaseFabricCaptureLighting()
+    toast.show(getErrorMessage(error, '启用拍摄标准光照失败'), 'error')
+    shakeAiActions()
+  }
+}
+
+function armFabricPickerReturnFallback() {
+  clearFabricPickerReturnFallback()
+  fabricPickerFocusHandler = () => {
+    if (fabricPickerReturnTimer) clearTimeout(fabricPickerReturnTimer)
+    fabricPickerReturnTimer = setTimeout(() => {
+      fabricPickerReturnTimer = null
+      void handleFabricPickerCancel()
+    }, 300)
+  }
+  window.addEventListener('focus', fabricPickerFocusHandler, { once: true })
+}
+
+function clearFabricPickerReturnFallback() {
+  if (fabricPickerFocusHandler) {
+    window.removeEventListener('focus', fabricPickerFocusHandler)
+    fabricPickerFocusHandler = null
+  }
+  if (fabricPickerReturnTimer) {
+    clearTimeout(fabricPickerReturnTimer)
+    fabricPickerReturnTimer = null
+  }
+}
+
+async function releaseFabricCaptureLighting() {
+  const lampChipId = fabricCaptureLightingLamp
+  const sessionId = fabricCaptureLightingSession
+  fabricCaptureLightingLamp = ''
+  fabricCaptureLightingSession = ''
+  if (!lampChipId || !sessionId) return
+  try {
+    await stopCaptureLighting(lampChipId, sessionId)
+  } catch (error) {
+    console.warn('[lamp-device-card] capture lighting stop failed', error)
+  }
+}
+
+async function handleFabricPickerCancel() {
+  clearFabricPickerReturnFallback()
+  await releaseFabricCaptureLighting()
+  if (fabricInputRef.value) fabricInputRef.value.value = ''
 }
 
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024 // 20MB
 
 async function handleFabricFileChange(event: Event) {
+  clearFabricPickerReturnFallback()
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
+  await releaseFabricCaptureLighting()
 
-  if (!file) return
+  if (!file) {
+    input.value = ''
+    return
+  }
 
   if (file.size > MAX_IMAGE_SIZE) {
     toast.show('图片大小不能超过 20MB，请压缩后再上传', 'error')
@@ -2502,7 +2589,7 @@ const temperatureSliderStyle = computed<Record<string, string>>(() => {
 
 .ota-progress-fill {
   height: 100%;
-  border-radius: inherit;
+  border-radius: 999px;
   background: linear-gradient(90deg, #60a5fa, #2563eb);
   transition: width 180ms ease;
 }
