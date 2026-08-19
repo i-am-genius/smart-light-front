@@ -99,44 +99,67 @@
       </div>
 
       <div class="calibration-actions">
+        <button type="button" class="btn-secondary details-trigger" :disabled="!calibration" @click="detailsModalOpen = true">
+          标定详情
+        </button>
         <button type="button" class="btn-secondary" :disabled="!canCapture || captureLoading" @click="captureNewPosition">
-          {{ captureLoading ? '等待识别...' : '拍摄并识别新位置' }}
+          {{ captureLoading ? '识别中...' : '拍摄识别' }}
         </button>
         <button type="button" class="btn-primary" :disabled="!canConfirmSample || sampleLoading" @click="confirmSample">
-          {{ sampleLoading ? '保存并拟合中...' : calibration?.currentTargetSampled ? '该位置已确认' : '照射正确，确认本次样本' }}
+          {{ sampleLoading ? '保存中...' : calibration?.currentTargetSampled ? '已确认' : '确认样本' }}
         </button>
         <button type="button" class="btn-danger" :disabled="!calibration?.sampleCount || clearLoading" @click="clearSamples">
-          {{ clearLoading ? '清空中...' : '重置当前来源标定' }}
+          {{ clearLoading ? '重置中...' : '重置标定' }}
         </button>
       </div>
-
-      <section v-if="calibration?.sampleCount" class="copy-card">
-        <div class="sample-list-head">
-          <div>
-            <strong>复制标定到其他 Lamp</strong>
-            <small>仅复制当前“{{ selectedSourceLabel }}”的标定 Profile；目标 Lamp 使用自己的默认服装角度。</small>
-          </div>
-          <button type="button" class="btn-secondary" :disabled="!copyTargetLampIds.length || copyLoading" @click="copyCalibration(false)">
-            {{ copyLoading ? '复制中...' : '复制标定' }}
-          </button>
-        </div>
-        <div class="copy-target-grid">
-          <label v-for="lamp in copyTargetLamps" :key="lamp.chipId" class="copy-target">
-            <input v-model="copyTargetLampIds" type="checkbox" :value="lamp.chipId" />
-            <span>{{ deviceLabel(lamp) }}</span>
-          </label>
-        </div>
-      </section>
-
-      <div v-if="recentSamples.length" class="sample-list">
-        <div class="sample-list-head"><strong>最近样本 · {{ selectedSourceLabel }}</strong><small>应尽量覆盖画面左、右、上、下和中心</small></div>
-        <div v-for="(sample, index) in recentSamples" :key="sample.id" class="sample-row">
-          <span>#{{ (calibration?.sampleCount || 0) - index }}</span>
-          <span>图像 {{ format(sample.centerX, 2) }}, {{ format(sample.centerY, 2) }}</span>
-          <span>Pan {{ format(sample.pan, 1) }}°</span><span>Tilt {{ format(sample.tilt, 1) }}°</span>
-        </div>
-      </div>
     </template>
+
+    <Teleport to="body">
+      <div v-if="detailsModalOpen" class="calibration-modal-backdrop" @click.self="detailsModalOpen = false">
+        <section class="calibration-modal" role="dialog" aria-modal="true" aria-labelledby="calibration-details-title">
+          <div class="calibration-modal-header">
+            <div>
+              <h3 id="calibration-details-title">标定详情 · {{ selectedSourceLabel }}</h3>
+              <p>查看最近样本，并将当前来源的标定 Profile 复制到其他 Lamp。</p>
+            </div>
+            <button type="button" class="modal-close" aria-label="关闭" @click="detailsModalOpen = false">×</button>
+          </div>
+
+          <section v-if="calibration?.sampleCount" class="modal-section copy-card">
+            <div class="sample-list-head">
+              <div>
+                <strong>复制标定到其他 Lamp</strong>
+                <small>仅复制当前“{{ selectedSourceLabel }}”的标定 Profile；目标 Lamp 使用自己的默认服装角度。</small>
+              </div>
+              <button type="button" class="btn-secondary" :disabled="!copyTargetLampIds.length || copyLoading" @click="copyCalibration(false)">
+                {{ copyLoading ? '复制中...' : '复制标定' }}
+              </button>
+            </div>
+            <div class="copy-target-grid">
+              <label v-for="lamp in copyTargetLamps" :key="lamp.chipId" class="copy-target">
+                <input v-model="copyTargetLampIds" type="checkbox" :value="lamp.chipId" />
+                <span>{{ deviceLabel(lamp) }}</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="modal-section sample-list">
+            <div class="sample-list-head">
+              <strong>最近样本 · {{ selectedSourceLabel }}</strong>
+              <small>应尽量覆盖画面左、右、上、下和中心</small>
+            </div>
+            <div v-if="recentSamples.length">
+              <div v-for="(sample, index) in recentSamples" :key="sample.id" class="sample-row">
+                <span>#{{ (calibration?.sampleCount || 0) - index }}</span>
+                <span>图像 {{ format(sample.centerX, 2) }}, {{ format(sample.centerY, 2) }}</span>
+                <span>Pan {{ format(sample.pan, 1) }}°</span><span>Tilt {{ format(sample.tilt, 1) }}°</span>
+              </div>
+            </div>
+            <p v-else class="modal-empty">当前来源还没有标定样本。</p>
+          </section>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -177,6 +200,7 @@ const sampleLoading = ref(false)
 const clearLoading = ref(false)
 const migrationLoading = ref(false)
 const copyLoading = ref(false)
+const detailsModalOpen = ref(false)
 const position = reactive<Record<AxisKey, number>>({ pan: 0, tilt: 20 })
 let recognitionPoll: ReturnType<typeof setInterval> | null = null
 let recognitionPollCount = 0
@@ -223,7 +247,7 @@ watch(lampOptions, (options) => {
 }, { immediate: true })
 watch([selectedLampChipId, selectedCaptureDevice], () => {
   stopRecognitionPoll(); clearPhonePickerReturnFallback(); void releasePhoneCaptureLighting()
-  copyTargetLampIds.value = []; lastSyncedRecognition = ''
+  copyTargetLampIds.value = []; lastSyncedRecognition = ''; detailsModalOpen.value = false
   position.pan = Math.round(selectedLamp.value?.garmentDefaultPan ?? 0)
   position.tilt = Math.round(selectedLamp.value?.garmentDefaultTilt ?? 20)
   void loadCalibration(true)
@@ -393,5 +417,5 @@ function formatTime(value: string) { const date = new Date(value); return Number
 </script>
 
 <style scoped>
-.calibration-panel{min-width:0}.hidden-file-input{display:none}.panel-header,.section-title-row,.progress-head,.sample-list-head,.motor-label,.calibration-actions,.migration-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.panel-header,.sample-list-head{align-items:flex-start}.panel-desc{margin:6px 0 0;color:#64748b;font-size:13px;line-height:1.5}.model-badge,.sampled-badge{flex:none;padding:5px 9px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:12px;font-weight:800}.model-badge.ready,.sampled-badge{background:#dcfce7;color:#15803d}.device-pair-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.device-pair-grid label>span{display:block;margin-bottom:6px;color:#64748b;font-size:12px;font-weight:700}.legacy-card,.calibration-progress,.target-card,.motor-card,.sample-list,.copy-card{margin-top:14px;padding:14px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc}.legacy-card{border-color:#fde68a;background:#fffbeb}.legacy-card p{margin:5px 0 12px;color:#92400e;font-size:12px}.migration-actions{justify-content:flex-start}.progress-head{align-items:flex-start}.progress-head span,.section-title-row small,.sample-list-head small{color:#64748b;font-size:12px;line-height:1.4}.progress-head span{max-width:66%;text-align:right}.progress-track{height:7px;margin-top:10px;overflow:hidden;border-radius:999px;background:#e2e8f0}.progress-track span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#38bdf8,#2563eb);transition:width 220ms ease}.coverage-row{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:9px;color:#64748b;font-size:11px}.workflow-grid{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.3fr);gap:12px}.section-title-row>div,.sample-list-head>div{display:flex;flex-direction:column;gap:3px}.target-plane{position:relative;height:150px;margin-top:12px;overflow:hidden;border-radius:12px;border:1px solid #cbd5e1;background:linear-gradient(rgba(148,163,184,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.11) 1px,transparent 1px),#fff;background-size:25% 25%}.axis-horizontal,.axis-vertical{position:absolute;background:rgba(59,130,246,.2)}.axis-horizontal{left:0;right:0;top:50%;height:1px}.axis-vertical{top:0;bottom:0;left:50%;width:1px}.target-dot{position:absolute;z-index:1;width:16px;height:16px;border:3px solid #fff;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.2);transform:translate(-50%,-50%)}.coordinate-text,.empty-hint{margin:9px 0 0;color:#475569;font-size:12px;text-align:center}.empty-hint{display:grid;min-height:150px;place-items:center;color:#94a3b8}.motor-row{margin-top:12px}.motor-label{color:#475569;font-size:12px}.motor-label strong{color:#2563eb}.motor-control{display:grid;grid-template-columns:34px minmax(80px,1fr) 34px 72px;gap:7px;align-items:center;margin-top:5px}.motor-control button,.text-btn{border:1px solid #bfdbfe;border-radius:9px;background:#eff6ff;color:#2563eb;cursor:pointer;font-weight:800}.motor-control button{min-height:34px}.motor-control input[type='range']{width:100%;accent-color:#2563eb}.motor-number{width:100%;min-width:0;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:9px;padding:7px;background:#fff;color:#0f172a}.text-btn{padding:6px 9px;font-size:11px}.calibration-actions{justify-content:flex-end;margin-top:14px}.btn-primary,.btn-secondary,.btn-danger{min-height:38px;border:none;border-radius:10px;padding:8px 13px;cursor:pointer;font-weight:800}.btn-primary{color:#fff;background:linear-gradient(135deg,#3b82f6,#2563eb)}.btn-secondary{color:#2563eb;background:#eef4ff}.btn-danger{color:#dc2626;background:#fff1f2}button:disabled,input:disabled{cursor:not-allowed;opacity:.55}.copy-target-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.copy-target{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#475569;font-size:12px}.sample-row{display:grid;grid-template-columns:38px 1.2fr repeat(2,1fr);gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;color:#475569;font-size:11px}:global(.app-container.night-mode) .legacy-card,:global(.app-container.night-mode) .calibration-progress,:global(.app-container.night-mode) .target-card,:global(.app-container.night-mode) .motor-card,:global(.app-container.night-mode) .sample-list,:global(.app-container.night-mode) .copy-card{border-color:rgba(148,163,184,.18);background:rgba(15,23,42,.58)}:global(.app-container.night-mode) .target-plane,:global(.app-container.night-mode) .motor-number,:global(.app-container.night-mode) .copy-target{border-color:rgba(148,163,184,.28);background-color:rgba(30,41,59,.9);color:#e2e8f0}:global(.app-container.night-mode) .motor-label,:global(.app-container.night-mode) .coordinate-text,:global(.app-container.night-mode) .sample-row{color:rgba(203,213,225,.84)}@media(max-width:768px){.calibration-panel{padding:12px}.device-pair-grid,.workflow-grid,.copy-target-grid{grid-template-columns:1fr}.progress-head,.migration-actions{flex-direction:column;align-items:stretch;gap:6px}.progress-head span{max-width:none;text-align:left}.target-plane{height:130px}.sample-row{grid-template-columns:30px 1fr 1fr}.calibration-actions{flex-wrap:wrap}}
+.calibration-panel{min-width:0}.hidden-file-input{display:none}.panel-header,.section-title-row,.progress-head,.sample-list-head,.motor-label,.calibration-actions,.migration-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.panel-header,.sample-list-head{align-items:flex-start}.panel-desc{margin:6px 0 0;color:#64748b;font-size:13px;line-height:1.5}.model-badge,.sampled-badge{flex:none;padding:5px 9px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:12px;font-weight:800}.model-badge.ready,.sampled-badge{background:#dcfce7;color:#15803d}.device-pair-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.device-pair-grid label>span{display:block;margin-bottom:6px;color:#64748b;font-size:12px;font-weight:700}.legacy-card,.calibration-progress,.target-card,.motor-card,.sample-list,.copy-card{margin-top:14px;padding:14px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc}.legacy-card{border-color:#fde68a;background:#fffbeb}.legacy-card p{margin:5px 0 12px;color:#92400e;font-size:12px}.migration-actions{justify-content:flex-start}.progress-head{align-items:flex-start}.progress-head span,.section-title-row small,.sample-list-head small{color:#64748b;font-size:12px;line-height:1.4}.progress-head span{max-width:66%;text-align:right}.progress-track{height:7px;margin-top:10px;overflow:hidden;border-radius:999px;background:#e2e8f0}.progress-track span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#38bdf8,#2563eb);transition:width 220ms ease}.coverage-row{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:9px;color:#64748b;font-size:11px}.workflow-grid{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(280px,1.3fr);gap:12px}.section-title-row>div,.sample-list-head>div{display:flex;flex-direction:column;gap:3px}.target-plane{position:relative;height:150px;margin-top:12px;overflow:hidden;border-radius:12px;border:1px solid #cbd5e1;background:linear-gradient(rgba(148,163,184,.11) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.11) 1px,transparent 1px),#fff;background-size:25% 25%}.axis-horizontal,.axis-vertical{position:absolute;background:rgba(59,130,246,.2)}.axis-horizontal{left:0;right:0;top:50%;height:1px}.axis-vertical{top:0;bottom:0;left:50%;width:1px}.target-dot{position:absolute;z-index:1;width:16px;height:16px;border:3px solid #fff;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.2);transform:translate(-50%,-50%)}.coordinate-text,.empty-hint{margin:9px 0 0;color:#475569;font-size:12px;text-align:center}.empty-hint{display:grid;min-height:150px;place-items:center;color:#94a3b8}.motor-row{margin-top:12px}.motor-label{color:#475569;font-size:12px}.motor-label strong{color:#2563eb}.motor-control{display:grid;grid-template-columns:34px minmax(80px,1fr) 34px 72px;gap:7px;align-items:center;margin-top:5px}.motor-control button,.text-btn{border:1px solid #bfdbfe;border-radius:9px;background:#eff6ff;color:#2563eb;cursor:pointer;font-weight:800}.motor-control button{min-height:34px}.motor-control input[type='range']{width:100%;accent-color:#2563eb}.motor-number{width:100%;min-width:0;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:9px;padding:7px;background:#fff;color:#0f172a}.text-btn{padding:6px 9px;font-size:11px}.calibration-actions{justify-content:flex-end;margin-top:14px}.details-trigger{margin-right:auto}.btn-primary,.btn-secondary,.btn-danger{min-height:38px;border:none;border-radius:10px;padding:8px 13px;cursor:pointer;font-weight:800}.btn-primary{color:#fff;background:linear-gradient(135deg,#3b82f6,#2563eb)}.btn-secondary{color:#2563eb;background:#eef4ff}.btn-danger{color:#dc2626;background:#fff1f2}button:disabled,input:disabled{cursor:not-allowed;opacity:.55}.copy-target-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.copy-target{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#475569;font-size:12px}.sample-row{display:grid;grid-template-columns:38px 1.2fr repeat(2,1fr);gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;color:#475569;font-size:11px}.calibration-modal-backdrop{position:fixed;inset:0;z-index:1500;display:grid;place-items:center;padding:24px;background:rgba(15,23,42,.42);backdrop-filter:blur(5px)}.calibration-modal{width:min(720px,calc(100vw - 32px));max-height:min(78vh,760px);overflow:auto;border:1px solid rgba(226,232,240,.9);border-radius:20px;padding:18px;background:#fff;box-shadow:0 24px 80px rgba(15,23,42,.24)}.calibration-modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.calibration-modal-header h3{margin:0;color:#0f172a;font-size:18px}.calibration-modal-header p{margin:5px 0 0;color:#64748b;font-size:12px;line-height:1.5}.modal-close{flex:none;width:34px;height:34px;border:none;border-radius:10px;background:#f1f5f9;color:#64748b;cursor:pointer;font-size:24px;line-height:1}.modal-section{margin-top:14px}.modal-empty{margin:14px 0 2px;color:#94a3b8;font-size:12px;text-align:center}:global(.app-container.night-mode) .legacy-card,:global(.app-container.night-mode) .calibration-progress,:global(.app-container.night-mode) .target-card,:global(.app-container.night-mode) .motor-card,:global(.app-container.night-mode) .sample-list,:global(.app-container.night-mode) .copy-card{border-color:rgba(148,163,184,.18);background:rgba(15,23,42,.58)}:global(.app-container.night-mode) .target-plane,:global(.app-container.night-mode) .motor-number,:global(.app-container.night-mode) .copy-target{border-color:rgba(148,163,184,.28);background-color:rgba(30,41,59,.9);color:#e2e8f0}:global(.app-container.night-mode) .motor-label,:global(.app-container.night-mode) .coordinate-text,:global(.app-container.night-mode) .sample-row{color:rgba(203,213,225,.84)}:global(.app-container.night-mode) .calibration-modal{border-color:rgba(148,163,184,.2);background:#172033}:global(.app-container.night-mode) .calibration-modal-header h3{color:#f8fafc}:global(.app-container.night-mode) .modal-close{background:rgba(51,65,85,.9);color:#cbd5e1}@media(max-width:768px){.calibration-panel{padding:12px}.device-pair-grid,.workflow-grid,.copy-target-grid{grid-template-columns:1fr}.progress-head,.migration-actions{flex-direction:column;align-items:stretch;gap:6px}.progress-head span{max-width:none;text-align:left}.target-plane{height:130px}.sample-row{grid-template-columns:30px 1fr 1fr}.calibration-actions{flex-wrap:wrap}.details-trigger{margin-right:0}.calibration-modal-backdrop{padding:12px}.calibration-modal{width:100%;max-height:84vh;padding:14px;border-radius:16px}}
 </style>
