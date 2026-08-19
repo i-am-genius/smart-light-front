@@ -1,5 +1,9 @@
 <template>
   <div class="device-grid">
+    <Teleport to="#controls">
+      <SmartLightingButton :devices="devices" />
+    </Teleport>
+
     <div class="section-header">
       <h2>已绑定设备</h2>
       <button class="refresh-btn" @click="$emit('refresh')">刷新</button>
@@ -26,6 +30,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import DeviceCard from './DeviceCard.vue'
+import SmartLightingButton from './SmartLightingButton.vue'
+import './SmartLightingButtonVisual.css'
 import type { DeviceItem } from '../../types/device'
 import type { LampRealtimeUpdateEnvelope } from '../../utils/garmentRecognition'
 import { sortBoundDevices, type ZoneDefinition } from '../../utils/deviceZones'
