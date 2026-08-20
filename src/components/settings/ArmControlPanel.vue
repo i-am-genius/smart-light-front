@@ -37,6 +37,7 @@
       </div>
     </div>
 
+    <!-- ===== 精确模式切换 ===== -->
     <div class="form-row">
       <label>控制模式：</label>
       <button
@@ -49,9 +50,11 @@
       </button>
     </div>
 
+        <!-- ===== 摇杆模式 (默认) ===== -->
     <div v-if="!isPrecisionMode" class="joystick-section">
       <div class="gimbal-control-block">
         <div class="gimbal-control-row">
+          <!-- 左侧：摇杆安全盒子 -->
           <div class="joystick-side">
             <div
               ref="joystickBaseRef"
@@ -79,6 +82,7 @@
                 </div>
               </div>
 
+              <!-- SVG 箭头 (安全盒子内部) -->
               <svg class="joystick-icon joystick-icon-up" :class="{ active: joystickActive && joystickY > 0.3 }" viewBox="0 0 30 30">
                 <path d="M15,3 L28,26 L2,26 Z" />
               </svg>
@@ -94,6 +98,7 @@
             </div>
           </div>
 
+          <!-- 右侧：预设动作按钮 -->
           <div v-if="presetActions.length > 0" class="gimbal-preset-side">
             <button
               v-for="item in presetActions"
@@ -107,9 +112,11 @@
             </button>
           </div>
         </div>
+
       </div>
     </div>
 
+<!-- ===== 精确模式 (二级菜单) ===== -->
     <div v-else class="precision-section">
       <div class="precision-card">
         <div class="precision-row">
@@ -179,6 +186,8 @@
         </div>
       </div>
     </div>
+
+
   </div>
 </template>
 
@@ -219,6 +228,19 @@ type ArmAction = {
   label: string
   desc: string
 }
+type SelfTestResult = {
+  done?: boolean
+  overall?: boolean
+  nano?: boolean
+  nanoHoming?: boolean
+  nanoHallStatus?: boolean
+  nanoStatus?: string
+  hall?: {
+    pan?: string
+    tilt?: string
+    slider?: string
+  }
+}
 
 const selectedDeviceCode = ref('')
 const speed = ref<ArmControlSpeed>('normal')
@@ -226,10 +248,12 @@ const submitting = ref(false)
 const errorText = ref('')
 const statusText = ref('拖动摇杆或点击精确模式开始控制')
 
+// 摇杆状态
 const isPrecisionMode = ref(false)
 const armPositionsByDevice = new Map<string, ArmPosition>()
 const armPosition = reactive(createZeroArmPosition())
 
+// 真实摇杆
 const joystickBaseRef = ref<HTMLElement | null>(null)
 const joystickActive = ref(false)
 const joystickX = ref(0)
@@ -247,7 +271,7 @@ const knobStyle = computed(() => ({
     translate(${knobX.value}px, ${knobY.value}px)
     rotateX(${(-joystickY.value * 8).toFixed(2)}deg)
     rotateY(${(joystickX.value * 8).toFixed(2)}deg)
-  `,
+  `
 }))
 
 const PAN_MIN = -90
@@ -284,7 +308,9 @@ const camPresetActions: ArmAction[] = [
 ]
 
 const armDevices = computed(() => {
-  return (props.devices || []).filter(device => normalizeDeviceType(device.deviceType) !== '')
+  return (props.devices || []).filter(device => {
+    return normalizeDeviceType(device.deviceType) !== ''
+  })
 })
 
 const armDeviceOptions = computed(() => {
@@ -309,6 +335,57 @@ const selectedDeviceTypeText = computed(() => {
   if (type === 'camlamp') return 'camlamp（按 cam 控制）'
   return '未知'
 })
+
+function parseSelfTestJson(value?: string | null): SelfTestResult | null {
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function hallText(value?: string) {
+  if (value === 'triggered') return '触发'
+  if (value === 'clear') return '未触发'
+  if (value === 'disabled') return '已禁用'
+  return '未知'
+}
+
+const selectedSelfTest = computed(() => {
+  const device = selectedDevice.value
+  if (!device?.online) return null
+  return parseSelfTestJson(device.selfTestJson)
+})
+
+const gimbalSelfTestClass = computed(() => {
+  const data = selectedSelfTest.value
+  if (!data?.done) return 'unknown'
+  return data.nano && data.nanoHoming && data.nanoHallStatus ? 'ok' : 'bad'
+})
+
+const gimbalSelfTestText = computed(() => {
+  const data = selectedSelfTest.value
+  if (!data?.done) return '云台自检：暂无记录'
+  if (data.nano && data.nanoHoming && data.nanoHallStatus) return '云台自检：寻零完成'
+  if (data.nanoHoming === false) return '云台自检：寻零失败'
+  if (data.nano === false) return '云台自检：Nano 无响应'
+  if (data.nanoHallStatus === false) return '云台自检：霍尔读取失败'
+  return '云台自检：异常'
+})
+
+const gimbalSelfTestDetail = computed(() => {
+  const data = selectedSelfTest.value
+  if (!data?.done) return '设备联网后会自动执行一次'
+  const hall = data.hall || {}
+  return `Pan ${hallText(hall.pan)} · Tilt ${hallText(hall.tilt)} · Slider ${hallText(hall.slider)}`
+})
+
+// Keep legacy Nano/Hall diagnostics available in setup without surfacing them in the UI.
+void gimbalSelfTestClass
+void gimbalSelfTestText
+void gimbalSelfTestDetail
 
 const isCamDevice = computed(() => {
   return selectedDeviceType.value === 'cam' || selectedDeviceType.value === 'camlamp'
@@ -347,11 +424,13 @@ watch(
   { immediate: true },
 )
 
+// 切换设备时停止旧设备的摇杆，并加载新设备自己的精确角度
 watch(selectedDeviceCode, (deviceCode, previousDeviceCode) => {
   stopJoystick(previousDeviceCode)
   syncArmPosition(deviceCode)
 })
 
+// 设备离线后清除其角度缓存；当前选中设备立即显示为零
 watch(
   () => armDevices.value.map(device => ({
     code: getDeviceCode(device),
@@ -366,6 +445,7 @@ watch(
   { immediate: true, deep: true },
 )
 
+// 组件卸载时停止
 onBeforeUnmount(() => {
   stopJoystick()
 })
@@ -398,6 +478,7 @@ function buildDeviceLabel(device: DeviceItem) {
   return `${zoneName} · ${no} · ${type} · ${chipId}`
 }
 
+// ===== 速度切换 =====
 async function changeSpeed(nextSpeed: ArmControlSpeed) {
   speed.value = nextSpeed
   if (!selectedDevice.value || !selectedDeviceCode.value) return
@@ -411,6 +492,7 @@ async function changeSpeed(nextSpeed: ArmControlSpeed) {
   }
 }
 
+// 坐标转换函数放在 startJoystick 前面
 function updateJoystickFromPointer(event: PointerEvent) {
   const base = joystickBaseRef.value
   if (!base) return
@@ -467,11 +549,13 @@ function startJoystick(event: PointerEvent) {
   }, JOYSTICK_RENEW_INTERVAL)
 }
 
+// pointermove：只更新本地位置，不发请求
 function moveJoystick(event: PointerEvent) {
   if (!joystickActive.value) return
   updateJoystickFromPointer(event)
 }
 
+// pointerup / pointercancel / lostpointercapture：停止
 function stopJoystick(eventOrDeviceCode?: PointerEvent | string) {
   const deviceCode = typeof eventOrDeviceCode === 'string'
     ? eventOrDeviceCode
@@ -499,6 +583,7 @@ function clearJoystickTimer() {
   }
 }
 
+// ===== 精确模式 =====
 function togglePrecisionMode() {
   if (!selectedDevice.value || !selectedDeviceCode.value) {
     toast.show('请先选择设备', 'error')
@@ -506,6 +591,7 @@ function togglePrecisionMode() {
     return
   }
   if (!isPrecisionMode.value) {
+    // 进入精确模式：先停止摇杆
     stopJoystick()
   }
   isPrecisionMode.value = !isPrecisionMode.value
@@ -548,6 +634,7 @@ function resetPrecisionAxis(field: 'pan' | 'tilt') {
   statusText.value = `精确：${field}=0°`
 }
 
+// ===== 预设动作 (保留兼容) =====
 async function sendPreset(action: string) {
   errorText.value = ''
   if (!selectedDevice.value || !selectedDeviceCode.value) {
@@ -646,6 +733,7 @@ async function sendPreset(action: string) {
   color: #64748b;
 }
 
+/* 速度按钮 */
 .speed-tabs {
   display: flex;
   gap: 8px;
@@ -674,6 +762,7 @@ async function sendPreset(action: string) {
   color: #2563eb;
 }
 
+/* 模式切换按钮 */
 .mode-toggle-btn {
   border: 1px solid rgba(64, 158, 255, 0.55);
   border-radius: 12px;
@@ -701,14 +790,17 @@ async function sendPreset(action: string) {
   cursor: not-allowed;
 }
 
+/* ===== 五层拟物摇杆 (参考 UI) ===== */
 .joystick-section {
   margin-top: 18px;
 }
 
+/* 外层容器 */
 .gimbal-control-block {
   width: 100%;
 }
 
+/* 左右布局：grid 230px 安全盒子 + 1fr 按钮区 */
 .gimbal-control-row {
   display: grid;
   grid-template-columns: 230px 1fr;
@@ -719,6 +811,7 @@ async function sendPreset(action: string) {
   margin: 16px 0 12px;
 }
 
+/* 摇杆安全盒子：固定 230px，包含箭头 */
 .joystick-side {
   width: 230px;
   min-width: 230px;
@@ -729,6 +822,7 @@ async function sendPreset(action: string) {
   flex: 0 0 230px;
 }
 
+/* 摇杆容器：pointer 事件 + 箭头定位上下文 */
 .joystick-container {
   position: relative;
   width: 230px;
@@ -745,6 +839,7 @@ async function sendPreset(action: string) {
   cursor: grabbing;
 }
 
+/* 按钮区：2×2 均分占满右侧 */
 .gimbal-preset-side {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -753,6 +848,7 @@ async function sendPreset(action: string) {
   align-self: center;
 }
 
+/* 第一层：外圈 */
 .joystick-around {
   position: relative;
   width: 170px;
@@ -764,6 +860,7 @@ async function sendPreset(action: string) {
   background-image: linear-gradient(0deg, #f5f8fa, #9da4a8);
 }
 
+/* 第二层：凹槽 */
 .joystick-handle {
   width: 132px;
   height: 132px;
@@ -781,6 +878,7 @@ async function sendPreset(action: string) {
   perspective: 300px;
 }
 
+/* 第三层：摇杆按钮 (flex 居中，translate 位移) */
 .joystick-button {
   width: 88px;
   height: 88px;
@@ -804,9 +902,9 @@ async function sendPreset(action: string) {
   transition: none;
 }
 
+/* 第四层：内圈 */
 .joystick-inside {
-  position: relative;
-  width: 72px;
+  position: relative;  width: 72px;
   height: 72px;
   border-radius: 50%;
   background-image: linear-gradient(180deg, #adb9bf, #d4dbdd);
@@ -815,10 +913,10 @@ async function sendPreset(action: string) {
     inset 0 -3px 6px rgba(238, 244, 246, 0.4);
 }
 
+/* 第五层：四个定位点 */
 .joystick-dot {
   position: absolute;
-  transform: translate(-50%, -50%);
-  width: 7px;
+  transform: translate(-50%, -50%);  width: 7px;
   height: 7px;
   border-radius: 50%;
   background: #e7ecef;
@@ -847,6 +945,7 @@ async function sendPreset(action: string) {
   top: 50%;
 }
 
+/* SVG 箭头 (安全盒子内部，像素定位) */
 .joystick-icon {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -888,6 +987,7 @@ async function sendPreset(action: string) {
     drop-shadow(0 0 1px #fff);
 }
 
+/* ===== 精确模式 ===== */
 .precision-section {
   margin-top: 18px;
 }
@@ -981,6 +1081,7 @@ async function sendPreset(action: string) {
   cursor: not-allowed;
 }
 
+/* 预设动作卡片 */
 .preset-card {
   width: 100%;
   min-height: 68px;
@@ -1169,6 +1270,7 @@ async function sendPreset(action: string) {
     margin-top: 4px;
     font-size: 12px;
   }
+
 }
 
 @media (max-width: 480px) {
@@ -1180,6 +1282,7 @@ async function sendPreset(action: string) {
 :global(.app-container.night-mode) .panel-desc,
 :global(.app-container.night-mode) .form-row label,
 :global(.app-container.night-mode) .device-meta,
+/* 暗夜模式微调 */
 :global(.app-container.night-mode) .joystick-container,
 :global(.app-container.night-mode) .joystick-around {
   background-image: linear-gradient(0deg, #1e2832, #3a424a);
