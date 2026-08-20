@@ -103,6 +103,8 @@ export interface DeviceItem {
   camCaptureTasks?: CamCaptureTaskResult[]
   camPresence?: CamPresenceState
   camCaptureConfig?: CamCaptureConfig
+  /** @deprecated Internal adapter only while CameraDeviceCard is decomposed. */
+  camRoiConfig?: CamRoiConfig
   lampClothState?: LampClothState
   lampProximityState?: LampProximityState
   garmentDetectionStatus?: GarmentDetectionStatus
@@ -224,12 +226,46 @@ export interface CamCaptureConfig {
   targets: CamCaptureTargetConfig[]
 }
 
+/** @deprecated Spatial ROI is no longer part of the product model. */
+export interface CamRoiItem {
+  targetIndex: number
+  targetChipId?: string
+  areaName?: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** @deprecated Internal compatibility shape for the legacy Camera card only. */
+export interface CamRoiConfig {
+  camChipId: string
+  sliderLampChipId?: string
+  rois: CamRoiItem[]
+  sliderPresets: Record<string, number>
+  sliderMoveTimes: Record<string, CamSliderMoveTimes>
+  configured?: boolean
+}
+
+/** @deprecated Camera area presence is synthesized from per-Lamp ToF. */
+export interface CamPresenceArea {
+  targetIndex: number
+  targetChipId?: string
+  areaName?: string
+  present?: boolean
+  confidence?: number
+  dwellSeconds?: number
+  updateTime?: string | number
+}
+
 export interface CamPresenceState {
   camChipId: string
   workStatus?: CamWorkStatus
   personCount?: number
   confidence?: number
   updateTime?: string | number
+  /** @deprecated Internal UI adapter only; backend no longer accepts ROI areas. */
+  areas?: CamPresenceArea[]
 }
 
 export interface CamStatusState {
