@@ -18,9 +18,8 @@
       />
     </div>
 
-    <div v-if="selectedDevice" class="gimbal-self-test" :class="gimbalSelfTestClass">
-      <span>{{ gimbalSelfTestText }}</span>
-      <small>{{ gimbalSelfTestDetail }}</small>
+    <div v-if="selectedDevice" class="gimbal-self-test" :class="selectedDevice.online ? 'ok' : 'bad'">
+      <span>{{ selectedDevice.online ? '设备在线' : '设备离线' }}</span>
     </div>
 
     <div class="form-row">
@@ -382,6 +381,11 @@ const gimbalSelfTestDetail = computed(() => {
   const hall = data.hall || {}
   return `Pan ${hallText(hall.pan)} · Tilt ${hallText(hall.tilt)} · Slider ${hallText(hall.slider)}`
 })
+
+// Keep legacy Nano/Hall diagnostics available in setup without surfacing them in the UI.
+void gimbalSelfTestClass
+void gimbalSelfTestText
+void gimbalSelfTestDetail
 
 const isCamDevice = computed(() => {
   return selectedDeviceType.value === 'cam' || selectedDeviceType.value === 'camlamp'

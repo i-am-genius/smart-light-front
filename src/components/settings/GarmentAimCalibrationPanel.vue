@@ -252,7 +252,7 @@ watch([selectedLampChipId, selectedCaptureDevice], () => {
   position.pan = Math.round(selectedLamp.value?.garmentDefaultPan ?? 0)
   position.tilt = Math.round(selectedLamp.value?.garmentDefaultTilt ?? 20)
   void loadCalibration(true)
-})
+}, { immediate: true })
 watch(() => selectedLamp.value?.updateTime, (value, previous) => { if (value && value !== previous) void loadCalibration(false) })
 onBeforeUnmount(() => {
   stopRecognitionPoll()
