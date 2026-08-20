@@ -102,7 +102,7 @@ export interface DeviceItem {
   camLastCapture?: CamCaptureTaskResult
   camCaptureTasks?: CamCaptureTaskResult[]
   camPresence?: CamPresenceState
-  camRoiConfig?: CamRoiConfig
+  camCaptureConfig?: CamCaptureConfig
   lampClothState?: LampClothState
   lampProximityState?: LampProximityState
   garmentDetectionStatus?: GarmentDetectionStatus
@@ -110,7 +110,6 @@ export interface DeviceItem {
   tracking?: boolean
   trackingStatus?: TrackingStatusState
 }
-
 
 export interface DeviceOnlineItem {
   chipId: string
@@ -146,7 +145,6 @@ export interface DeviceCreatePayload {
 
 export type FirmwareChannel = 'stable' | 'test'
 export type FirmwareDeviceType = 'lamp' | 'cam' | 'camlamp'
-
 export type OtaStatus = 'idle' | 'updating' | 'success' | 'failed'
 
 export type PtzAxis = 'yaw' | 'pitch' | 'roll' | 'all'
@@ -178,6 +176,7 @@ export interface CamTrackingControlResult {
   chipId?: string
   role?: string
   trackingStatus: string
+  sessionId?: string
   camChipId?: string
   lampChipId?: string
   targetIndex?: number
@@ -199,16 +198,6 @@ export type CamWorkStatus =
   | 'error'
   | string
 
-export interface CamRoiItem {
-  targetIndex: number
-  targetChipId?: string
-  areaName?: string
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
 export interface CamPtzPreset {
   pan: number
   tilt: number
@@ -221,33 +210,26 @@ export interface CamSliderMoveTimes {
   fast: number
 }
 
-export interface CamRoiConfig {
+export interface CamCaptureTargetConfig {
+  index: number
+  lampChipId?: string
+  sliderMm: number
+  moveTimes: CamSliderMoveTimes
+}
+
+export interface CamCaptureConfig {
   camChipId: string
   sliderLampChipId?: string
   configured?: boolean
-  sliderPresets: Record<string, number>
-  sliderMoveTimes: Record<string, CamSliderMoveTimes>
-  rois: CamRoiItem[]
-}
-
-export interface CamPresenceArea {
-  targetIndex: number
-  targetChipId?: string
-  areaName?: string
-  present: boolean
-  confidence?: number
-  dwellSeconds?: number
-  updateTime?: string | number
+  targets: CamCaptureTargetConfig[]
 }
 
 export interface CamPresenceState {
   camChipId: string
   workStatus?: CamWorkStatus
-  configured?: boolean
   personCount?: number
   confidence?: number
   updateTime?: string | number
-  areas: CamPresenceArea[]
 }
 
 export interface CamStatusState {
@@ -318,6 +300,7 @@ export type LampClothStatus = 'on_rack' | 'taken' | 'unknown' | string
 export interface LampClothState {
   chipId: string
   clothStatus?: LampClothStatus
+  clothState?: LampClothStatus
   lastTakenAt?: string | number
   tracking?: boolean
   updateTime?: string | number
@@ -331,10 +314,12 @@ export interface LampProximityState {
 
 export interface TrackingStatusState {
   chipId?: string
+  sessionId?: string
   camChipId?: string
+  lampChipId?: string
   targetChipId?: string
   targetIndex?: number
-  status?: 'waiting_motion' | 'ready' | 'tracking' | 'lost' | 'stopped' | 'monitoring' | 'timeout' | 'error' | string
+  status?: 'armed' | 'ready' | 'tracking' | 'lost' | 'stopped' | 'monitoring' | 'timeout' | 'error' | string
   message?: string
   timestamp?: string | number
 }
