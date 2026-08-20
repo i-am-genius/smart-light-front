@@ -1,6 +1,5 @@
 import { createApp } from 'vue'
 import './style.css'
-import './styles/self-test-visibility.css'
 import App from './App.vue'
 import router from './router'
 
