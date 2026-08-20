@@ -1,5 +1,5 @@
 <template>
-  <CameraDeviceCard
+  <CameraDeviceCardShell
     v-if="isCamera"
     :device="device"
     :deleting="deleting"
@@ -31,22 +31,10 @@
     </header>
 
     <dl class="unknown-device-grid">
-      <div>
-        <dt>Chip ID</dt>
-        <dd>{{ device.chipId || '-' }}</dd>
-      </div>
-      <div>
-        <dt>IP</dt>
-        <dd>{{ device.ip || '-' }}</dd>
-      </div>
-      <div>
-        <dt>固件版本</dt>
-        <dd>{{ firmwareVersionText }}</dd>
-      </div>
-      <div>
-        <dt>OTA 状态</dt>
-        <dd>{{ device.otaStatus || 'idle' }}</dd>
-      </div>
+      <div><dt>Chip ID</dt><dd>{{ device.chipId || '-' }}</dd></div>
+      <div><dt>IP</dt><dd>{{ device.ip || '-' }}</dd></div>
+      <div><dt>固件版本</dt><dd>{{ firmwareVersionText }}</dd></div>
+      <div><dt>OTA 状态</dt><dd>{{ device.otaStatus || 'idle' }}</dd></div>
     </dl>
 
     <div class="unknown-device-actions">
@@ -59,7 +47,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import CameraDeviceCard from './CameraDeviceCard.vue'
+import CameraDeviceCardShell from './CameraDeviceCardShell.vue'
 import LampDeviceCard from './LampDeviceCard.vue'
 import type { DeviceItem } from '../../types/device'
 import { isCameraDevice, isLampDevice } from '../../utils/device'
@@ -90,10 +78,7 @@ const camIndex = computed(() => {
   return index >= 0 ? index + 1 : 1
 })
 
-const displayName = computed(() => {
-  return props.device.displayName?.trim() || props.device.chipId || '未知设备'
-})
-
+const displayName = computed(() => props.device.displayName?.trim() || props.device.chipId || '未知设备')
 const firmwareVersionText = computed(() => {
   const version = props.device.firmwareVersion || 'unknown'
   const code = props.device.firmwareVersionCode
@@ -114,91 +99,21 @@ const firmwareVersionText = computed(() => {
   background: var(--card-bg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
-
-.unknown-device-card.offline {
-  opacity: 0.82;
-}
-
-.unknown-device-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.unknown-device-header h3 {
-  margin: 0;
-  color: #0f172a;
-  font-size: 18px;
-}
-
-.unknown-device-header p {
-  margin: 6px 0 0;
-  color: #64748b;
-  font-size: 13px;
-}
-
-.status-badge {
-  flex-shrink: 0;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.status-badge.online {
-  color: #16a34a;
-  background: #ecfdf3;
-}
-
-.status-badge.offline {
-  color: #dc2626;
-  background: #fff1f2;
-}
-
-.unknown-device-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  margin: 16px 0 0;
-}
-
-.unknown-device-grid div {
-  min-width: 0;
-}
-
-.unknown-device-grid dt {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.unknown-device-grid dd {
-  margin: 4px 0 0;
-  color: #0f172a;
-  font-size: 14px;
-  font-weight: 800;
-  word-break: break-all;
-}
-
-.unknown-device-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: auto;
-  padding-top: 16px;
-}
-
+.unknown-device-card.offline { opacity: 0.82; }
+.unknown-device-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.unknown-device-header h3 { margin: 0; color: #0f172a; font-size: 18px; }
+.unknown-device-header p { margin: 6px 0 0; color: #64748b; font-size: 13px; }
+.status-badge { flex-shrink: 0; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800; }
+.status-badge.online { color: #16a34a; background: #ecfdf3; }
+.status-badge.offline { color: #dc2626; background: #fff1f2; }
+.unknown-device-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 16px 0 0; }
+.unknown-device-grid div { min-width: 0; }
+.unknown-device-grid dt { color: #64748b; font-size: 12px; }
+.unknown-device-grid dd { margin: 4px 0 0; color: #0f172a; font-size: 14px; font-weight: 800; word-break: break-all; }
+.unknown-device-actions { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 16px; }
 @media (max-width: 520px) {
-  .unknown-device-card {
-    height: auto;
-  }
-
-  .unknown-device-actions {
-    margin-top: 16px;
-    padding-top: 0;
-  }
-
-  .unknown-device-grid {
-    grid-template-columns: 1fr;
-  }
+  .unknown-device-card { height: auto; }
+  .unknown-device-actions { margin-top: 16px; padding-top: 0; }
+  .unknown-device-grid { grid-template-columns: 1fr; }
 }
 </style>
