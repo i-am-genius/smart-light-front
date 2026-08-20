@@ -4,6 +4,7 @@
     :device="device"
     :deleting="deleting"
     :target-devices="targetLampDevices"
+    :capture-controller-devices="captureControllerDevices"
     :cam-index="camIndex"
     @update-realtime="$emit('update-realtime', $event)"
     @delete="$emit('delete', $event)"
@@ -23,7 +24,7 @@
     <header class="unknown-device-header">
       <div>
         <h3>{{ displayName }}</h3>
-        <p>{{ device.deviceType || 'unknown' }}</p>
+        <p>{{ deviceTypeText }}</p>
       </div>
       <span class="status-badge" :class="{ online: device.online, offline: !device.online }">
         {{ device.online ? '在线' : '离线' }}
@@ -62,7 +63,7 @@ import { computed } from 'vue'
 import CameraDeviceCard from './CameraDeviceCard.vue'
 import LampDeviceCard from './LampDeviceCard.vue'
 import type { DeviceItem } from '../../types/device'
-import { isCameraDevice, isLampDevice } from '../../utils/device'
+import { isCameraDevice, isCaptureControllerDevice, isLampDevice } from '../../utils/device'
 import type { LampRealtimeUpdateEnvelope } from '../../utils/garmentRecognition'
 import type { ZoneDefinition } from '../../utils/deviceZones'
 
@@ -81,6 +82,7 @@ defineEmits<{
 const isCamera = computed(() => isCameraDevice(props.device))
 const isLampLike = computed(() => isLampDevice(props.device))
 const targetLampDevices = computed(() => (props.allDevices || []).filter(isLampDevice))
+const captureControllerDevices = computed(() => (props.allDevices || []).filter(isCaptureControllerDevice))
 const camIndex = computed(() => {
   const cameras = (props.allDevices || []).filter(isCameraDevice)
   const index = cameras.findIndex((item) => {
@@ -92,6 +94,11 @@ const camIndex = computed(() => {
 
 const displayName = computed(() => {
   return props.device.displayName?.trim() || props.device.chipId || '未知设备'
+})
+
+const deviceTypeText = computed(() => {
+  if (isCaptureControllerDevice(props.device)) return '拍照控制器 · cam_capture'
+  return props.device.deviceType || 'unknown'
 })
 
 const firmwareVersionText = computed(() => {

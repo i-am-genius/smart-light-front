@@ -16,8 +16,12 @@ describe('camera capture availability', () => {
     assert.doesNotMatch(disabledReason, /目标灯离线/)
   })
 
-  it('keeps camera and target identity guards', () => {
-    assert.match(disabledReason, /!props\.device\.online/)
+  it('uses the bound capture controller instead of tracking camera online state', () => {
+    assert.doesNotMatch(disabledReason, /!props\.device\.online/)
+    assert.match(disabledReason, /captureControllerDisabledReason\.value/)
+  })
+
+  it('keeps busy and target identity guards', () => {
     assert.match(disabledReason, /isCamBusy\.value/)
     assert.match(disabledReason, /!target\.targetChipId/)
     assert.match(disabledReason, /target\.targetMissing/)

@@ -303,13 +303,21 @@
                   </div>
 
                   <div class="roi-editor-item roi-global-config">
-                    <div class="roi-editor-title">滑轨控制</div>
+                    <div class="roi-editor-title">执行设备绑定</div>
                     <label>
                       <span>滑轨控制灯</span>
                       <BaseSelect
                         v-model="roiDraft.sliderLampChipId"
                         :options="targetSelectOptions"
                         placeholder="选择实际连接滑轨电机的灯具"
+                      />
+                    </label>
+                    <label>
+                      <span>拍照控制器</span>
+                      <BaseSelect
+                        v-model="roiDraft.captureControllerChipId"
+                        :options="captureControllerSelectOptions"
+                        placeholder="选择负责舵机与拍照转发的控制器"
                       />
                     </label>
                   </div>
@@ -412,8 +420,8 @@
 
                 <section class="ptz-section">
                   <div class="section-title-row">
-                    <h4>三轴云台调试</h4>
-                    <span>{{ ptzLoading ? '下发中...' : device.online ? '可控制' : '离线禁用' }}</span>
+                    <h4>拍照舵机调试</h4>
+                    <span>{{ ptzStatusText }}</span>
                   </div>
 
                   <div class="ptz-grid">
@@ -493,6 +501,7 @@ const props = defineProps<{
   device: DeviceItem
   deleting?: boolean
   targetDevices?: DeviceItem[]
+  captureControllerDevices?: DeviceItem[]
   camIndex?: number
 }>()
 
@@ -639,6 +648,32 @@ const targetSelectOptions = computed(() => {
   })
 })
 
+const captureControllerSelectOptions = computed(() => {
+  return (props.captureControllerDevices || []).flatMap((controller) => {
+    if (!controller.chipId) return []
+    const name = controller.displayName?.trim() || controller.chipId
+    return [{
+      label: `${name} · ${controller.online ? '在线' : '离线'}`,
+      value: controller.chipId,
+    }]
+  })
+})
+
+const captureControllerDevice = computed(() => {
+  const chipId = normalizeChipId(roiDraft.value.captureControllerChipId)
+  if (!chipId) return undefined
+  return (props.captureControllerDevices || []).find(
+    controller => normalizeChipId(controller.chipId) === chipId,
+  )
+})
+
+const captureControllerDisabledReason = computed(() => {
+  if (!roiDraft.value.captureControllerChipId) return '拍照控制器未绑定'
+  if (!captureControllerDevice.value) return '拍照控制器不存在'
+  if (!captureControllerDevice.value.online) return '拍照控制器离线'
+  return ''
+})
+
 const roiReady = computed(() => {
   const configured = props.device.camRoiConfig?.configured ?? roiDraft.value.configured
   if (configured) return true
@@ -728,6 +763,8 @@ const isLastCaptureError = computed(() => {
     'motion_timeout',
     'camera_offline',
     'camera_command_failed',
+    'capture_controller_offline',
+    'capture_controller_command_failed',
     'timeout',
     'upload_failed',
     'photo_saved_ai_failed',
@@ -738,7 +775,7 @@ const isLastCaptureError = computed(() => {
 const canRetryLastCapture = computed(() => {
   return Boolean(
     isLastCaptureError.value &&
-    props.device.online &&
+    !captureControllerDisabledReason.value &&
     !isCamBusy.value &&
     props.device.camLastCapture?.targetIndex,
   )
@@ -770,7 +807,7 @@ const displayCaptureTasks = computed(() => {
 
 const batchCaptureDisabledReason = computed(() => {
   if (batchCaptureLoading.value || aimLoading.value) return '任务创建中'
-  if (!props.device.online) return '摄像头离线'
+  if (captureControllerDisabledReason.value) return captureControllerDisabledReason.value
   if (isCamBusy.value) return '摄像头忙碌中'
   if (!roiReady.value || targetButtons.value.some(target => !target.targetChipId || target.targetMissing)) {
     return '三个区域尚未完整配置'
@@ -906,7 +943,12 @@ const canStartOta = computed(() => {
   )
 })
 
-const ptzDisabled = computed(() => !props.device.online || ptzLoading.value)
+const ptzDisabled = computed(() => Boolean(captureControllerDisabledReason.value) || ptzLoading.value)
+
+const ptzStatusText = computed(() => {
+  if (ptzLoading.value) return '下发中...'
+  return captureControllerDisabledReason.value || '拍照控制器可控制'
+})
 
 const selfTest = computed(() => {
   return parseSelfTestJson(props.device.selfTestJson)
@@ -1043,6 +1085,8 @@ function getCamWorkStatusText(status: CamWorkStatus) {
     motion_timeout: '滑轨对位超时',
     camera_offline: '摄像头离线',
     camera_command_failed: '拍摄指令失败',
+    capture_controller_offline: '拍照控制器离线',
+    capture_controller_command_failed: '拍照指令失败',
     timeout: '目标丢失',
     ready: '准备追踪',
     offline: '离线',
@@ -1055,6 +1099,7 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
   return {
     camChipId,
     sliderLampChipId: '',
+    captureControllerChipId: '',
     configured: false,
     sliderPresets: createDefaultSliderPresetMap(),
     sliderMoveTimes: createDefaultSliderMoveTimeMap(),
@@ -1099,6 +1144,7 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
   return {
     camChipId,
     sliderLampChipId: String(value?.sliderLampChipId || '').trim(),
+    captureControllerChipId: String(value?.captureControllerChipId || '').trim(),
     configured: Boolean(value?.configured) || rois.every(isRoiReady),
     sliderPresets: normalizeSliderPresetMap(value),
     sliderMoveTimes: normalizeSliderMoveTimeMap(value),
@@ -1264,7 +1310,7 @@ function isTargetButtonDisabled(target: TargetButton) {
 
 function getTargetButtonDisabledReason(target: TargetButton) {
   if (aimLoading.value) return '任务创建中'
-  if (!props.device.online) return '摄像头离线'
+  if (captureControllerDisabledReason.value) return captureControllerDisabledReason.value
   if (isCamBusy.value) return '摄像头忙碌中'
   const sliderLampChipId = roiDraft.value.sliderLampChipId
   if (!sliderLampChipId) return '滑轨控制灯未绑定'
@@ -1399,6 +1445,8 @@ function isCaptureTaskError(status?: string) {
     'motion_timeout',
     'camera_offline',
     'camera_command_failed',
+    'capture_controller_offline',
+    'capture_controller_command_failed',
     'upload_failed',
     'timeout',
     'photo_saved_ai_failed',
@@ -1435,19 +1483,20 @@ async function createCaptureTaskForTarget(targetIndex: number, targetChipId?: st
 
 async function retryLastCapture() {
   const capture = props.device.camLastCapture
-  if (!capture?.targetIndex || aimLoading.value || isCamBusy.value || !props.device.online) return
+  if (!capture?.targetIndex || aimLoading.value || isCamBusy.value || captureControllerDisabledReason.value) return
   await createCaptureTaskForTarget(capture.targetIndex, capture.targetChipId)
 }
 
 async function sendDirectionalPtz(axis: PtzAxis, direction: PtzDirection) {
-  if (!props.device.chipId || ptzDisabled.value) return
+  const controller = captureControllerDevice.value
+  if (!controller?.chipId || ptzDisabled.value) return
 
   ptzLoading.value = true
   ptzMessage.value = ''
 
   try {
     await sendCamPtz({
-      chipId: props.device.chipId,
+      chipId: controller.chipId,
       axis,
       direction,
       step: ptzStep.value,
@@ -1530,8 +1579,11 @@ async function handleSaveRoiConfig() {
     } else if (!payload.sliderLampChipId) {
       roiMessage.value = 'ROI 已保存，但还未绑定滑轨控制灯'
       roiMessageIsError.value = true
+    } else if (!payload.captureControllerChipId) {
+      roiMessage.value = 'ROI 已保存，但还未绑定拍照控制器'
+      roiMessageIsError.value = true
     } else {
-      roiMessage.value = 'ROI 与滑轨配置已保存'
+      roiMessage.value = 'ROI、滑轨与拍照控制器配置已保存'
     }
   } catch (error) {
     roiMessage.value = getErrorMessage(error, 'ROI 配置保存失败')
@@ -1765,9 +1817,9 @@ watch(
 )
 
 watch(
-  () => [props.device.chipId, props.device.online] as const,
-  ([chipId, isOnline]) => {
-    if (chipId && isOnline) {
+  () => props.device.chipId,
+  (chipId) => {
+    if (chipId) {
       void loadRoiConfig()
     }
   },

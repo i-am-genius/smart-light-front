@@ -211,6 +211,7 @@ type FilterChannel = FirmwareChannel | ''
 const uploadDeviceTypeOptions = [
   { label: '灯光节点', value: 'lamp' },
   { label: '摄像头节点', value: 'cam' },
+  { label: '拍照控制器', value: 'cam_capture' },
   { label: '旧摄像头灯节点', value: 'camlamp' },
 ]
 
@@ -279,8 +280,8 @@ function validateForm() {
     return '固件文件必须是 .bin 文件'
   }
 
-  if (deviceType.value !== 'lamp' && deviceType.value !== 'cam' && deviceType.value !== 'camlamp') {
-    return '设备类型只能是 lamp、cam 或 camlamp'
+  if (!['lamp', 'cam', 'camlamp', 'cam_capture'].includes(deviceType.value)) {
+    return '设备类型只能是 lamp、cam、camlamp 或 cam_capture'
   }
 
   if (channel.value !== 'stable' && channel.value !== 'test') {
@@ -411,6 +412,7 @@ function formatDeviceType(type?: string) {
   const map: Record<string, string> = {
     lamp: '灯光节点',
     cam: '摄像头节点',
+    cam_capture: '拍照控制器',
     camlamp: '旧摄像头灯节点',
   }
   return type ? map[type] || type : '-'
@@ -1127,5 +1129,4 @@ watch([historyDeviceType, historyChannel], () => {
   }
 }
 </style>
-
 

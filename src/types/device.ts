@@ -24,7 +24,7 @@ export interface GarmentState {
   garments: GarmentPart[]
 }
 
-export type DeviceType = 'lamp' | 'camlamp' | 'cam' | string
+export type DeviceType = 'lamp' | 'camlamp' | 'cam' | 'cam_capture' | string
 export type GarmentDetectionStatus = 'not_detected' | 'detecting' | 'detected' | string
 
 export interface DeviceItem {
@@ -145,7 +145,7 @@ export interface DeviceCreatePayload {
 }
 
 export type FirmwareChannel = 'stable' | 'test'
-export type FirmwareDeviceType = 'lamp' | 'cam' | 'camlamp'
+export type FirmwareDeviceType = 'lamp' | 'cam' | 'camlamp' | 'cam_capture'
 
 export type OtaStatus = 'idle' | 'updating' | 'success' | 'failed'
 
@@ -224,6 +224,7 @@ export interface CamSliderMoveTimes {
 export interface CamRoiConfig {
   camChipId: string
   sliderLampChipId?: string
+  captureControllerChipId?: string
   configured?: boolean
   sliderPresets: Record<string, number>
   sliderMoveTimes: Record<string, CamSliderMoveTimes>

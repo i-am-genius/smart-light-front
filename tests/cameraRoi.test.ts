@@ -116,6 +116,8 @@ describe('camera ROI helpers', () => {
     }
     assert.match(globalConfig, /滑轨控制灯/)
     assert.match(globalConfig, /roiDraft\.sliderLampChipId/)
+    assert.match(globalConfig, /拍照控制器/)
+    assert.match(globalConfig, /roiDraft\.captureControllerChipId/)
     assert.equal(roiEditor.includes('拍摄预设'), false)
     assert.equal(roiEditor.includes('追踪预设'), false)
     assert.equal(roiEditor.includes('Pan 水平'), false)
