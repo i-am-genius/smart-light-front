@@ -443,10 +443,6 @@
                   <strong>{{ item.text }}</strong>
                 </div>
               </div>
-
-              <p v-if="selfTestNanoStatusText" class="self-test-status-line">
-                Nano 返回：{{ selfTestNanoStatusText }}
-              </p>
             </section>
 
             <p v-if="deviceNoError" class="modal-error">
@@ -1207,7 +1203,6 @@ const deviceNoError = computed(() => {
 
     const sameZone = (item.displayName || '').trim() === zoneName
     const sameNo = (item.deviceNo || '').trim() === deviceNo
-
     return sameZone && sameNo
   })
 
@@ -1311,44 +1306,41 @@ const selfTest = computed(() => {
   return parseSelfTestJson(props.device.selfTestJson)
 })
 
-const selfTestBadgeClass = computed(() => {
-  if (!selfTest.value?.done) return 'unknown'
-  return selfTest.value.overall ? 'ok' : 'bad'
+const enabledSelfTestValues = computed(() => {
+  const data = selfTest.value
+  if (!data) return []
+  return [data.wifi, data.ws, data.fs, data.bh1750, data.tof]
 })
 
+const enabledSelfTestState = computed<'ok' | 'bad' | 'unknown'>(() => {
+  if (!selfTest.value) return 'unknown'
+  if (enabledSelfTestValues.value.some(value => value === false)) return 'bad'
+  if (enabledSelfTestValues.value.every(value => value === true)) return 'ok'
+  return 'unknown'
+})
+
+const selfTestBadgeClass = computed(() => enabledSelfTestState.value)
+
 const selfTestBadgeText = computed(() => {
-  if (!selfTest.value?.done) return '未自检'
-  return selfTest.value.overall ? '自检正常' : '自检异常'
+  if (!selfTest.value) return '未自检'
+  if (enabledSelfTestState.value === 'ok') return '自检正常'
+  if (enabledSelfTestState.value === 'bad') return '自检异常'
+  return '自检未完成'
 })
 
 const selfTestTimeText = computed(() => {
-  if (!props.device.online || !selfTest.value?.done) return '暂无记录'
+  if (!props.device.online || !selfTest.value) return '暂无记录'
   return formatDateTime(props.device.selfTestTime) || '暂无记录'
 })
 
-const selfTestNanoStatusText = computed(() => selfTest.value?.nanoStatus || '')
-
 const selfTestRows = computed(() => {
   const data = selfTest.value
-  if (!data) {
-    return [
-      { label: '整体', text: '未自检', okClass: 'unknown' },
-    ]
-  }
-
   return [
-    { label: '整体', text: statusText(data.overall), okClass: statusClass(data.overall) },
-    { label: '网络 WiFi', text: statusText(data.wifi), okClass: statusClass(data.wifi) },
-    { label: 'WebSocket', text: statusText(data.ws), okClass: statusClass(data.ws) },
-    { label: '文件系统', text: statusText(data.fs), okClass: statusClass(data.fs) },
-    { label: 'BH1750 光照', text: statusText(data.bh1750), okClass: statusClass(data.bh1750) },
-    { label: 'ToF 传感器', text: statusText(data.tof), okClass: statusClass(data.tof) },
-    { label: 'Nano 通讯', text: statusText(data.nano), okClass: statusClass(data.nano) },
-    { label: '云台寻零', text: statusText(data.nanoHoming), okClass: statusClass(data.nanoHoming) },
-    { label: '霍尔读取', text: statusText(data.nanoHallStatus), okClass: statusClass(data.nanoHallStatus) },
-    { label: 'Pan 霍尔', text: statusText(data.hall?.pan), okClass: statusClass(data.hall?.pan) },
-    { label: 'Tilt 霍尔', text: statusText(data.hall?.tilt), okClass: statusClass(data.hall?.tilt) },
-    { label: 'Slider 霍尔', text: statusText(data.hall?.slider), okClass: statusClass(data.hall?.slider) },
+    { label: '网络 WiFi', text: statusText(data?.wifi), okClass: statusClass(data?.wifi) },
+    { label: 'WebSocket', text: statusText(data?.ws), okClass: statusClass(data?.ws) },
+    { label: '文件系统', text: statusText(data?.fs), okClass: statusClass(data?.fs) },
+    { label: 'BH1750 光照', text: statusText(data?.bh1750), okClass: statusClass(data?.bh1750) },
+    { label: 'ToF 传感器', text: statusText(data?.tof), okClass: statusClass(data?.tof) },
   ]
 })
 
