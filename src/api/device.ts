@@ -9,6 +9,7 @@ import type {
   CamCaptureBatchPayload,
   CamCaptureBatchResult,
   CamCaptureConfig,
+  CamRoiConfig,
   CamPresenceState,
   CamStatusState,
   CamTrackingControlPayload,
@@ -73,73 +74,43 @@ export async function deleteDevice(id: number): Promise<boolean> {
 
 export type ArmControlSpeed = 'slow' | 'normal' | 'fast'
 
-/** 单独发送云台速度切换，不触发方向动作 */
 export async function sendArmSpeed(chipId: string, speed: ArmControlSpeed): Promise<boolean> {
   const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
-    type: 'arm_speed',
-    speed,
+    type: 'arm_speed', speed,
   })
   return res.data.data
 }
 
-/** 发送云台方向动作，不带 speed 字段 */
-export async function sendArmAction(
-  chipId: string,
-  action: string,
-  position?: number,
-): Promise<boolean> {
-  const payload: Record<string, unknown> = {
-    type: 'arm',
-    action,
-  }
-
-  if (position !== undefined) {
-    payload.position = position
-  }
-
+export async function sendArmAction(chipId: string, action: string, position?: number): Promise<boolean> {
+  const payload: Record<string, unknown> = { type: 'arm', action }
+  if (position !== undefined) payload.position = position
   const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, payload)
   return res.data.data
 }
 
-/** 摇杆连续控制：按住时调用。前端每 250ms 续期一次 */
-export async function sendArmJoystick(
-  chipId: string,
-  x: number,
-  y: number,
-  durationMs = 300,
-): Promise<boolean> {
+export async function sendArmJoystick(chipId: string, x: number, y: number, durationMs = 300): Promise<boolean> {
   const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
-    type: 'arm_joystick',
-    x,
-    y,
-    durationMs,
+    type: 'arm_joystick', x, y, durationMs,
   })
   return res.data.data
 }
 
-/** 停止摇杆运动：松开/离开/卸载/进入精确模式时调用 */
 export async function sendArmStop(chipId: string): Promise<boolean> {
-  const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
-    type: 'arm_stop',
-  })
+  const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, { type: 'arm_stop' })
   return res.data.data
 }
 
-/** 精确模式位置控制：允许部分字段更新 */
 export async function sendArmPosition(
   chipId: string,
   position: { pan?: number; tilt?: number; slider?: number },
 ): Promise<boolean> {
   const res = await http.post<CommonResult<boolean>>(`/admin/device/arm/${chipId}`, {
-    type: 'arm_position',
-    ...position,
+    type: 'arm_position', ...position,
   })
   return res.data.data
 }
 
-export async function getGarmentAimCalibration(
-  lampChipId: string,
-): Promise<GarmentAimCalibrationStatus> {
+export async function getGarmentAimCalibration(lampChipId: string): Promise<GarmentAimCalibrationStatus> {
   const res = await http.get<CommonResult<GarmentAimCalibrationStatus>>(
     `/admin/device/lamp/${encodeURIComponent(lampChipId)}/garment-aim-calibration`,
   )
@@ -151,15 +122,12 @@ export async function addGarmentAimCalibrationSample(
   payload: GarmentAimCalibrationSamplePayload,
 ): Promise<GarmentAimCalibrationStatus> {
   const res = await http.post<CommonResult<GarmentAimCalibrationStatus>>(
-    `/admin/device/lamp/${encodeURIComponent(lampChipId)}/garment-aim-calibration/samples`,
-    payload,
+    `/admin/device/lamp/${encodeURIComponent(lampChipId)}/garment-aim-calibration/samples`, payload,
   )
   return res.data.data
 }
 
-export async function clearGarmentAimCalibration(
-  lampChipId: string,
-): Promise<GarmentAimCalibrationStatus> {
+export async function clearGarmentAimCalibration(lampChipId: string): Promise<GarmentAimCalibrationStatus> {
   const res = await http.delete<CommonResult<GarmentAimCalibrationStatus>>(
     `/admin/device/lamp/${encodeURIComponent(lampChipId)}/garment-aim-calibration`,
   )
@@ -176,23 +144,13 @@ export async function sendCamAimTarget(payload: CameraAimTargetPayload): Promise
   return res.data.data
 }
 
-export async function startCamTracking(
-  payload: CamTrackingControlPayload,
-): Promise<CamTrackingControlResult> {
-  const res = await http.post<CommonResult<CamTrackingControlResult>>(
-    '/admin/device/cam/tracking/start',
-    payload,
-  )
+export async function startCamTracking(payload: CamTrackingControlPayload): Promise<CamTrackingControlResult> {
+  const res = await http.post<CommonResult<CamTrackingControlResult>>('/admin/device/cam/tracking/start', payload)
   return res.data.data
 }
 
-export async function stopCamTracking(
-  payload: CamTrackingControlPayload,
-): Promise<CamTrackingControlResult> {
-  const res = await http.post<CommonResult<CamTrackingControlResult>>(
-    '/admin/device/cam/tracking/stop',
-    payload,
-  )
+export async function stopCamTracking(payload: CamTrackingControlPayload): Promise<CamTrackingControlResult> {
+  const res = await http.post<CommonResult<CamTrackingControlResult>>('/admin/device/cam/tracking/stop', payload)
   return res.data.data
 }
 
@@ -203,15 +161,59 @@ export async function getCamCaptureConfig(camChipId: string): Promise<CamCapture
   return res.data.data
 }
 
-export async function saveCamCaptureConfig(
-  camChipId: string,
-  payload: CamCaptureConfig,
-): Promise<CamCaptureConfig> {
+export async function saveCamCaptureConfig(camChipId: string, payload: CamCaptureConfig): Promise<CamCaptureConfig> {
   const res = await http.put<CommonResult<CamCaptureConfig>>(
-    `/admin/device/cam/${encodeURIComponent(camChipId)}/capture-config`,
-    payload,
+    `/admin/device/cam/${encodeURIComponent(camChipId)}/capture-config`, payload,
   )
   return res.data.data
+}
+
+function captureConfigToLegacy(config: CamCaptureConfig): CamRoiConfig {
+  const targets = [1, 2, 3].map(index =>
+    config.targets.find(target => Number(target.index) === index) || {
+      index, lampChipId: '', sliderMm: 0, moveTimes: { slow: 0, normal: 0, fast: 0 },
+    },
+  )
+  return {
+    camChipId: config.camChipId,
+    sliderLampChipId: config.sliderLampChipId || '',
+    configured: Boolean(config.configured),
+    rois: targets.map(target => ({
+      targetIndex: target.index,
+      targetChipId: target.lampChipId || '',
+      areaName: `拍摄目标 ${target.index}`,
+      x: 0, y: 0, w: 1, h: 1,
+    })),
+    sliderPresets: Object.fromEntries(targets.map(target => [String(target.index), target.sliderMm || 0])),
+    sliderMoveTimes: Object.fromEntries(targets.map(target => [String(target.index), target.moveTimes])),
+  }
+}
+
+function legacyToCaptureConfig(camChipId: string, config: CamRoiConfig): CamCaptureConfig {
+  return {
+    camChipId,
+    sliderLampChipId: config.sliderLampChipId || '',
+    configured: Boolean(config.configured),
+    targets: [1, 2, 3].map(index => {
+      const roi = config.rois.find(item => Number(item.targetIndex) === index)
+      return {
+        index,
+        lampChipId: roi?.targetChipId || '',
+        sliderMm: Number(config.sliderPresets?.[String(index)] || 0),
+        moveTimes: config.sliderMoveTimes?.[String(index)] || { slow: 0, normal: 0, fast: 0 },
+      }
+    }),
+  }
+}
+
+/** @deprecated Internal adapter for the old Camera card; no /roi request is sent. */
+export async function getCamRoiConfig(camChipId: string): Promise<CamRoiConfig> {
+  return captureConfigToLegacy(await getCamCaptureConfig(camChipId))
+}
+
+/** @deprecated Internal adapter for the old Camera card; persists capture config only. */
+export async function saveCamRoiConfig(camChipId: string, payload: CamRoiConfig): Promise<CamRoiConfig> {
+  return captureConfigToLegacy(await saveCamCaptureConfig(camChipId, legacyToCaptureConfig(camChipId, payload)))
 }
 
 export async function getCamPresence(camChipId: string): Promise<CamPresenceState | null> {
@@ -228,35 +230,21 @@ export async function getCamStatus(camChipId: string): Promise<CamStatusState | 
   return res.data.data || null
 }
 
-export async function createCamCaptureTask(
-  payload: CamCaptureTaskPayload,
-): Promise<CamCaptureTaskResult> {
-  const res = await http.post<CommonResult<CamCaptureTaskResult>>(
-    '/admin/device/cam/capture-task',
-    payload,
-  )
+export async function createCamCaptureTask(payload: CamCaptureTaskPayload): Promise<CamCaptureTaskResult> {
+  const res = await http.post<CommonResult<CamCaptureTaskResult>>('/admin/device/cam/capture-task', payload)
   return res.data.data
 }
 
-export async function createCamCaptureBatch(
-  payload: CamCaptureBatchPayload,
-): Promise<CamCaptureBatchResult> {
-  const res = await http.post<CommonResult<CamCaptureBatchResult>>(
-    '/admin/device/cam/capture-batch',
-    payload,
-  )
+export async function createCamCaptureBatch(payload: CamCaptureBatchPayload): Promise<CamCaptureBatchResult> {
+  const res = await http.post<CommonResult<CamCaptureBatchResult>>('/admin/device/cam/capture-batch', payload)
   return res.data.data
 }
 
-export async function uploadCamCapturePhoto(
-  taskId: string,
-  file: File,
-): Promise<CamCaptureTaskResult> {
+export async function uploadCamCapturePhoto(taskId: string, file: File): Promise<CamCaptureTaskResult> {
   const formData = new FormData()
   formData.append('file', file)
   const res = await http.post<CommonResult<CamCaptureTaskResult>>(
-    `/admin/device/cam/capture-task/${encodeURIComponent(taskId)}/photo`,
-    formData,
+    `/admin/device/cam/capture-task/${encodeURIComponent(taskId)}/photo`, formData,
   )
   return res.data.data
 }
@@ -277,10 +265,7 @@ export async function uploadCamFlowPhoto(
 }
 
 export async function setFlowUpload(chipId: string, enabled: boolean): Promise<boolean> {
-  const res = await http.post<CommonResult<boolean>>(
-    `/admin/device/flow-upload/${chipId}`,
-    { enabled },
-  )
+  const res = await http.post<CommonResult<boolean>>(`/admin/device/flow-upload/${chipId}`, { enabled })
   return res.data.data
 }
 
@@ -303,32 +288,19 @@ export interface LightEffectPayload {
   phaseGap?: number
 }
 
-export async function sendLightEffect(
-  chipId: string,
-  payload: LightEffectPayload,
-): Promise<boolean> {
+export async function sendLightEffect(chipId: string, payload: LightEffectPayload): Promise<boolean> {
   const res = await http.post<CommonResult<boolean>>(`/admin/device/effect/${chipId}`, payload)
   return res.data.data
 }
 
-export async function updateFirmwareChannel(
-  chipId: string,
-  channel: FirmwareChannel,
-): Promise<boolean> {
-  const res = await http.put<CommonResult<boolean>>(
-    `/admin/device/${chipId}/firmware-channel`,
-    { channel },
-  )
+export async function updateFirmwareChannel(chipId: string, channel: FirmwareChannel): Promise<boolean> {
+  const res = await http.put<CommonResult<boolean>>(`/admin/device/${chipId}/firmware-channel`, { channel })
   return res.data.data
 }
 
-export async function checkFirmwareUpdate(
-  chipId: string,
-  channel?: FirmwareChannel,
-): Promise<OtaCheckResult> {
+export async function checkFirmwareUpdate(chipId: string, channel?: FirmwareChannel): Promise<OtaCheckResult> {
   const res = await http.get<CommonResult<OtaCheckResult>>(
-    `/admin/device/${chipId}/ota/check`,
-    channel ? { params: { channel } } : undefined,
+    `/admin/device/${chipId}/ota/check`, channel ? { params: { channel } } : undefined,
   )
   return res.data.data
 }
@@ -341,41 +313,23 @@ export async function startOtaUpdate(
   const payload: { firmwareId?: number; channel?: FirmwareChannel } = {}
   if (firmwareId) payload.firmwareId = firmwareId
   if (channel) payload.channel = channel
-
-  const res = await http.post<CommonResult<OtaCheckResult>>(
-    `/admin/device/${chipId}/ota/update`,
-    payload,
-  )
+  const res = await http.post<CommonResult<OtaCheckResult>>(`/admin/device/${chipId}/ota/update`, payload)
   return res.data.data
 }
 
 export async function uploadFirmware(formData: FormData): Promise<FirmwareUploadResult> {
-  const res = await http.post<CommonResult<FirmwareUploadResult>>(
-    '/admin/device/ota/firmware/upload',
-    formData,
-  )
-
-  if (res.data.code !== 200) {
-    throw new Error(res.data.msg || '固件上传失败')
-  }
-
+  const res = await http.post<CommonResult<FirmwareUploadResult>>('/admin/device/ota/firmware/upload', formData)
+  if (res.data.code !== 200) throw new Error(res.data.msg || '固件上传失败')
   return res.data.data
 }
 
 export async function getFirmwareHistory(params: FirmwareHistoryParams = {}): Promise<FirmwareItem[]> {
-  const res = await http.get<CommonResult<FirmwareItem[]>>(
-    '/admin/device/ota/firmware/list',
-    {
-      params: {
-        ...(params.deviceType ? { deviceType: params.deviceType } : {}),
-        ...(params.channel ? { channel: params.channel } : {}),
-      },
+  const res = await http.get<CommonResult<FirmwareItem[]>>('/admin/device/ota/firmware/list', {
+    params: {
+      ...(params.deviceType ? { deviceType: params.deviceType } : {}),
+      ...(params.channel ? { channel: params.channel } : {}),
     },
-  )
-
-  if (res.data.code !== 200) {
-    throw new Error(res.data.msg || '固件历史版本加载失败')
-  }
-
+  })
+  if (res.data.code !== 200) throw new Error(res.data.msg || '固件历史版本加载失败')
   return res.data.data || []
 }
