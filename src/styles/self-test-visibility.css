@@ -1,0 +1,12 @@
+/*
+ * Nano homing / Hall diagnostics are intentionally disabled in the current
+ * hardware build. Keep the raw selfTestJson data for diagnostics, but do not
+ * surface those disabled checks as a user-facing fault.
+ */
+.card-status-stack .self-test-badge,
+.self-test-section .self-test-head .self-test-badge,
+.self-test-section .self-test-status-line,
+.self-test-section .self-test-grid .self-test-row:nth-child(1),
+.self-test-section .self-test-grid .self-test-row:nth-child(n + 7) {
+  display: none !important;
+}
