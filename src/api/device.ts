@@ -8,8 +8,8 @@ import type {
   CamCaptureTaskResult,
   CamCaptureBatchPayload,
   CamCaptureBatchResult,
+  CamCaptureConfig,
   CamPresenceState,
-  CamRoiConfig,
   CamStatusState,
   CamTrackingControlPayload,
   CamTrackingControlResult,
@@ -196,19 +196,19 @@ export async function stopCamTracking(
   return res.data.data
 }
 
-export async function getCamRoiConfig(camChipId: string): Promise<CamRoiConfig> {
-  const res = await http.get<CommonResult<CamRoiConfig>>(
-    `/admin/device/cam/${encodeURIComponent(camChipId)}/roi`,
+export async function getCamCaptureConfig(camChipId: string): Promise<CamCaptureConfig> {
+  const res = await http.get<CommonResult<CamCaptureConfig>>(
+    `/admin/device/cam/${encodeURIComponent(camChipId)}/capture-config`,
   )
   return res.data.data
 }
 
-export async function saveCamRoiConfig(
+export async function saveCamCaptureConfig(
   camChipId: string,
-  payload: CamRoiConfig,
-): Promise<CamRoiConfig> {
-  const res = await http.put<CommonResult<CamRoiConfig>>(
-    `/admin/device/cam/${encodeURIComponent(camChipId)}/roi`,
+  payload: CamCaptureConfig,
+): Promise<CamCaptureConfig> {
+  const res = await http.put<CommonResult<CamCaptureConfig>>(
+    `/admin/device/cam/${encodeURIComponent(camChipId)}/capture-config`,
     payload,
   )
   return res.data.data
@@ -279,17 +279,13 @@ export async function uploadCamFlowPhoto(
 export async function setFlowUpload(chipId: string, enabled: boolean): Promise<boolean> {
   const res = await http.post<CommonResult<boolean>>(
     `/admin/device/flow-upload/${chipId}`,
-    {
-      enabled,
-    }
+    { enabled },
   )
   return res.data.data
 }
 
 export async function locateDevice(chipId: string): Promise<boolean> {
-  const res = await http.post<CommonResult<boolean>>(
-    `/admin/device/locate/${chipId}`
-  )
+  const res = await http.post<CommonResult<boolean>>(`/admin/device/locate/${chipId}`)
   return res.data.data
 }
 
@@ -311,10 +307,7 @@ export async function sendLightEffect(
   chipId: string,
   payload: LightEffectPayload,
 ): Promise<boolean> {
-  const res = await http.post<CommonResult<boolean>>(
-    `/admin/device/effect/${chipId}`,
-    payload,
-  )
+  const res = await http.post<CommonResult<boolean>>(`/admin/device/effect/${chipId}`, payload)
   return res.data.data
 }
 
@@ -346,12 +339,8 @@ export async function startOtaUpdate(
   channel?: FirmwareChannel,
 ): Promise<OtaCheckResult> {
   const payload: { firmwareId?: number; channel?: FirmwareChannel } = {}
-  if (firmwareId) {
-    payload.firmwareId = firmwareId
-  }
-  if (channel) {
-    payload.channel = channel
-  }
+  if (firmwareId) payload.firmwareId = firmwareId
+  if (channel) payload.channel = channel
 
   const res = await http.post<CommonResult<OtaCheckResult>>(
     `/admin/device/${chipId}/ota/update`,
