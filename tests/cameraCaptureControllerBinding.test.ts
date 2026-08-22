@@ -55,4 +55,16 @@ describe('camera capture controller binding', () => {
     assert.match(smartLightingSource, /!roi\.captureControllerChipId/)
     assert.match(smartLightingSource, /captureController\.online/)
   })
+
+  it('exposes OTA check and update controls on the capture controller card', () => {
+    assert.match(deviceCardSource, /v-if="isCaptureController" class="capture-ota-panel"/)
+    assert.match(deviceCardSource, /checkFirmwareUpdate/)
+    assert.match(deviceCardSource, /startOtaUpdate/)
+    assert.match(deviceCardSource, /@click="handleCheckFirmwareUpdate"/)
+    assert.match(deviceCardSource, /@click="handleStartOtaUpdate"/)
+    assert.match(deviceCardSource, /检查更新/)
+    assert.match(deviceCardSource, /确认更新/)
+    assert.match(deviceCardSource, /otaCheckResult\.value\?\.firmwareId/)
+    assert.match(deviceCardSource, /firmwareChannel/)
+  })
 })
