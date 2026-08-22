@@ -85,7 +85,11 @@ describe('camera ROI helpers', () => {
       'collisionCenterMm',
       'collisionClearanceMm',
       'collisionParkTimeSeconds',
+      'garmentCapturePan',
+      'garmentCaptureTilt',
       'h',
+      'personCapturePan',
+      'personCaptureTilt',
       'targetChipId',
       'targetIndex',
       'w',
@@ -121,12 +125,16 @@ describe('camera ROI helpers', () => {
     assert.match(globalConfig, /roiDraft\.sliderLampChipId/)
     assert.match(globalConfig, /拍照控制器/)
     assert.match(globalConfig, /roiDraft\.captureControllerChipId/)
-    assert.match(globalConfig, /服装拍摄角度/)
-    assert.match(globalConfig, /roiDraft\.garmentCapturePan/)
-    assert.match(globalConfig, /roiDraft\.garmentCaptureTilt/)
-    assert.match(globalConfig, /人物拍摄角度/)
-    assert.match(globalConfig, /roiDraft\.personCapturePan/)
-    assert.match(globalConfig, /roiDraft\.personCaptureTilt/)
+    assert.doesNotMatch(globalConfig, /roiDraft\.garmentCapturePan/)
+    assert.doesNotMatch(globalConfig, /roiDraft\.garmentCaptureTilt/)
+    assert.doesNotMatch(globalConfig, /roiDraft\.personCapturePan/)
+    assert.doesNotMatch(globalConfig, /roiDraft\.personCaptureTilt/)
+    assert.match(roiEditor, /服装拍摄角度/)
+    assert.match(roiEditor, /roi\.garmentCapturePan/)
+    assert.match(roiEditor, /roi\.garmentCaptureTilt/)
+    assert.match(roiEditor, /人物拍摄角度/)
+    assert.match(roiEditor, /roi\.personCapturePan/)
+    assert.match(roiEditor, /roi\.personCaptureTilt/)
     assert.match(globalConfig, /自动人流拍摄/)
     assert.match(globalConfig, /roiDraft\.flowUploadIntervalSeconds/)
     assert.match(globalConfig, /class="flow-upload-row"/)
