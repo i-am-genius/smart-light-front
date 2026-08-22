@@ -380,7 +380,7 @@
                       </label>
                       <small>开启后拍照控制器使用人物角度，默认每 30 秒自动上传一张人流图片。</small>
                     </div>
-                    <small class="capture-config-hint">{{ captureControllerDisabledReason || '测试后请点击“保存 ROI”持久化配置' }}</small>
+                    <small class="capture-config-hint">{{ captureControllerDisabledReason || '测试后请点击设备详情底部“保存”持久化配置' }}</small>
                     <p v-if="ptzMessage" class="camera-message" :class="{ error: ptzMessageIsError }">
                       {{ ptzMessage }}
                     </p>
@@ -476,9 +476,6 @@
                     <button class="btn-secondary" type="button" :disabled="roiLoading" @click="loadRoiConfig">
                       {{ roiLoading ? '读取中...' : '重新读取' }}
                     </button>
-                    <button class="btn-primary" type="button" :disabled="roiSaving" @click="handleSaveRoiConfig">
-                      {{ roiSaving ? '保存中...' : '保存 ROI' }}
-                    </button>
                   </div>
                 </section>
 
@@ -489,7 +486,9 @@
                   {{ deleting ? '删除中...' : '删除' }}
                 </button>
                 <button class="btn-secondary" type="button" @click="closeDetailModal">取消</button>
-                <button class="btn-primary" type="button" @click="saveDeviceBaseInfo">保存</button>
+                <button class="btn-primary" type="button" :disabled="roiSaving" @click="saveDeviceBaseInfo">
+                  {{ roiSaving ? '保存中...' : '保存' }}
+                </button>
               </div>
             </div>
           </Transition>
@@ -1339,7 +1338,11 @@ function syncFromProps() {
   roiDraft.value = normalizeRoiConfig(props.device.camRoiConfig || roiDraft.value, props.device.chipId || '')
 }
 
-function saveDeviceBaseInfo() {
+async function saveDeviceBaseInfo() {
+  if (roiSaving.value) return
+  const roiSaved = await persistRoiConfig()
+  if (!roiSaved) return
+
   emit('update-realtime', {
     id: props.device.id,
     payload: {
@@ -1630,8 +1633,8 @@ async function loadRoiConfig() {
   }
 }
 
-async function handleSaveRoiConfig() {
-  if (!props.device.chipId || roiSaving.value) return
+async function persistRoiConfig(): Promise<boolean> {
+  if (!props.device.chipId || roiSaving.value) return false
 
   roiSaving.value = true
   roiMessage.value = ''
@@ -1655,9 +1658,11 @@ async function handleSaveRoiConfig() {
     } else {
       roiMessage.value = 'ROI、滑轨与拍照控制器配置已保存'
     }
+    return true
   } catch (error) {
     roiMessage.value = getErrorMessage(error, 'ROI 配置保存失败')
     roiMessageIsError.value = true
+    return false
   } finally {
     roiSaving.value = false
   }

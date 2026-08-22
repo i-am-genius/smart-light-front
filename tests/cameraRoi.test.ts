@@ -139,4 +139,18 @@ describe('camera ROI helpers', () => {
     assert.match(source, /'滑轨控制灯未绑定'/)
     assert.match(source, /'滑轨控制灯离线'/)
   })
+
+  it('uses the device footer save for both base info and ROI config', () => {
+    const source = readFileSync(new URL('../src/components/device/CameraDeviceCard.vue', import.meta.url), 'utf8')
+    const saveDeviceBlock = source.slice(
+      source.indexOf('async function saveDeviceBaseInfo'),
+      source.indexOf('function handleDelete'),
+    )
+
+    assert.doesNotMatch(source, />\s*保存 ROI\s*</)
+    assert.match(source, /@click="saveDeviceBaseInfo"/)
+    assert.match(saveDeviceBlock, /await persistRoiConfig\(\)/)
+    assert.match(source, /async function persistRoiConfig/)
+    assert.match(source, /saveCamRoiConfig\(props\.device\.chipId, payload\)/)
+  })
 })
