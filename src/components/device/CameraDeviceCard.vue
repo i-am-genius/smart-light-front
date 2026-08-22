@@ -2849,6 +2849,7 @@ onBeforeUnmount(() => {
 }
 
 .roi-editor-item .flow-upload-toggle > .flow-upload-control {
+  position: relative;
   display: flex;
   align-items: center;
   min-height: 38px;
@@ -2863,11 +2864,15 @@ onBeforeUnmount(() => {
 
 .roi-editor-item .flow-upload-switch-input {
   position: absolute;
-  width: 1px;
-  min-height: 1px;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   margin: 0;
   padding: 0;
   opacity: 0;
+  cursor: pointer;
 }
 
 .flow-upload-switch-track {

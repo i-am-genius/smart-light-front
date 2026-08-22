@@ -130,6 +130,8 @@ describe('camera ROI helpers', () => {
     assert.match(globalConfig, /class="flow-upload-switch-track"/)
     assert.doesNotMatch(globalConfig, /开启后拍照控制器使用人物角度/)
     assert.match(source, /flowUploadIntervalSeconds: 30/)
+    assert.match(source, /\.flow-upload-toggle\s*>\s*\.flow-upload-control\s*\{[\s\S]*?position:\s*relative/)
+    assert.match(source, /\.flow-upload-switch-input\s*\{[\s\S]*?inset:\s*0/)
     assert.equal(roiEditor.includes('拍摄预设'), false)
     assert.equal(roiEditor.includes('追踪预设'), false)
     assert.equal(roiEditor.includes('Pan 水平'), false)
