@@ -321,48 +321,11 @@
                       />
                     </label>
                     <div class="roi-preset-group standby-config">
-                      <div class="roi-preset-title">全局拍摄结束待机位</div>
-                      <div class="roi-preset-grid">
-                        <label class="roi-slider-position-field">
-                          <span>待机 Slider：</span>
-                          <div class="roi-preset-input">
-                            <input v-model.number="roiDraft.sliderPresets.standby" type="number" min="0" max="2500" step="1" />
-                            <small>mm</small>
-                          </div>
-                        </label>
-                        <div class="roi-move-times-field">
-                          <span title="从 0 mm 移动到待机位置的实测时间">移动时间：</span>
-                          <div class="roi-move-time-row">
-                            <BaseSelect
-                              v-model="standbySpeedSelection"
-                              class="roi-speed-select"
-                              :options="sliderSpeedOptions"
-                            />
-                            <div class="roi-preset-input">
-                              <input
-                                v-model.number="roiDraft.sliderMoveTimes.standby[standbySpeedSelection]"
-                                type="number"
-                                min="0"
-                                max="3600"
-                                step="0.1"
-                                inputmode="decimal"
-                              />
-                              <small>s</small>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="standby-actions">
-                        <button
-                          class="btn-secondary"
-                          type="button"
-                          :disabled="standbyRecommendationMm == null"
-                          @click="applyStandbyRecommendation"
-                        >
-                          设为区域 2 与最远灯的中点
-                        </button>
-                        <small>待机位必须严格位于区域 2 与距它最远的灯之间。</small>
-                      </div>
+                      <div class="roi-preset-title">自动安全撤离</div>
+                      <small>
+                        单点拍区域 1 后停在 1–2 中点，拍区域 3 后停在 2–3 中点；
+                        拍区域 2 时自动选择离区域 2 更远的相邻中点。批量拍摄结束后停在区域 2 与最远灯的中点。
+                      </small>
                     </div>
                     <div class="capture-preset-config">
                       <div class="roi-preset-title">服装拍摄角度</div>
@@ -728,7 +691,6 @@ const sliderSpeedSelection = reactive<Record<number, keyof CamSliderMoveTimes>>(
   2: 'normal',
   3: 'normal',
 })
-const standbySpeedSelection = ref<keyof CamSliderMoveTimes>('normal')
 
 const displayNameText = computed(() => {
   const index = Number.isFinite(props.camIndex) && Number(props.camIndex) > 0
@@ -799,18 +761,7 @@ const captureControllerDisabledReason = computed(() => {
 const roiReady = computed(() => {
   const configured = props.device.camRoiConfig?.configured ?? roiDraft.value.configured
   const roisReady = configured || roiDraft.value.rois.slice(0, 3).every(isRoiReady)
-  return roisReady && isCollisionSafetyReady(roiDraft.value.rois) && isStandbyReady(roiDraft.value)
-})
-
-const standbyRecommendationMm = computed(() => {
-  const positions = [1, 2, 3].map(index => Number(roiDraft.value.sliderPresets[String(index)]))
-  const regionTwoMm = positions[1]
-  if (!positions.every(Number.isFinite)) return null
-  const farthestMm = positions.reduce((selected, position) => (
-    Math.abs(position - regionTwoMm) > Math.abs(selected - regionTwoMm) ? position : selected
-  ), regionTwoMm)
-  if (Math.abs(farthestMm - regionTwoMm) < 1) return null
-  return Math.round((regionTwoMm + farthestMm) / 2)
+  return roisReady && isCollisionSafetyReady(roiDraft.value.rois)
 })
 
 const roiWarningText = computed(() => {
@@ -1252,21 +1203,17 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
 }
 
 function createDefaultSliderMoveTimeMap(): Record<string, CamSliderMoveTimes> {
-  const map = [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((result, index) => {
+  return [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((result, index) => {
     result[String(index)] = { slow: 0, normal: 0, fast: 0 }
     return result
   }, {})
-  map.standby = { slow: 0, normal: 0, fast: 0 }
-  return map
 }
 
 function createDefaultSliderPresetMap(): Record<string, number> {
-  const map = [1, 2, 3].reduce<Record<string, number>>((result, index) => {
+  return [1, 2, 3].reduce<Record<string, number>>((result, index) => {
     result[String(index)] = 0
     return result
   }, {})
-  map.standby = 0
-  return map
 }
 
 function createDefaultRoi(targetIndex: number): CamRoiItem {
@@ -1305,8 +1252,7 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
     flowUploadEnabled: Boolean(value?.flowUploadEnabled),
     flowUploadIntervalSeconds: normalizeFlowUploadInterval(value?.flowUploadIntervalSeconds),
     configured: (Boolean(value?.configured) || rois.every(isRoiReady))
-      && isCollisionSafetyReady(rois)
-      && isStandbyPositionReady(sliderPresets),
+      && isCollisionSafetyReady(rois),
     sliderPresets,
     sliderMoveTimes,
     rois,
@@ -1335,7 +1281,7 @@ function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefine
   const legacyTracking = isPlainObject(legacyValue?.trackingPresets)
     ? legacyValue.trackingPresets
     : {}
-  const normalized = [1, 2, 3].reduce<Record<string, number>>((map, index) => {
+  return [1, 2, 3].reduce<Record<string, number>>((map, index) => {
     const key = String(index)
     const legacyCapturePreset = isPlainObject(legacyCapture[key]) ? legacyCapture[key] : {}
     const legacyTrackingPreset = isPlainObject(legacyTracking[key]) ? legacyTracking[key] : {}
@@ -1343,15 +1289,13 @@ function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefine
     map[key] = Math.round(Math.max(0, Math.min(2500, Number.isFinite(numeric) ? numeric : 0)))
     return map
   }, {})
-  normalized.standby = normalizeSliderPosition(source.standby)
-  return normalized
 }
 
 function normalizeSliderMoveTimeMap(
   value: Partial<CamRoiConfig> | null | undefined,
 ): Record<string, CamSliderMoveTimes> {
   const source = isPlainObject(value?.sliderMoveTimes) ? value.sliderMoveTimes : {}
-  const normalized = [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((map, index) => {
+  return [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((map, index) => {
     const key = String(index)
     const rawTimes = source[key]
     const sourceTimes: Record<string, unknown> = isPlainObject(rawTimes) ? rawTimes : {}
@@ -1362,13 +1306,6 @@ function normalizeSliderMoveTimeMap(
     }
     return map
   }, {})
-  const standbyTimes: Record<string, unknown> = isPlainObject(source.standby) ? source.standby : {}
-  normalized.standby = {
-    slow: normalizeSliderMoveTime(standbyTimes.slow),
-    normal: normalizeSliderMoveTime(standbyTimes.normal),
-    fast: normalizeSliderMoveTime(standbyTimes.fast),
-  }
-  return normalized
 }
 
 function normalizeSliderPosition(value: unknown) {
@@ -1414,30 +1351,6 @@ function isCollisionSafetyReady(rois: CamRoiItem[]) {
     && Number(roi.collisionClearanceMm) > 0
     && Number(roi.collisionParkTimeSeconds) > 0
   ))
-}
-
-function isStandbyPositionReady(sliderPresets: Record<string, number>) {
-  const regionTwoMm = Number(sliderPresets['2'])
-  const standbyMm = Number(sliderPresets.standby)
-  const positions = [1, 2, 3].map(index => Number(sliderPresets[String(index)]))
-  if (![...positions, standbyMm].every(Number.isFinite)) return false
-  const farthestMm = positions.reduce((selected, position) => (
-    Math.abs(position - regionTwoMm) > Math.abs(selected - regionTwoMm) ? position : selected
-  ), regionTwoMm)
-  const min = Math.min(regionTwoMm, farthestMm)
-  const max = Math.max(regionTwoMm, farthestMm)
-  return standbyMm > min && standbyMm < max
-}
-
-function isStandbyReady(config: CamRoiConfig) {
-  const times = config.sliderMoveTimes.standby
-  return isStandbyPositionReady(config.sliderPresets)
-    && Boolean(times && Object.values(times).some(time => Number(time) > 0))
-}
-
-function applyStandbyRecommendation() {
-  if (standbyRecommendationMm.value == null) return
-  roiDraft.value.sliderPresets.standby = standbyRecommendationMm.value
 }
 
 function clamp(value: unknown, min = 0, max = 1) {
@@ -1812,7 +1725,6 @@ async function persistRoiConfig(): Promise<boolean> {
   const payload = normalizeRoiConfig(roiDraft.value, props.device.chipId)
   payload.configured = payload.rois.every(isRoiReady)
     && isCollisionSafetyReady(payload.rois)
-    && isStandbyReady(payload)
 
   try {
     const result = await saveCamRoiConfig(props.device.chipId, payload)
@@ -1822,9 +1734,6 @@ async function persistRoiConfig(): Promise<boolean> {
       roiMessageIsError.value = true
     } else if (!isCollisionSafetyReady(payload.rois)) {
       roiMessage.value = 'ROI 已保存，但碰撞中心、避让距离或回零时间尚未完整标定'
-      roiMessageIsError.value = true
-    } else if (!isStandbyReady(payload)) {
-      roiMessage.value = 'ROI 已保存，但待机位置或待机移动时间尚未正确标定'
       roiMessageIsError.value = true
     } else if (!payload.sliderLampChipId) {
       roiMessage.value = 'ROI 已保存，但还未绑定滑轨控制灯'
@@ -3162,15 +3071,7 @@ onBeforeUnmount(() => {
   margin-top: 14px;
 }
 
-.standby-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.standby-actions small,
+.standby-config small,
 .collision-config-hint {
   color: #64748b;
   font-size: 11px;
