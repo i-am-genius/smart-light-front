@@ -22,7 +22,7 @@ describe('camera capture availability', () => {
   })
 
   it('keeps busy and target identity guards', () => {
-    assert.match(disabledReason, /isCamBusy\.value/)
+    assert.match(disabledReason, /isCaptureBusy\.value/)
     assert.match(disabledReason, /!target\.targetChipId/)
     assert.match(disabledReason, /target\.targetMissing/)
   })

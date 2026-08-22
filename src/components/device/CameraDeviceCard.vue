@@ -3,8 +3,8 @@
     <article
       class="camera-card lamp-card"
       :class="{
-        'is-online': device.online,
-        'is-offline': !device.online,
+        'is-online': cameraCardOnline,
+        'is-offline': !cameraCardOnline,
         'online-flash': onlineFlash,
       }"
     >
@@ -12,13 +12,13 @@
         <div class="device-title-block">
           <h3>{{ displayNameText }}</h3>
           <p class="last-seen-under-name">
-            上次在线：{{ !device.online ? (lastSeenText || '暂无记录') : '当前在线' }}
+            上次在线：{{ !cameraCardOnline ? (lastSeenText || '暂无记录') : '当前在线' }}
           </p>
         </div>
 
         <div class="card-status-stack">
-          <span class="status-badge" :class="{ online: device.online, offline: !device.online }">
-            {{ device.online ? '在线' : '离线' }}
+          <span class="status-badge" :class="{ online: cameraCardOnline, offline: !cameraCardOnline }">
+            {{ cameraCardOnline ? '在线' : '离线' }}
           </span>
           <span class="self-test-badge" :class="selfTestBadgeClass">
             {{ selfTestBadgeText }}
@@ -134,7 +134,7 @@
               <div class="detail-modal-header">
                 <div>
                   <h3>{{ displayNameText }}</h3>
-                  <p class="detail-subtitle">{{ device.online ? '在线' : '离线' }}</p>
+                  <p class="detail-subtitle">{{ cameraCardOnline ? '在线' : '离线' }}</p>
                 </div>
                 <button class="detail-close-btn" type="button" @click="closeDetailModal">x</button>
               </div>
@@ -146,8 +146,8 @@
                       <h4>设备信息</h4>
                       <p>芯片 ID：{{ device.chipId || '未知' }}</p>
                     </div>
-                    <span class="device-info-status" :class="{ online: device.online, offline: !device.online }">
-                      {{ device.online ? '在线' : '离线' }}
+                    <span class="device-info-status" :class="{ online: cameraCardOnline, offline: !cameraCardOnline }">
+                      {{ cameraCardOnline ? '在线' : '离线' }}
                     </span>
                   </div>
 
@@ -711,6 +711,12 @@ const captureControllerDevice = computed(() => {
   )
 })
 
+const trackingCameraOnline = computed(() => props.device.online === true)
+const captureControllerOnline = computed(() => captureControllerDevice.value?.online === true)
+const cameraCardOnline = computed(() =>
+  trackingCameraOnline.value || captureControllerOnline.value
+)
+
 const captureControllerDisabledReason = computed(() => {
   if (!roiDraft.value.captureControllerChipId) return '拍照控制器未绑定'
   if (!captureControllerDevice.value) return '拍照控制器不存在'
@@ -725,20 +731,27 @@ const roiReady = computed(() => {
 })
 
 const roiWarningText = computed(() => {
-  if (!props.device.online) return ''
+  if (!trackingCameraOnline.value) return ''
   if (roiLoading.value) return ''
   if (!roiReady.value) return '区域未配置，请在详情中完成区域标定'
   return ''
 })
 
+const captureWorkStatus = computed(() =>
+  String(props.device.camLastCapture?.status || '').trim().toLowerCase()
+)
+
 const normalizedWorkStatus = computed(() => {
-  if (!props.device.online) return 'offline'
+  if (['waiting_motion', 'capturing', 'uploading'].includes(captureWorkStatus.value)) {
+    return captureWorkStatus.value
+  }
+  if (!trackingCameraOnline.value) {
+    return captureControllerOnline.value ? 'capture_ready' : 'offline'
+  }
   const trackingStatus = props.device.trackingStatus?.status
   if (trackingStatus === 'tracking') return 'tracking'
   if (trackingStatus === 'lost' || trackingStatus === 'timeout') return 'lost'
   if (trackingStatus === 'error') return 'error'
-  const captureStatus = String(props.device.camLastCapture?.status || '').trim().toLowerCase()
-  if (['waiting_motion', 'capturing', 'uploading'].includes(captureStatus)) return captureStatus
   const status = normalizeCamWorkStatus(props.device.camWorkStatus || props.device.camPresence?.workStatus || 'monitoring')
   if (localCapturePending.value && ['monitoring', 'presence'].includes(status)) return 'capturing'
   return status
@@ -752,7 +765,7 @@ const workStatusClass = computed(() => {
   return {
     busy: isCamBusy.value,
     error: ['lost', 'offline', 'error'].includes(normalizedWorkStatus.value),
-    active: ['presence', 'monitoring'].includes(normalizedWorkStatus.value),
+    active: ['presence', 'monitoring', 'capture_ready'].includes(normalizedWorkStatus.value),
   }
 })
 
@@ -815,25 +828,30 @@ const canRetryLastCapture = computed(() => {
   return Boolean(
     isLastCaptureError.value &&
     !captureControllerDisabledReason.value &&
-    !isCamBusy.value &&
+    !isCaptureBusy.value &&
     props.device.camLastCapture?.targetIndex,
   )
 })
 
-const isCamBusy = computed(() => {
+const isCaptureBusy = computed(() => {
   const batchHasPhysicalWork = displayCaptureTasks.value.some(task =>
     ['queued', 'waiting_motion', 'capturing', 'uploading'].includes(String(task.status || '')),
   )
-  return batchHasPhysicalWork || [
+  return localCapturePending.value || batchHasPhysicalWork || [
     'waiting_motion',
     'capturing',
     'uploading',
-    'returning_center',
     'returning_target_2',
-    'ready_tracking',
-    'tracking',
-  ].includes(normalizedWorkStatus.value)
+  ].includes(captureWorkStatus.value)
 })
+
+const isTrackingBusy = computed(() =>
+  ['waiting_motion', 'ready_tracking', 'tracking'].includes(
+    String(props.device.trackingStatus?.status || '').trim().toLowerCase(),
+  )
+)
+
+const isCamBusy = computed(() => isCaptureBusy.value || isTrackingBusy.value)
 
 const displayCaptureTasks = computed(() => {
   const tasks = localCaptureTasks.value.length
@@ -847,7 +865,7 @@ const displayCaptureTasks = computed(() => {
 const batchCaptureDisabledReason = computed(() => {
   if (batchCaptureLoading.value || aimLoading.value) return '任务创建中'
   if (captureControllerDisabledReason.value) return captureControllerDisabledReason.value
-  if (isCamBusy.value) return '摄像头忙碌中'
+  if (isCaptureBusy.value) return '拍照控制器忙碌中'
   if (!roiReady.value || targetButtons.value.some(target => !target.targetChipId || target.targetMissing)) {
     return '三个区域尚未完整配置'
   }
@@ -1008,7 +1026,7 @@ const selfTestBadgeText = computed(() => {
 })
 
 const selfTestTimeText = computed(() => {
-  if (!props.device.online || !selfTest.value?.done) return '暂无记录'
+  if (!trackingCameraOnline.value || !selfTest.value?.done) return '暂无记录'
   return formatDateTime(props.device.selfTestTime) || '暂无记录'
 })
 
@@ -1105,6 +1123,7 @@ function getCamWorkStatusText(status: CamWorkStatus) {
 
   const map: Record<string, string> = {
     monitoring: '顾客感知中',
+    capture_ready: '拍照控制器在线',
     presence: '有人靠近',
     waiting_motion: '滑轨对位中',
     capturing: '正在拍摄服装',
@@ -1303,16 +1322,23 @@ function getRoiBoxStyle(roi: CamRoiItem) {
 }
 
 const lastSeenText = computed(() => {
-  if (props.device.lastSeenAt) {
-    return formatMinuteDateTime(props.device.lastSeenAt)
-  }
-
-  const value = props.device.lastSeen
-  if (!value) return ''
-
-  const timestamp = value < 1e12 ? value * 1000 : value
-  return formatMinuteDateTime(timestamp)
+  const timestamps = [props.device, captureControllerDevice.value]
+    .map(deviceLastSeenTimestamp)
+    .filter((value): value is number => value != null)
+  if (!timestamps.length) return ''
+  return formatMinuteDateTime(Math.max(...timestamps))
 })
+
+function deviceLastSeenTimestamp(device?: DeviceItem) {
+  if (!device) return undefined
+  if (device.lastSeenAt) {
+    const parsed = new Date(device.lastSeenAt).getTime()
+    if (Number.isFinite(parsed)) return parsed
+  }
+  const value = Number(device.lastSeen)
+  if (!Number.isFinite(value) || value <= 0) return undefined
+  return value < 1e12 ? value * 1000 : value
+}
 
 function clampProgress(value: unknown) {
   const numericValue = Number(value)
@@ -1371,7 +1397,7 @@ function isTargetButtonDisabled(target: TargetButton) {
 function getTargetButtonDisabledReason(target: TargetButton) {
   if (aimLoading.value) return '任务创建中'
   if (captureControllerDisabledReason.value) return captureControllerDisabledReason.value
-  if (isCamBusy.value) return '摄像头忙碌中'
+  if (isCaptureBusy.value) return '拍照控制器忙碌中'
   const sliderLampChipId = roiDraft.value.sliderLampChipId
   if (!sliderLampChipId) return '滑轨控制灯未绑定'
   const sliderLamp = findTargetDevice(sliderLampChipId)
@@ -1410,13 +1436,7 @@ function isTrackingButtonDisabled(target: TargetButton) {
 
 function getTrackingButtonDisabledReason(target: TargetButton) {
   if (trackingActionIndex.value != null) return '正在下发'
-  if (!props.device.online) return '摄像头离线'
-
-  const sliderLampChipId = roiDraft.value.sliderLampChipId
-  if (!sliderLampChipId) return '滑轨控制灯未绑定'
-  const sliderLamp = findTargetDevice(sliderLampChipId)
-  if (!sliderLamp) return '滑轨控制灯不存在'
-  if (!sliderLamp.online) return '滑轨控制灯离线'
+  if (!trackingCameraOnline.value) return '跟踪摄像头离线'
 
   const targetChipId = getTrackingTargetChipId(target)
   if (!targetChipId) return '目标灯未配置'
@@ -1543,7 +1563,7 @@ async function createCaptureTaskForTarget(targetIndex: number, targetChipId?: st
 
 async function retryLastCapture() {
   const capture = props.device.camLastCapture
-  if (!capture?.targetIndex || aimLoading.value || isCamBusy.value || captureControllerDisabledReason.value) return
+  if (!capture?.targetIndex || aimLoading.value || isCaptureBusy.value || captureControllerDisabledReason.value) return
   await createCaptureTaskForTarget(capture.targetIndex, capture.targetChipId)
 }
 
@@ -1904,7 +1924,7 @@ watch(
 )
 
 watch(
-  () => props.device.online,
+  () => cameraCardOnline.value,
   (isOnline, wasOnline) => {
     if (wasOnline === false && isOnline === true) {
       triggerOnlineFlash()

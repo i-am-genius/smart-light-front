@@ -21,7 +21,7 @@ test('camera loads persisted ROI without requiring the tracking node to be onlin
 test('camera card does not report ROI as unconfigured while the initial request is pending', () => {
   assert.match(
     cameraCardSource,
-    /const roiWarningText = computed\(\(\) => \{\s*if \(!props\.device\.online\) return ''\s*if \(roiLoading\.value\) return ''/,
+    /const roiWarningText = computed\(\(\) => \{\s*if \(!trackingCameraOnline\.value\) return ''\s*if \(roiLoading\.value\) return ''/,
   )
 })
 
