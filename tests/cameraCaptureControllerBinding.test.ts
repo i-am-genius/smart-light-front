@@ -34,12 +34,16 @@ describe('camera capture controller binding', () => {
     assert.match(addModalSource, /拍照控制器（cam_capture）/)
   })
 
-  it('persists the binding and shared capture pose, then previews it on the bound controller', () => {
+  it('persists separate garment and person poses and previews either one on the controller', () => {
     assert.match(cameraCardSource, /roiDraft\.captureControllerChipId/)
-    assert.match(cameraCardSource, /roiDraft\.capturePan/)
-    assert.match(cameraCardSource, /roiDraft\.captureTilt/)
-    assert.match(cameraCardSource, /capturePan" type="number" min="0" max="180"/)
-    assert.match(cameraCardSource, /captureTilt" type="number" min="0" max="180"/)
+    assert.match(cameraCardSource, /roiDraft\.garmentCapturePan/)
+    assert.match(cameraCardSource, /roiDraft\.garmentCaptureTilt/)
+    assert.match(cameraCardSource, /roiDraft\.personCapturePan/)
+    assert.match(cameraCardSource, /roiDraft\.personCaptureTilt/)
+    assert.match(cameraCardSource, /garmentCapturePan" type="number" min="0" max="180"/)
+    assert.match(cameraCardSource, /personCapturePan" type="number" min="0" max="180"/)
+    assert.match(cameraCardSource, /roiDraft\.flowUploadEnabled/)
+    assert.match(cameraCardSource, /roiDraft\.flowUploadIntervalSeconds/)
     assert.match(cameraCardSource, /captureControllerDevice/)
     assert.match(cameraCardSource, /sendArmPosition\(controller\.chipId/)
     assert.match(cameraCardSource, /applyCapturePreset/)

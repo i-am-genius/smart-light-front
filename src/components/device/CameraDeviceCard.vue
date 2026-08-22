@@ -321,30 +321,69 @@
                       />
                     </label>
                     <div class="capture-preset-config">
-                      <div class="roi-preset-title">共享拍照舵机预置</div>
+                      <div class="roi-preset-title">服装拍摄角度</div>
                       <div class="capture-preset-grid">
                         <label>
-                          <span>拍照 Pan（SG90）</span>
-                          <input v-model.number="roiDraft.capturePan" type="number" min="0" max="180" step="1" />
+                          <span>服装 Pan（SG90）</span>
+                          <input v-model.number="roiDraft.garmentCapturePan" type="number" min="0" max="180" step="1" />
                         </label>
                         <label>
-                          <span>拍照 Tilt（SG90）</span>
-                          <input v-model.number="roiDraft.captureTilt" type="number" min="0" max="180" step="1" />
+                          <span>服装 Tilt（SG90）</span>
+                          <input v-model.number="roiDraft.garmentCaptureTilt" type="number" min="0" max="180" step="1" />
                         </label>
                       </div>
                       <button
                         class="btn-secondary capture-preset-preview"
                         type="button"
                         :disabled="ptzDisabled"
-                        @click="applyCapturePreset"
+                        @click="applyCapturePreset('garment')"
                       >
-                        {{ ptzLoading ? '下发中...' : '下发测试角度' }}
+                        {{ ptzLoading ? '下发中...' : '测试服装角度' }}
                       </button>
-                      <small>{{ captureControllerDisabledReason || '测试后请点击“保存 ROI”持久化该角度' }}</small>
-                      <p v-if="ptzMessage" class="camera-message" :class="{ error: ptzMessageIsError }">
-                        {{ ptzMessage }}
-                      </p>
                     </div>
+                    <div class="capture-preset-config">
+                      <div class="roi-preset-title">人物拍摄角度</div>
+                      <div class="capture-preset-grid">
+                        <label>
+                          <span>人物 Pan（SG90）</span>
+                          <input v-model.number="roiDraft.personCapturePan" type="number" min="0" max="180" step="1" />
+                        </label>
+                        <label>
+                          <span>人物 Tilt（SG90）</span>
+                          <input v-model.number="roiDraft.personCaptureTilt" type="number" min="0" max="180" step="1" />
+                        </label>
+                      </div>
+                      <button
+                        class="btn-secondary capture-preset-preview"
+                        type="button"
+                        :disabled="ptzDisabled"
+                        @click="applyCapturePreset('person')"
+                      >
+                        {{ ptzLoading ? '下发中...' : '测试人物角度' }}
+                      </button>
+                    </div>
+                    <div class="capture-preset-config flow-upload-config">
+                      <label class="flow-upload-toggle">
+                        <input v-model="roiDraft.flowUploadEnabled" type="checkbox" role="switch" />
+                        <span>自动人流拍摄</span>
+                      </label>
+                      <label>
+                        <span>上传间隔（秒）</span>
+                        <input
+                          v-model.number="roiDraft.flowUploadIntervalSeconds"
+                          type="number"
+                          min="5"
+                          max="3600"
+                          step="1"
+                          :disabled="!roiDraft.flowUploadEnabled"
+                        />
+                      </label>
+                      <small>开启后拍照控制器使用人物角度，默认每 30 秒自动上传一张人流图片。</small>
+                    </div>
+                    <small class="capture-config-hint">{{ captureControllerDisabledReason || '测试后请点击“保存 ROI”持久化配置' }}</small>
+                    <p v-if="ptzMessage" class="camera-message" :class="{ error: ptzMessageIsError }">
+                      {{ ptzMessage }}
+                    </p>
                   </div>
 
                   <div class="roi-calibration-layout">
@@ -1094,8 +1133,12 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
     camChipId,
     sliderLampChipId: '',
     captureControllerChipId: '',
-    capturePan: 90,
-    captureTilt: 90,
+    garmentCapturePan: 90,
+    garmentCaptureTilt: 90,
+    personCapturePan: 90,
+    personCaptureTilt: 90,
+    flowUploadEnabled: false,
+    flowUploadIntervalSeconds: 30,
     configured: false,
     sliderPresets: createDefaultSliderPresetMap(),
     sliderMoveTimes: createDefaultSliderMoveTimeMap(),
@@ -1141,8 +1184,12 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
     camChipId,
     sliderLampChipId: String(value?.sliderLampChipId || '').trim(),
     captureControllerChipId: String(value?.captureControllerChipId || '').trim(),
-    capturePan: normalizeCaptureAngle(value?.capturePan),
-    captureTilt: normalizeCaptureAngle(value?.captureTilt),
+    garmentCapturePan: normalizeCaptureAngle(value?.garmentCapturePan ?? value?.capturePan),
+    garmentCaptureTilt: normalizeCaptureAngle(value?.garmentCaptureTilt ?? value?.captureTilt),
+    personCapturePan: normalizeCaptureAngle(value?.personCapturePan),
+    personCaptureTilt: normalizeCaptureAngle(value?.personCaptureTilt),
+    flowUploadEnabled: Boolean(value?.flowUploadEnabled),
+    flowUploadIntervalSeconds: normalizeFlowUploadInterval(value?.flowUploadIntervalSeconds),
     configured: Boolean(value?.configured) || rois.every(isRoiReady),
     sliderPresets: normalizeSliderPresetMap(value),
     sliderMoveTimes: normalizeSliderMoveTimeMap(value),
@@ -1153,6 +1200,11 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
 function normalizeCaptureAngle(value: unknown) {
   const numeric = value == null || value === '' ? 90 : Number(value)
   return Math.round(clamp(Number.isFinite(numeric) ? numeric : 90, 0, 180))
+}
+
+function normalizeFlowUploadInterval(value: unknown) {
+  const numeric = value == null || value === '' ? 30 : Number(value)
+  return Math.round(clamp(Number.isFinite(numeric) ? numeric : 30, 5, 3600))
 }
 
 function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefined): Record<string, number> {
@@ -1490,7 +1542,7 @@ async function retryLastCapture() {
   await createCaptureTaskForTarget(capture.targetIndex, capture.targetChipId)
 }
 
-async function applyCapturePreset() {
+async function applyCapturePreset(kind: 'garment' | 'person') {
   const controller = captureControllerDevice.value
   if (!controller?.chipId || ptzDisabled.value) {
     ptzMessageIsError.value = true
@@ -1504,13 +1556,20 @@ async function applyCapturePreset() {
 
   try {
     const normalized = normalizeRoiConfig(roiDraft.value, props.device.chipId || '')
-    roiDraft.value.capturePan = normalized.capturePan
-    roiDraft.value.captureTilt = normalized.captureTilt
+    const pan = kind === 'garment' ? normalized.garmentCapturePan : normalized.personCapturePan
+    const tilt = kind === 'garment' ? normalized.garmentCaptureTilt : normalized.personCaptureTilt
+    if (kind === 'garment') {
+      roiDraft.value.garmentCapturePan = pan
+      roiDraft.value.garmentCaptureTilt = tilt
+    } else {
+      roiDraft.value.personCapturePan = pan
+      roiDraft.value.personCaptureTilt = tilt
+    }
     await sendArmPosition(controller.chipId, {
-      pan: normalized.capturePan,
-      tilt: normalized.captureTilt,
+      pan,
+      tilt,
     })
-    ptzMessage.value = `已下发 Pan ${normalized.capturePan}° / Tilt ${normalized.captureTilt}°`
+    ptzMessage.value = `已下发${kind === 'garment' ? '服装' : '人物'}角度：Pan ${pan}° / Tilt ${tilt}°`
   } catch (error) {
     ptzMessageIsError.value = true
     ptzMessage.value = getErrorMessage(error, '拍照舵机预置下发失败')
@@ -2749,6 +2808,32 @@ onBeforeUnmount(() => {
   margin-top: 6px;
   color: #64748b;
   font-size: 11px;
+}
+
+.capture-config-hint {
+  display: block;
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.flow-upload-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.roi-editor-item .flow-upload-toggle > input {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+  accent-color: #0ea5e9;
+}
+
+.roi-editor-item .flow-upload-toggle > span {
+  margin: 0;
+  color: #334155;
+  font-size: 13px;
 }
 
 .roi-preset-group {

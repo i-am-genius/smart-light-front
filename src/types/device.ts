@@ -225,7 +225,15 @@ export interface CamRoiConfig {
   camChipId: string
   sliderLampChipId?: string
   captureControllerChipId?: string
+  garmentCapturePan: number
+  garmentCaptureTilt: number
+  personCapturePan: number
+  personCaptureTilt: number
+  flowUploadEnabled: boolean
+  flowUploadIntervalSeconds: number
+  /** @deprecated 仅用于读取旧配置 */
   capturePan?: number
+  /** @deprecated 仅用于读取旧配置 */
   captureTilt?: number
   configured?: boolean
   sliderPresets: Record<string, number>
