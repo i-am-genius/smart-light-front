@@ -363,22 +363,34 @@
                       </button>
                     </div>
                     <div class="capture-preset-config flow-upload-config">
-                      <label class="flow-upload-toggle">
-                        <input v-model="roiDraft.flowUploadEnabled" type="checkbox" role="switch" />
-                        <span>自动人流拍摄</span>
-                      </label>
-                      <label>
-                        <span>上传间隔（秒）</span>
-                        <input
-                          v-model.number="roiDraft.flowUploadIntervalSeconds"
-                          type="number"
-                          min="5"
-                          max="3600"
-                          step="1"
-                          :disabled="!roiDraft.flowUploadEnabled"
-                        />
-                      </label>
-                      <small>开启后拍照控制器使用人物角度，默认每 30 秒自动上传一张人流图片。</small>
+                      <div class="flow-upload-row">
+                        <label class="flow-upload-toggle">
+                          <span class="flow-upload-label">自动人流拍摄</span>
+                          <span class="flow-upload-control">
+                            <input
+                              v-model="roiDraft.flowUploadEnabled"
+                              class="flow-upload-switch-input"
+                              type="checkbox"
+                              role="switch"
+                            />
+                            <span class="flow-upload-switch-track" aria-hidden="true"></span>
+                            <span class="flow-upload-state">
+                              {{ roiDraft.flowUploadEnabled ? '已开启' : '已关闭' }}
+                            </span>
+                          </span>
+                        </label>
+                        <label class="flow-upload-interval">
+                          <span>上传间隔（秒）</span>
+                          <input
+                            v-model.number="roiDraft.flowUploadIntervalSeconds"
+                            type="number"
+                            min="5"
+                            max="3600"
+                            step="1"
+                            :disabled="!roiDraft.flowUploadEnabled"
+                          />
+                        </label>
+                      </div>
                     </div>
                     <small class="capture-config-hint">{{ captureControllerDisabledReason || '测试后请点击设备详情底部“保存”持久化配置' }}</small>
                     <p v-if="ptzMessage" class="camera-message" :class="{ error: ptzMessageIsError }">
@@ -2817,23 +2829,102 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
-.flow-upload-toggle {
-  display: flex !important;
-  align-items: center;
+.flow-upload-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
   gap: 8px;
 }
 
-.roi-editor-item .flow-upload-toggle > input {
-  width: 18px;
-  min-height: 18px;
-  margin: 0;
-  accent-color: #0ea5e9;
+.roi-editor-item .flow-upload-row > label {
+  min-width: 0;
+  margin-top: 0;
 }
 
-.roi-editor-item .flow-upload-toggle > span {
+.roi-editor-item .flow-upload-toggle > .flow-upload-label {
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roi-editor-item .flow-upload-toggle > .flow-upload-control {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  box-sizing: border-box;
   margin: 0;
-  color: #334155;
-  font-size: 13px;
+  padding: 0 10px;
+  border: 1px solid #dbe3f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.roi-editor-item .flow-upload-switch-input {
+  position: absolute;
+  width: 1px;
+  min-height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.flow-upload-switch-track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.flow-upload-switch-track::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+  content: '';
+  transition: transform 0.2s ease;
+}
+
+.flow-upload-switch-input:checked + .flow-upload-switch-track {
+  background: #2563eb;
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.18);
+}
+
+.flow-upload-switch-input:checked + .flow-upload-switch-track::after {
+  transform: translateX(16px);
+}
+
+.flow-upload-switch-input:focus-visible + .flow-upload-switch-track {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.roi-editor-item .flow-upload-control > .flow-upload-state {
+  overflow: hidden;
+  margin: 0 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roi-editor-item .flow-upload-switch-input:checked ~ .flow-upload-state {
+  color: #1d4ed8;
+}
+
+.roi-editor-item .flow-upload-interval > input:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 .roi-preset-group {
