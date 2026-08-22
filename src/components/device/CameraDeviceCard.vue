@@ -487,22 +487,8 @@
                           </div>
                         </div>
                         <div class="roi-preset-group collision-config">
-                          <div class="roi-preset-title">滑轨碰撞避让</div>
+                          <div class="roi-preset-title">滑轨沿途灯具回零</div>
                           <div class="collision-config-grid">
-                            <label>
-                              <span>灯具碰撞中心</span>
-                              <div class="roi-preset-input">
-                                <input v-model.number="roi.collisionCenterMm" type="number" min="0" max="2500" step="1" />
-                                <small>mm</small>
-                              </div>
-                            </label>
-                            <label>
-                              <span>两侧避让距离</span>
-                              <div class="roi-preset-input">
-                                <input v-model.number="roi.collisionClearanceMm" type="number" min="0.1" max="2500" step="1" />
-                                <small>mm</small>
-                              </div>
-                            </label>
                             <label>
                               <span>回零最坏时间</span>
                               <div class="roi-preset-input">
@@ -511,7 +497,7 @@
                               </div>
                             </label>
                           </div>
-                          <small class="collision-config-hint">滑轨经过该区前，灯会先临时转到 Pan 0° / Tilt 0°；系统按此实测最坏时间再加 0.3 秒确认避让。</small>
+                          <small class="collision-config-hint">系统按区域 1/2/3 的 Slider 坐标自动判断沿途灯具，移动前全部转到 Pan 0° / Tilt 0°；并按此实测最坏时间再加 0.3 秒等待。</small>
                         </div>
                       </div>
                     </div>
@@ -1354,13 +1340,7 @@ function isRoiReady(roi: CamRoiItem) {
 }
 
 function isCollisionSafetyReady(rois: CamRoiItem[]) {
-  return rois.slice(0, 3).every(roi => (
-    Number.isFinite(Number(roi.collisionCenterMm))
-    && Number(roi.collisionCenterMm) >= 0
-    && Number(roi.collisionCenterMm) <= 2500
-    && Number(roi.collisionClearanceMm) > 0
-    && Number(roi.collisionParkTimeSeconds) > 0
-  ))
+  return rois.slice(0, 3).every(roi => Number(roi.collisionParkTimeSeconds) > 0)
 }
 
 function clamp(value: unknown, min = 0, max = 1) {
@@ -1745,7 +1725,7 @@ async function persistRoiConfig(): Promise<boolean> {
       roiMessage.value = 'ROI 已保存，但仍有区域未绑定目标灯'
       roiMessageIsError.value = true
     } else if (!isCollisionSafetyReady(payload.rois)) {
-      roiMessage.value = 'ROI 已保存，但碰撞中心、避让距离或回零时间尚未完整标定'
+      roiMessage.value = 'ROI 已保存，但灯具回零最坏时间尚未完整标定'
       roiMessageIsError.value = true
     } else if (!payload.sliderLampChipId) {
       roiMessage.value = 'ROI 已保存，但还未绑定滑轨控制灯'
@@ -3092,7 +3072,7 @@ onBeforeUnmount(() => {
 
 .collision-config-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 320px);
   gap: 8px;
 }
 
