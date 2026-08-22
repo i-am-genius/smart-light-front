@@ -80,5 +80,12 @@ export function pickCamRoiFields(value: CamRoiItem): CamRoiItem {
     y: value.y,
     w: value.w,
     h: value.h,
+    garmentCapturePan: value.garmentCapturePan,
+    garmentCaptureTilt: value.garmentCaptureTilt,
+    personCapturePan: value.personCapturePan,
+    personCaptureTilt: value.personCaptureTilt,
+    collisionCenterMm: value.collisionCenterMm,
+    collisionClearanceMm: value.collisionClearanceMm,
+    collisionParkTimeSeconds: value.collisionParkTimeSeconds,
   }
 }

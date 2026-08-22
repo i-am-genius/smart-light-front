@@ -320,47 +320,49 @@
                         placeholder="选择负责舵机与拍照转发的控制器"
                       />
                     </label>
-                    <div class="capture-preset-config">
-                      <div class="roi-preset-title">服装拍摄角度</div>
-                      <div class="capture-preset-grid">
-                        <label>
-                          <span>服装 Pan（SG90）</span>
-                          <input v-model.number="roiDraft.garmentCapturePan" type="number" min="0" max="180" step="1" />
+                    <div class="roi-preset-group standby-config">
+                      <div class="roi-preset-title">全局拍摄结束待机位</div>
+                      <div class="roi-preset-grid">
+                        <label class="roi-slider-position-field">
+                          <span>待机 Slider：</span>
+                          <div class="roi-preset-input">
+                            <input v-model.number="roiDraft.sliderPresets.standby" type="number" min="0" max="2500" step="1" />
+                            <small>mm</small>
+                          </div>
                         </label>
-                        <label>
-                          <span>服装 Tilt（SG90）</span>
-                          <input v-model.number="roiDraft.garmentCaptureTilt" type="number" min="0" max="180" step="1" />
-                        </label>
+                        <div class="roi-move-times-field">
+                          <span title="从 0 mm 移动到待机位置的实测时间">移动时间：</span>
+                          <div class="roi-move-time-row">
+                            <BaseSelect
+                              v-model="standbySpeedSelection"
+                              class="roi-speed-select"
+                              :options="sliderSpeedOptions"
+                            />
+                            <div class="roi-preset-input">
+                              <input
+                                v-model.number="roiDraft.sliderMoveTimes.standby[standbySpeedSelection]"
+                                type="number"
+                                min="0"
+                                max="3600"
+                                step="0.1"
+                                inputmode="decimal"
+                              />
+                              <small>s</small>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <button
-                        class="btn-secondary capture-preset-preview"
-                        type="button"
-                        :disabled="ptzDisabled"
-                        @click="applyCapturePreset('garment')"
-                      >
-                        {{ ptzLoading ? '下发中...' : '测试服装角度' }}
-                      </button>
-                    </div>
-                    <div class="capture-preset-config">
-                      <div class="roi-preset-title">人物拍摄角度</div>
-                      <div class="capture-preset-grid">
-                        <label>
-                          <span>人物 Pan（SG90）</span>
-                          <input v-model.number="roiDraft.personCapturePan" type="number" min="0" max="180" step="1" />
-                        </label>
-                        <label>
-                          <span>人物 Tilt（SG90）</span>
-                          <input v-model.number="roiDraft.personCaptureTilt" type="number" min="0" max="180" step="1" />
-                        </label>
+                      <div class="standby-actions">
+                        <button
+                          class="btn-secondary"
+                          type="button"
+                          :disabled="standbyRecommendationMm == null"
+                          @click="applyStandbyRecommendation"
+                        >
+                          设为区域 2 与最远灯的中点
+                        </button>
+                        <small>待机位必须严格位于区域 2 与距它最远的灯之间。</small>
                       </div>
-                      <button
-                        class="btn-secondary capture-preset-preview"
-                        type="button"
-                        :disabled="ptzDisabled"
-                        @click="applyCapturePreset('person')"
-                      >
-                        {{ ptzLoading ? '下发中...' : '测试人物角度' }}
-                      </button>
                     </div>
                     <div class="capture-preset-config flow-upload-config">
                       <div class="flow-upload-row">
@@ -392,7 +394,7 @@
                         </label>
                       </div>
                     </div>
-                    <small class="capture-config-hint">{{ captureControllerDisabledReason || '测试后请点击设备详情底部“保存”持久化配置' }}</small>
+                    <small class="capture-config-hint">{{ captureControllerDisabledReason || '服装与人物角度在下方各区域中独立设置，测试后请点击底部“保存”' }}</small>
                     <p v-if="ptzMessage" class="camera-message" :class="{ error: ptzMessageIsError }">
                       {{ ptzMessage }}
                     </p>
@@ -446,6 +448,48 @@
                           <span>区域名称</span>
                           <input v-model.trim="roi.areaName" type="text" placeholder="如 新品展示区" />
                         </label>
+                        <div class="capture-preset-config region-capture-preset">
+                          <div class="roi-preset-title">服装拍摄角度</div>
+                          <div class="capture-preset-grid">
+                            <label>
+                              <span>服装 Pan（SG90）</span>
+                              <input v-model.number="roi.garmentCapturePan" type="number" min="0" max="180" step="1" />
+                            </label>
+                            <label>
+                              <span>服装 Tilt（SG90）</span>
+                              <input v-model.number="roi.garmentCaptureTilt" type="number" min="0" max="180" step="1" />
+                            </label>
+                          </div>
+                          <button
+                            class="btn-secondary capture-preset-preview"
+                            type="button"
+                            :disabled="ptzDisabled"
+                            @click="applyCapturePreset('garment', roi)"
+                          >
+                            {{ ptzLoading ? '下发中...' : '测试服装角度' }}
+                          </button>
+                        </div>
+                        <div class="capture-preset-config region-capture-preset">
+                          <div class="roi-preset-title">人物拍摄角度</div>
+                          <div class="capture-preset-grid">
+                            <label>
+                              <span>人物 Pan（SG90）</span>
+                              <input v-model.number="roi.personCapturePan" type="number" min="0" max="180" step="1" />
+                            </label>
+                            <label>
+                              <span>人物 Tilt（SG90）</span>
+                              <input v-model.number="roi.personCaptureTilt" type="number" min="0" max="180" step="1" />
+                            </label>
+                          </div>
+                          <button
+                            class="btn-secondary capture-preset-preview"
+                            type="button"
+                            :disabled="ptzDisabled"
+                            @click="applyCapturePreset('person', roi)"
+                          >
+                            {{ ptzLoading ? '下发中...' : '测试人物角度' }}
+                          </button>
+                        </div>
                         <div class="roi-preset-group">
                           <div class="roi-preset-title">滑轨预设</div>
                           <div class="roi-preset-grid">
@@ -478,6 +522,33 @@
                               </div>
                             </div>
                           </div>
+                        </div>
+                        <div class="roi-preset-group collision-config">
+                          <div class="roi-preset-title">滑轨碰撞避让</div>
+                          <div class="collision-config-grid">
+                            <label>
+                              <span>灯具碰撞中心</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roi.collisionCenterMm" type="number" min="0" max="2500" step="1" />
+                                <small>mm</small>
+                              </div>
+                            </label>
+                            <label>
+                              <span>两侧避让距离</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roi.collisionClearanceMm" type="number" min="0.1" max="2500" step="1" />
+                                <small>mm</small>
+                              </div>
+                            </label>
+                            <label>
+                              <span>回零最坏时间</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roi.collisionParkTimeSeconds" type="number" min="0.1" max="3600" step="0.1" inputmode="decimal" />
+                                <small>s</small>
+                              </div>
+                            </label>
+                          </div>
+                          <small class="collision-config-hint">滑轨经过该区前，灯会先临时转到 Pan 0° / Tilt 0°；系统按此实测最坏时间再加 0.3 秒确认避让。</small>
                         </div>
                       </div>
                     </div>
@@ -657,6 +728,7 @@ const sliderSpeedSelection = reactive<Record<number, keyof CamSliderMoveTimes>>(
   2: 'normal',
   3: 'normal',
 })
+const standbySpeedSelection = ref<keyof CamSliderMoveTimes>('normal')
 
 const displayNameText = computed(() => {
   const index = Number.isFinite(props.camIndex) && Number(props.camIndex) > 0
@@ -720,8 +792,19 @@ const captureControllerDisabledReason = computed(() => {
 
 const roiReady = computed(() => {
   const configured = props.device.camRoiConfig?.configured ?? roiDraft.value.configured
-  if (configured) return true
-  return roiDraft.value.rois.slice(0, 3).every(isRoiReady)
+  const roisReady = configured || roiDraft.value.rois.slice(0, 3).every(isRoiReady)
+  return roisReady && isCollisionSafetyReady(roiDraft.value.rois) && isStandbyReady(roiDraft.value)
+})
+
+const standbyRecommendationMm = computed(() => {
+  const positions = [1, 2, 3].map(index => Number(roiDraft.value.sliderPresets[String(index)]))
+  const regionTwoMm = positions[1]
+  if (!positions.every(Number.isFinite)) return null
+  const farthestMm = positions.reduce((selected, position) => (
+    Math.abs(position - regionTwoMm) > Math.abs(selected - regionTwoMm) ? position : selected
+  ), regionTwoMm)
+  if (Math.abs(farthestMm - regionTwoMm) < 1) return null
+  return Math.round((regionTwoMm + farthestMm) / 2)
 })
 
 const roiWarningText = computed(() => {
@@ -830,6 +913,7 @@ const isCamBusy = computed(() => {
     'uploading',
     'returning_center',
     'returning_target_2',
+    'returning_standby',
     'ready_tracking',
     'tracking',
   ].includes(normalizedWorkStatus.value)
@@ -1111,6 +1195,7 @@ function getCamWorkStatusText(status: CamWorkStatus) {
     uploading: '上传照片中',
     returning_center: '回中心中',
     returning_target_2: '返回区域 2',
+    returning_standby: '返回待机位',
     batch_complete: '批量拍摄完成',
     ready_tracking: '准备追踪',
     tracking: '追踪中',
@@ -1134,10 +1219,6 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
     camChipId,
     sliderLampChipId: '',
     captureControllerChipId: '',
-    garmentCapturePan: 90,
-    garmentCaptureTilt: 90,
-    personCapturePan: 90,
-    personCaptureTilt: 90,
     flowUploadEnabled: false,
     flowUploadIntervalSeconds: 30,
     configured: false,
@@ -1148,17 +1229,21 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
 }
 
 function createDefaultSliderMoveTimeMap(): Record<string, CamSliderMoveTimes> {
-  return [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((map, index) => {
-    map[String(index)] = { slow: 0, normal: 0, fast: 0 }
-    return map
+  const map = [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((result, index) => {
+    result[String(index)] = { slow: 0, normal: 0, fast: 0 }
+    return result
   }, {})
+  map.standby = { slow: 0, normal: 0, fast: 0 }
+  return map
 }
 
 function createDefaultSliderPresetMap(): Record<string, number> {
-  return [1, 2, 3].reduce<Record<string, number>>((map, index) => {
-    map[String(index)] = 0
-    return map
+  const map = [1, 2, 3].reduce<Record<string, number>>((result, index) => {
+    result[String(index)] = 0
+    return result
   }, {})
+  map.standby = 0
+  return map
 }
 
 function createDefaultRoi(targetIndex: number): CamRoiItem {
@@ -1172,28 +1257,41 @@ function createDefaultRoi(targetIndex: number): CamRoiItem {
     y: 0.3,
     w: width,
     h: height,
+    garmentCapturePan: 90,
+    garmentCaptureTilt: 90,
+    personCapturePan: 90,
+    personCaptureTilt: 90,
+    collisionCenterMm: 0,
+    collisionClearanceMm: 0,
+    collisionParkTimeSeconds: 0,
   }
 }
 
 function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, camChipId: string): CamRoiConfig {
   const sourceRois = Array.isArray(value?.rois) ? value.rois : []
+  const legacyAngles = {
+    garmentPan: normalizeCaptureAngle(value?.garmentCapturePan ?? value?.capturePan),
+    garmentTilt: normalizeCaptureAngle(value?.garmentCaptureTilt ?? value?.captureTilt),
+    personPan: normalizeCaptureAngle(value?.personCapturePan),
+    personTilt: normalizeCaptureAngle(value?.personCaptureTilt),
+  }
   const rois = [1, 2, 3].map((index) => {
     const source = sourceRois.find(item => Number(item?.targetIndex) === index)
-    return normalizeRoi(source, index)
+    return normalizeRoi(source, index, legacyAngles)
   })
+  const sliderPresets = normalizeSliderPresetMap(value)
+  const sliderMoveTimes = normalizeSliderMoveTimeMap(value)
   return {
     camChipId,
     sliderLampChipId: String(value?.sliderLampChipId || '').trim(),
     captureControllerChipId: String(value?.captureControllerChipId || '').trim(),
-    garmentCapturePan: normalizeCaptureAngle(value?.garmentCapturePan ?? value?.capturePan),
-    garmentCaptureTilt: normalizeCaptureAngle(value?.garmentCaptureTilt ?? value?.captureTilt),
-    personCapturePan: normalizeCaptureAngle(value?.personCapturePan),
-    personCaptureTilt: normalizeCaptureAngle(value?.personCaptureTilt),
     flowUploadEnabled: Boolean(value?.flowUploadEnabled),
     flowUploadIntervalSeconds: normalizeFlowUploadInterval(value?.flowUploadIntervalSeconds),
-    configured: Boolean(value?.configured) || rois.every(isRoiReady),
-    sliderPresets: normalizeSliderPresetMap(value),
-    sliderMoveTimes: normalizeSliderMoveTimeMap(value),
+    configured: (Boolean(value?.configured) || rois.every(isRoiReady))
+      && isCollisionSafetyReady(rois)
+      && isStandbyPositionReady(sliderPresets),
+    sliderPresets,
+    sliderMoveTimes,
     rois,
   }
 }
@@ -1220,7 +1318,7 @@ function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefine
   const legacyTracking = isPlainObject(legacyValue?.trackingPresets)
     ? legacyValue.trackingPresets
     : {}
-  return [1, 2, 3].reduce<Record<string, number>>((map, index) => {
+  const normalized = [1, 2, 3].reduce<Record<string, number>>((map, index) => {
     const key = String(index)
     const legacyCapturePreset = isPlainObject(legacyCapture[key]) ? legacyCapture[key] : {}
     const legacyTrackingPreset = isPlainObject(legacyTracking[key]) ? legacyTracking[key] : {}
@@ -1228,13 +1326,15 @@ function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefine
     map[key] = Math.round(Math.max(0, Math.min(2500, Number.isFinite(numeric) ? numeric : 0)))
     return map
   }, {})
+  normalized.standby = normalizeSliderPosition(source.standby)
+  return normalized
 }
 
 function normalizeSliderMoveTimeMap(
   value: Partial<CamRoiConfig> | null | undefined,
 ): Record<string, CamSliderMoveTimes> {
   const source = isPlainObject(value?.sliderMoveTimes) ? value.sliderMoveTimes : {}
-  return [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((map, index) => {
+  const normalized = [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((map, index) => {
     const key = String(index)
     const rawTimes = source[key]
     const sourceTimes: Record<string, unknown> = isPlainObject(rawTimes) ? rawTimes : {}
@@ -1245,6 +1345,18 @@ function normalizeSliderMoveTimeMap(
     }
     return map
   }, {})
+  const standbyTimes: Record<string, unknown> = isPlainObject(source.standby) ? source.standby : {}
+  normalized.standby = {
+    slow: normalizeSliderMoveTime(standbyTimes.slow),
+    normal: normalizeSliderMoveTime(standbyTimes.normal),
+    fast: normalizeSliderMoveTime(standbyTimes.fast),
+  }
+  return normalized
+}
+
+function normalizeSliderPosition(value: unknown) {
+  const numeric = Number(value)
+  return Math.round(Math.max(0, Math.min(2500, Number.isFinite(numeric) ? numeric : 0)))
 }
 
 function normalizeSliderMoveTime(value: unknown) {
@@ -1253,7 +1365,11 @@ function normalizeSliderMoveTime(value: unknown) {
   return Math.round(clamped * 1000) / 1000
 }
 
-function normalizeRoi(value: Partial<CamRoiItem> | undefined, targetIndex: number): CamRoiItem {
+function normalizeRoi(
+  value: Partial<CamRoiItem> | undefined,
+  targetIndex: number,
+  legacyAngles: { garmentPan: number; garmentTilt: number; personPan: number; personTilt: number },
+): CamRoiItem {
   const fallback = createDefaultRoi(targetIndex)
   return pickCamRoiFields({
     targetIndex,
@@ -1263,6 +1379,13 @@ function normalizeRoi(value: Partial<CamRoiItem> | undefined, targetIndex: numbe
     y: clamp(value?.y ?? fallback.y),
     w: clamp(value?.w ?? fallback.w, 0.03, 1),
     h: clamp(value?.h ?? fallback.h, 0.03, 1),
+    garmentCapturePan: normalizeCaptureAngle(value?.garmentCapturePan ?? legacyAngles.garmentPan),
+    garmentCaptureTilt: normalizeCaptureAngle(value?.garmentCaptureTilt ?? legacyAngles.garmentTilt),
+    personCapturePan: normalizeCaptureAngle(value?.personCapturePan ?? legacyAngles.personPan),
+    personCaptureTilt: normalizeCaptureAngle(value?.personCaptureTilt ?? legacyAngles.personTilt),
+    collisionCenterMm: normalizeSliderPosition(value?.collisionCenterMm),
+    collisionClearanceMm: normalizeSliderMoveTime(value?.collisionClearanceMm),
+    collisionParkTimeSeconds: normalizeSliderMoveTime(value?.collisionParkTimeSeconds),
   })
 }
 
@@ -1272,6 +1395,40 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isRoiReady(roi: CamRoiItem) {
   return Boolean(roi.targetChipId && roi.w >= 0.03 && roi.h >= 0.03)
+}
+
+function isCollisionSafetyReady(rois: CamRoiItem[]) {
+  return rois.slice(0, 3).every(roi => (
+    Number.isFinite(Number(roi.collisionCenterMm))
+    && Number(roi.collisionCenterMm) >= 0
+    && Number(roi.collisionCenterMm) <= 2500
+    && Number(roi.collisionClearanceMm) > 0
+    && Number(roi.collisionParkTimeSeconds) > 0
+  ))
+}
+
+function isStandbyPositionReady(sliderPresets: Record<string, number>) {
+  const regionTwoMm = Number(sliderPresets['2'])
+  const standbyMm = Number(sliderPresets.standby)
+  const positions = [1, 2, 3].map(index => Number(sliderPresets[String(index)]))
+  if (![...positions, standbyMm].every(Number.isFinite)) return false
+  const farthestMm = positions.reduce((selected, position) => (
+    Math.abs(position - regionTwoMm) > Math.abs(selected - regionTwoMm) ? position : selected
+  ), regionTwoMm)
+  const min = Math.min(regionTwoMm, farthestMm)
+  const max = Math.max(regionTwoMm, farthestMm)
+  return standbyMm > min && standbyMm < max
+}
+
+function isStandbyReady(config: CamRoiConfig) {
+  const times = config.sliderMoveTimes.standby
+  return isStandbyPositionReady(config.sliderPresets)
+    && Boolean(times && Object.values(times).some(time => Number(time) > 0))
+}
+
+function applyStandbyRecommendation() {
+  if (standbyRecommendationMm.value == null) return
+  roiDraft.value.sliderPresets.standby = standbyRecommendationMm.value
 }
 
 function clamp(value: unknown, min = 0, max = 1) {
@@ -1547,7 +1704,7 @@ async function retryLastCapture() {
   await createCaptureTaskForTarget(capture.targetIndex, capture.targetChipId)
 }
 
-async function applyCapturePreset(kind: 'garment' | 'person') {
+async function applyCapturePreset(kind: 'garment' | 'person', roi: CamRoiItem) {
   const controller = captureControllerDevice.value
   if (!controller?.chipId || ptzDisabled.value) {
     ptzMessageIsError.value = true
@@ -1561,20 +1718,22 @@ async function applyCapturePreset(kind: 'garment' | 'person') {
 
   try {
     const normalized = normalizeRoiConfig(roiDraft.value, props.device.chipId || '')
-    const pan = kind === 'garment' ? normalized.garmentCapturePan : normalized.personCapturePan
-    const tilt = kind === 'garment' ? normalized.garmentCaptureTilt : normalized.personCaptureTilt
+    const normalizedRoi = normalized.rois.find(item => item.targetIndex === roi.targetIndex)
+    if (!normalizedRoi) throw new Error(`区域 ${roi.targetIndex} 配置不存在`)
+    const pan = kind === 'garment' ? normalizedRoi.garmentCapturePan : normalizedRoi.personCapturePan
+    const tilt = kind === 'garment' ? normalizedRoi.garmentCaptureTilt : normalizedRoi.personCaptureTilt
     if (kind === 'garment') {
-      roiDraft.value.garmentCapturePan = pan
-      roiDraft.value.garmentCaptureTilt = tilt
+      roi.garmentCapturePan = pan
+      roi.garmentCaptureTilt = tilt
     } else {
-      roiDraft.value.personCapturePan = pan
-      roiDraft.value.personCaptureTilt = tilt
+      roi.personCapturePan = pan
+      roi.personCaptureTilt = tilt
     }
     await sendArmPosition(controller.chipId, {
       pan,
       tilt,
     })
-    ptzMessage.value = `已下发${kind === 'garment' ? '服装' : '人物'}角度：Pan ${pan}° / Tilt ${tilt}°`
+    ptzMessage.value = `区域 ${roi.targetIndex} 已下发${kind === 'garment' ? '服装' : '人物'}角度：Pan ${pan}° / Tilt ${tilt}°`
   } catch (error) {
     ptzMessageIsError.value = true
     ptzMessage.value = getErrorMessage(error, '拍照舵机预置下发失败')
@@ -1644,12 +1803,20 @@ async function persistRoiConfig(): Promise<boolean> {
 
   const payload = normalizeRoiConfig(roiDraft.value, props.device.chipId)
   payload.configured = payload.rois.every(isRoiReady)
+    && isCollisionSafetyReady(payload.rois)
+    && isStandbyReady(payload)
 
   try {
     const result = await saveCamRoiConfig(props.device.chipId, payload)
     roiDraft.value = normalizeRoiConfig(result, props.device.chipId)
-    if (!payload.configured) {
+    if (!payload.rois.every(isRoiReady)) {
       roiMessage.value = 'ROI 已保存，但仍有区域未绑定目标灯'
+      roiMessageIsError.value = true
+    } else if (!isCollisionSafetyReady(payload.rois)) {
+      roiMessage.value = 'ROI 已保存，但碰撞中心、避让距离或回零时间尚未完整标定'
+      roiMessageIsError.value = true
+    } else if (!isStandbyReady(payload)) {
+      roiMessage.value = 'ROI 已保存，但待机位置或待机移动时间尚未正确标定'
       roiMessageIsError.value = true
     } else if (!payload.sliderLampChipId) {
       roiMessage.value = 'ROI 已保存，但还未绑定滑轨控制灯'
@@ -2983,6 +3150,31 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+.standby-config {
+  margin-top: 14px;
+}
+
+.standby-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.standby-actions small,
+.collision-config-hint {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.collision-config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .device-info-head {
   gap: 10px;
   margin-bottom: 10px;
@@ -3476,6 +3668,7 @@ onBeforeUnmount(() => {
   .self-test-grid,
   .roi-number-grid,
   .roi-preset-grid,
+  .collision-config-grid,
   .ptz-grid {
     grid-template-columns: 1fr;
   }

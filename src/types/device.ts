@@ -207,6 +207,16 @@ export interface CamRoiItem {
   y: number
   w: number
   h: number
+  garmentCapturePan: number
+  garmentCaptureTilt: number
+  personCapturePan: number
+  personCaptureTilt: number
+  /** 灯具在滑轨上的物理碰撞中心，单位 mm */
+  collisionCenterMm?: number
+  /** 碰撞中心两侧的避让距离，单位 mm */
+  collisionClearanceMm?: number
+  /** 灯具回到 Pan=0/Tilt=0 的最坏实测时间，单位秒 */
+  collisionParkTimeSeconds?: number
 }
 
 export interface CamPtzPreset {
@@ -225,10 +235,14 @@ export interface CamRoiConfig {
   camChipId: string
   sliderLampChipId?: string
   captureControllerChipId?: string
-  garmentCapturePan: number
-  garmentCaptureTilt: number
-  personCapturePan: number
-  personCaptureTilt: number
+  /** @deprecated 旧版全局服装 Pan，仅用于迁移到每个区域 */
+  garmentCapturePan?: number
+  /** @deprecated 旧版全局服装 Tilt，仅用于迁移到每个区域 */
+  garmentCaptureTilt?: number
+  /** @deprecated 旧版全局人物 Pan，仅用于迁移到每个区域 */
+  personCapturePan?: number
+  /** @deprecated 旧版全局人物 Tilt，仅用于迁移到每个区域 */
+  personCaptureTilt?: number
   flowUploadEnabled: boolean
   flowUploadIntervalSeconds: number
   /** @deprecated 仅用于读取旧配置 */
