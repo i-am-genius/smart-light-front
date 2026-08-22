@@ -320,6 +320,31 @@
                         placeholder="选择负责舵机与拍照转发的控制器"
                       />
                     </label>
+                    <div class="capture-preset-config">
+                      <div class="roi-preset-title">共享拍照舵机预置</div>
+                      <div class="capture-preset-grid">
+                        <label>
+                          <span>拍照 Pan（SG90）</span>
+                          <input v-model.number="roiDraft.capturePan" type="number" min="0" max="180" step="1" />
+                        </label>
+                        <label>
+                          <span>拍照 Tilt（SG90）</span>
+                          <input v-model.number="roiDraft.captureTilt" type="number" min="0" max="180" step="1" />
+                        </label>
+                      </div>
+                      <button
+                        class="btn-secondary capture-preset-preview"
+                        type="button"
+                        :disabled="ptzDisabled"
+                        @click="applyCapturePreset"
+                      >
+                        {{ ptzLoading ? '下发中...' : '下发测试角度' }}
+                      </button>
+                      <small>{{ captureControllerDisabledReason || '测试后请点击“保存 ROI”持久化该角度' }}</small>
+                      <p v-if="ptzMessage" class="camera-message" :class="{ error: ptzMessageIsError }">
+                        {{ ptzMessage }}
+                      </p>
+                    </div>
                   </div>
 
                   <div class="roi-calibration-layout">
@@ -418,30 +443,6 @@
                   </div>
                 </section>
 
-                <section class="ptz-section">
-                  <div class="section-title-row">
-                    <h4>拍照舵机调试</h4>
-                    <span>{{ ptzStatusText }}</span>
-                  </div>
-
-                  <div class="ptz-grid">
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('yaw', 'left')">左</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('pitch', 'up')">上</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('yaw', 'right')">右</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('pitch', 'down')">下</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('roll', 'ccw')">逆时针</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('all', 'center')">回中</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('roll', 'cw')">顺时针</button>
-                  </div>
-
-                  <label class="step-row">
-                    <span>步进</span>
-                    <input v-model.number="ptzStep" type="range" min="1" max="30" />
-                    <strong>{{ ptzStep }}°</strong>
-                  </label>
-
-                  <p v-if="ptzMessage" class="camera-message error">{{ ptzMessage }}</p>
-                </section>
               </div>
 
               <div class="detail-modal-actions detail-modal-footer">
@@ -474,8 +475,6 @@ import type {
   DeviceItem,
   FirmwareChannel,
   OtaCheckResult,
-  PtzAxis,
-  PtzDirection,
 } from '../../types/device'
 import {
   checkFirmwareUpdate,
@@ -483,7 +482,7 @@ import {
   createCamCaptureTask,
   getCamRoiConfig,
   saveCamRoiConfig,
-  sendCamPtz,
+  sendArmPosition,
   startCamTracking,
   startOtaUpdate,
   stopCamTracking,
@@ -573,7 +572,7 @@ const otaCheckResult = ref<OtaCheckResult | null>(null)
 const otaMessage = ref('')
 const ptzLoading = ref(false)
 const ptzMessage = ref('')
-const ptzStep = ref(5)
+const ptzMessageIsError = ref(false)
 const aimLoading = ref(false)
 const batchCaptureLoading = ref(false)
 const aimMessage = ref('')
@@ -945,11 +944,6 @@ const canStartOta = computed(() => {
 
 const ptzDisabled = computed(() => Boolean(captureControllerDisabledReason.value) || ptzLoading.value)
 
-const ptzStatusText = computed(() => {
-  if (ptzLoading.value) return '下发中...'
-  return captureControllerDisabledReason.value || '拍照控制器可控制'
-})
-
 const selfTest = computed(() => {
   return parseSelfTestJson(props.device.selfTestJson)
 })
@@ -1100,6 +1094,8 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
     camChipId,
     sliderLampChipId: '',
     captureControllerChipId: '',
+    capturePan: 90,
+    captureTilt: 90,
     configured: false,
     sliderPresets: createDefaultSliderPresetMap(),
     sliderMoveTimes: createDefaultSliderMoveTimeMap(),
@@ -1145,11 +1141,18 @@ function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, cam
     camChipId,
     sliderLampChipId: String(value?.sliderLampChipId || '').trim(),
     captureControllerChipId: String(value?.captureControllerChipId || '').trim(),
+    capturePan: normalizeCaptureAngle(value?.capturePan),
+    captureTilt: normalizeCaptureAngle(value?.captureTilt),
     configured: Boolean(value?.configured) || rois.every(isRoiReady),
     sliderPresets: normalizeSliderPresetMap(value),
     sliderMoveTimes: normalizeSliderMoveTimeMap(value),
     rois,
   }
+}
+
+function normalizeCaptureAngle(value: unknown) {
+  const numeric = value == null || value === '' ? 90 : Number(value)
+  return Math.round(clamp(Number.isFinite(numeric) ? numeric : 90, 0, 180))
 }
 
 function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefined): Record<string, number> {
@@ -1487,22 +1490,30 @@ async function retryLastCapture() {
   await createCaptureTaskForTarget(capture.targetIndex, capture.targetChipId)
 }
 
-async function sendDirectionalPtz(axis: PtzAxis, direction: PtzDirection) {
+async function applyCapturePreset() {
   const controller = captureControllerDevice.value
-  if (!controller?.chipId || ptzDisabled.value) return
+  if (!controller?.chipId || ptzDisabled.value) {
+    ptzMessageIsError.value = true
+    ptzMessage.value = captureControllerDisabledReason.value || '拍照控制器不可用'
+    return
+  }
 
   ptzLoading.value = true
   ptzMessage.value = ''
+  ptzMessageIsError.value = false
 
   try {
-    await sendCamPtz({
-      chipId: controller.chipId,
-      axis,
-      direction,
-      step: ptzStep.value,
+    const normalized = normalizeRoiConfig(roiDraft.value, props.device.chipId || '')
+    roiDraft.value.capturePan = normalized.capturePan
+    roiDraft.value.captureTilt = normalized.captureTilt
+    await sendArmPosition(controller.chipId, {
+      pan: normalized.capturePan,
+      tilt: normalized.captureTilt,
     })
+    ptzMessage.value = `已下发 Pan ${normalized.capturePan}° / Tilt ${normalized.captureTilt}°`
   } catch (error) {
-    ptzMessage.value = getErrorMessage(error, '云台控制下发失败')
+    ptzMessageIsError.value = true
+    ptzMessage.value = getErrorMessage(error, '拍照舵机预置下发失败')
   } finally {
     ptzLoading.value = false
   }
@@ -1842,6 +1853,7 @@ watch(
     otaCheckResult.value = null
     otaMessage.value = ''
     ptzMessage.value = ''
+    ptzMessageIsError.value = false
     aimMessage.value = ''
   },
 )
@@ -2713,6 +2725,30 @@ onBeforeUnmount(() => {
 .roi-global-config .roi-number-grid,
 .roi-network-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.capture-preset-config {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe3f0;
+}
+
+.capture-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.capture-preset-preview {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.capture-preset-config > small {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 11px;
 }
 
 .roi-preset-group {

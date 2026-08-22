@@ -225,6 +225,8 @@ export interface CamRoiConfig {
   camChipId: string
   sliderLampChipId?: string
   captureControllerChipId?: string
+  capturePan?: number
+  captureTilt?: number
   configured?: boolean
   sliderPresets: Record<string, number>
   sliderMoveTimes: Record<string, CamSliderMoveTimes>

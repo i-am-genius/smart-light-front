@@ -34,10 +34,16 @@ describe('camera capture controller binding', () => {
     assert.match(addModalSource, /拍照控制器（cam_capture）/)
   })
 
-  it('persists the binding and sends manual PTZ to the bound controller', () => {
+  it('persists the binding and shared capture pose, then previews it on the bound controller', () => {
     assert.match(cameraCardSource, /roiDraft\.captureControllerChipId/)
+    assert.match(cameraCardSource, /roiDraft\.capturePan/)
+    assert.match(cameraCardSource, /roiDraft\.captureTilt/)
+    assert.match(cameraCardSource, /capturePan" type="number" min="0" max="180"/)
+    assert.match(cameraCardSource, /captureTilt" type="number" min="0" max="180"/)
     assert.match(cameraCardSource, /captureControllerDevice/)
-    assert.match(cameraCardSource, /chipId:\s*(?:captureControllerDevice\.value|controller)\.chipId/)
+    assert.match(cameraCardSource, /sendArmPosition\(controller\.chipId/)
+    assert.match(cameraCardSource, /applyCapturePreset/)
+    assert.doesNotMatch(cameraCardSource, /sendCamPtz/)
   })
 
   it('lets capture flows depend on the capture controller rather than tracking camera online state', () => {
