@@ -59,6 +59,7 @@
             <div
               ref="joystickBaseRef"
               class="joystick-container"
+              data-page-swipe-lock
               @pointerdown="startJoystick"
               @pointermove="moveJoystick"
               @pointerup="stopJoystick"

@@ -91,7 +91,7 @@
         </div>
       </div>
 
-      <div ref="viewportRef" class="three-layout-viewport"></div>
+      <div ref="viewportRef" class="three-layout-viewport" data-page-swipe-lock></div>
 
       <div class="scene-context-layer" aria-live="polite" @pointerdown.stop>
         <div v-if="selectedSlot" class="scene-context-bar workbench-glass">
@@ -3131,7 +3131,6 @@ function round(value: number) {
   }
 }
 </style>
-
 
 
 
