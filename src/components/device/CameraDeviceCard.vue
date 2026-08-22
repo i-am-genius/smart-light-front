@@ -472,11 +472,6 @@
                   </div>
 
                   <p v-if="roiMessage" class="camera-message" :class="{ error: roiMessageIsError }">{{ roiMessage }}</p>
-                  <div class="detail-modal-actions">
-                    <button class="btn-secondary" type="button" :disabled="roiLoading" @click="loadRoiConfig">
-                      {{ roiLoading ? '读取中...' : '重新读取' }}
-                    </button>
-                  </div>
                 </section>
 
               </div>

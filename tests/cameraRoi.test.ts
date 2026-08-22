@@ -148,6 +148,7 @@ describe('camera ROI helpers', () => {
     )
 
     assert.doesNotMatch(source, />\s*保存 ROI\s*</)
+    assert.doesNotMatch(source, /重新读取/)
     assert.match(source, /@click="saveDeviceBaseInfo"/)
     assert.match(saveDeviceBlock, /await persistRoiConfig\(\)/)
     assert.match(source, /async function persistRoiConfig/)
