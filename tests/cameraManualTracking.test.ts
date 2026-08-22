@@ -31,4 +31,12 @@ describe('camera manual tracking', () => {
 
     assert.doesNotMatch(guard, /present|trackingReady|isLampClothTaken/)
   })
+
+  it('starts tracking without requiring slider alignment', () => {
+    const guard = component.match(
+      /function getTrackingButtonDisabledReason[\s\S]*?\n}/,
+    )?.[0] ?? ''
+
+    assert.doesNotMatch(guard, /sliderLamp|滑轨/)
+  })
 })

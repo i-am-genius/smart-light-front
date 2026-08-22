@@ -122,6 +122,7 @@ type DeviceAddInitialData = {
 const deviceTypeOptions = [
   { label: '射灯节点（lamp）', value: 'lamp' },
   { label: '摄像头节点（cam）', value: 'cam' },
+  { label: '拍照控制器（cam_capture）', value: 'cam_capture' },
   { label: '旧摄像头灯节点（camlamp）', value: 'camlamp' },
 ]
 const props = defineProps<{

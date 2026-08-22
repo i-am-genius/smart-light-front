@@ -637,6 +637,7 @@ async function loadCurrentStore() {
 }
 
 onMounted(async () => {
+  window.addEventListener(NATIVE_BACK_EVENT, handleNativeBack)
   fabricImageCleanupTimer = window.setInterval(() => {
     assembler.clearExpired()
   }, 5_000)
@@ -1024,13 +1025,25 @@ function endPageSwitch() {
 }
 
 // ── Mobile swipe to switch tabs ──
+const PAGE_SWIPE_BLOCK_SELECTOR = [
+  'input, select, textarea, button, a',
+  '[role="slider"], [role="switch"]',
+  '[data-page-swipe-lock]',
+].join(', ')
 let swipeStartX = 0
 let swipeStartY = 0
 let swipeStartTime = 0
 let swipeTracking = false
 
+function shouldBlockPageSwipe(target: EventTarget | null) {
+  if (!target || typeof (target as Element).closest !== 'function') return false
+  return Boolean((target as Element).closest(PAGE_SWIPE_BLOCK_SELECTOR))
+}
+
 function onSwipeTouchStart(e: TouchEvent) {
-  if (pageSwitching.value) return
+  swipeTracking = false
+  if (pageSwitching.value || e.touches.length !== 1) return
+  if (shouldBlockPageSwipe(e.target)) return
   const touch = e.touches[0]
   swipeStartX = touch.clientX
   swipeStartY = touch.clientY
@@ -1069,6 +1082,41 @@ function onSwipeTouchEnd(e: TouchEvent) {
   } else if (dx > 0 && currentIndex > 0) {
     // Swipe right → previous tab
     activeTab.value = dashboardTabOrder[currentIndex - 1]
+  }
+}
+
+const NATIVE_BACK_EVENT = 'smartlight-native-back'
+const NATIVE_BACK_CLOSE_SELECTOR = [
+  '.device-detail-overlay .detail-close-btn',
+  '.modal-overlay .btn-cancel',
+  '.effect-modal-overlay .modal-close-btn',
+  '.detect-lightbox-overlay .detect-lightbox-close',
+  '.calibration-modal-backdrop .modal-close',
+  '.region-mask .region-close',
+].join(', ')
+
+function findVisibleModalCloseButton() {
+  const buttons = Array.from(document.querySelectorAll<HTMLElement>(NATIVE_BACK_CLOSE_SELECTOR))
+  return buttons.reverse().find(button => button.getClientRects().length > 0) || null
+}
+
+function handleNativeBack(event: Event) {
+  const modalCloseButton = findVisibleModalCloseButton()
+  if (modalCloseButton) {
+    event.preventDefault()
+    modalCloseButton.click()
+    return
+  }
+
+  if (activeTab.value !== 'main') {
+    event.preventDefault()
+    activeTab.value = 'main'
+    void router.replace({
+      query: {
+        ...route.query,
+        tab: 'main',
+      },
+    })
   }
 }
 
@@ -2425,9 +2473,12 @@ function handleWsMessage(message: any) {
 
     const trackingStatus = {
       chipId: message.data.chipId,
+      sessionId: message.data.sessionId,
       camChipId: message.data.camChipId,
+      trackingMode: message.data.trackingMode,
       targetChipId: message.data.targetChipId ?? message.data.lampChipId,
       targetIndex: message.data.targetIndex,
+      targetChipIds: Array.isArray(message.data.targetChipIds) ? message.data.targetChipIds : undefined,
       status: message.data.status ?? message.data.trackingStatus,
       message: message.data.message,
       timestamp: message.data.timestamp ?? message.data.updateTime,
@@ -2446,6 +2497,14 @@ function handleWsMessage(message: any) {
     if (trackingStatus.targetChipId && normalizeChipId(trackingStatus.targetChipId) !== normalizeChipId(chipId)) {
       updateDeviceByIncoming({
         chipId: trackingStatus.targetChipId,
+        trackingStatus,
+        tracking: trackingStatus.status === 'tracking',
+      })
+    }
+    for (const targetChipId of trackingStatus.targetChipIds || []) {
+      if (!targetChipId || normalizeChipId(targetChipId) === normalizeChipId(chipId)) continue
+      updateDeviceByIncoming({
+        chipId: targetChipId,
         trackingStatus,
         tracking: trackingStatus.status === 'tracking',
       })
@@ -2569,6 +2628,7 @@ onBeforeUnmount(() => {
     window.clearTimeout(pageSwitchCleanupTimer)
     pageSwitchCleanupTimer = null
   }
+  window.removeEventListener(NATIVE_BACK_EVENT, handleNativeBack)
   window.removeEventListener('person-flow-updated', handlePersonFlowUpdatedEvent)
   clearScanTimers()
   if (fabricImageCleanupTimer !== null) {

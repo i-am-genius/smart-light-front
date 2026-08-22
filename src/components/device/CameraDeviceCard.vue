@@ -3,8 +3,8 @@
     <article
       class="camera-card lamp-card"
       :class="{
-        'is-online': device.online,
-        'is-offline': !device.online,
+        'is-online': cameraCardOnline,
+        'is-offline': !cameraCardOnline,
         'online-flash': onlineFlash,
       }"
     >
@@ -12,13 +12,13 @@
         <div class="device-title-block">
           <h3>{{ displayNameText }}</h3>
           <p class="last-seen-under-name">
-            上次在线：{{ !device.online ? (lastSeenText || '暂无记录') : '当前在线' }}
+            上次在线：{{ !cameraCardOnline ? (lastSeenText || '暂无记录') : '当前在线' }}
           </p>
         </div>
 
         <div class="card-status-stack">
-          <span class="status-badge" :class="{ online: device.online, offline: !device.online }">
-            {{ device.online ? '在线' : '离线' }}
+          <span class="status-badge" :class="{ online: cameraCardOnline, offline: !cameraCardOnline }">
+            {{ cameraCardOnline ? '在线' : '离线' }}
           </span>
           <span class="self-test-badge" :class="selfTestBadgeClass">
             {{ selfTestBadgeText }}
@@ -30,6 +30,16 @@
         <div class="camera-work-row">
           <span class="camera-work-label">当前状态</span>
           <strong class="camera-work-status" :class="workStatusClass">{{ workStatusText }}</strong>
+          <button
+            type="button"
+            class="global-tracking-btn"
+            :class="{ stopping: isGlobalTracking }"
+            :disabled="Boolean(globalTrackingDisabledReason)"
+            :title="globalTrackingDisabledReason || (isGlobalTracking ? '停止三灯同步跟踪' : '让三盏灯同时执行 UDP 跟踪')"
+            @click.stop="handleGlobalTracking"
+          >
+            {{ globalTrackingLoading ? '下发中...' : (isGlobalTracking ? '停止全局跟踪' : '全局跟踪') }}
+          </button>
           <button
             type="button"
             class="batch-capture-btn"
@@ -134,7 +144,7 @@
               <div class="detail-modal-header">
                 <div>
                   <h3>{{ displayNameText }}</h3>
-                  <p class="detail-subtitle">{{ device.online ? '在线' : '离线' }}</p>
+                  <p class="detail-subtitle">{{ cameraCardOnline ? '在线' : '离线' }}</p>
                 </div>
                 <button class="detail-close-btn" type="button" @click="closeDetailModal">x</button>
               </div>
@@ -146,8 +156,8 @@
                       <h4>设备信息</h4>
                       <p>芯片 ID：{{ device.chipId || '未知' }}</p>
                     </div>
-                    <span class="device-info-status" :class="{ online: device.online, offline: !device.online }">
-                      {{ device.online ? '在线' : '离线' }}
+                    <span class="device-info-status" :class="{ online: cameraCardOnline, offline: !cameraCardOnline }">
+                      {{ cameraCardOnline ? '在线' : '离线' }}
                     </span>
                   </div>
 
@@ -303,7 +313,7 @@
                   </div>
 
                   <div class="roi-editor-item roi-global-config">
-                    <div class="roi-editor-title">滑轨控制</div>
+                    <div class="roi-editor-title">执行设备绑定</div>
                     <label>
                       <span>滑轨控制灯</span>
                       <BaseSelect
@@ -312,6 +322,55 @@
                         placeholder="选择实际连接滑轨电机的灯具"
                       />
                     </label>
+                    <label>
+                      <span>拍照控制器</span>
+                      <BaseSelect
+                        v-model="roiDraft.captureControllerChipId"
+                        :options="captureControllerSelectOptions"
+                        placeholder="选择负责舵机与拍照转发的控制器"
+                      />
+                    </label>
+                    <div class="roi-preset-group standby-config">
+                      <div class="roi-preset-title">自动安全撤离</div>
+                      <small>
+                        单点拍区域 1 后停在 1–2 中点，拍区域 3 后停在 2–3 中点；
+                        拍区域 2 时自动选择离区域 2 更远的相邻中点。批量拍摄结束后停在区域 2 与最远灯的中点。
+                      </small>
+                    </div>
+                    <div class="capture-preset-config flow-upload-config">
+                      <div class="flow-upload-row">
+                        <label class="flow-upload-toggle">
+                          <span class="flow-upload-label">自动人流拍摄</span>
+                          <span class="flow-upload-control">
+                            <input
+                              v-model="roiDraft.flowUploadEnabled"
+                              class="flow-upload-switch-input"
+                              type="checkbox"
+                              role="switch"
+                            />
+                            <span class="flow-upload-switch-track" aria-hidden="true"></span>
+                            <span class="flow-upload-state">
+                              {{ roiDraft.flowUploadEnabled ? '已开启' : '已关闭' }}
+                            </span>
+                          </span>
+                        </label>
+                        <label class="flow-upload-interval">
+                          <span>上传间隔（秒）</span>
+                          <input
+                            v-model.number="roiDraft.flowUploadIntervalSeconds"
+                            type="number"
+                            min="5"
+                            max="3600"
+                            step="1"
+                            :disabled="!roiDraft.flowUploadEnabled"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <small class="capture-config-hint">{{ captureControllerDisabledReason || '服装与人物角度在下方各区域中独立设置，测试后请点击底部“保存”' }}</small>
+                    <p v-if="ptzMessage" class="camera-message" :class="{ error: ptzMessageIsError }">
+                      {{ ptzMessage }}
+                    </p>
                   </div>
 
                   <div class="roi-calibration-layout">
@@ -362,6 +421,48 @@
                           <span>区域名称</span>
                           <input v-model.trim="roi.areaName" type="text" placeholder="如 新品展示区" />
                         </label>
+                        <div class="capture-preset-config region-capture-preset">
+                          <div class="roi-preset-title">服装拍摄角度</div>
+                          <div class="capture-preset-grid">
+                            <label>
+                              <span>服装 Pan（SG90）</span>
+                              <input v-model.number="roi.garmentCapturePan" type="number" min="0" max="180" step="1" />
+                            </label>
+                            <label>
+                              <span>服装 Tilt（SG90）</span>
+                              <input v-model.number="roi.garmentCaptureTilt" type="number" min="0" max="180" step="1" />
+                            </label>
+                          </div>
+                          <button
+                            class="btn-secondary capture-preset-preview"
+                            type="button"
+                            :disabled="ptzDisabled"
+                            @click="applyCapturePreset('garment', roi)"
+                          >
+                            {{ ptzLoading ? '下发中...' : '测试服装角度' }}
+                          </button>
+                        </div>
+                        <div class="capture-preset-config region-capture-preset">
+                          <div class="roi-preset-title">人物拍摄角度</div>
+                          <div class="capture-preset-grid">
+                            <label>
+                              <span>人物 Pan（SG90）</span>
+                              <input v-model.number="roi.personCapturePan" type="number" min="0" max="180" step="1" />
+                            </label>
+                            <label>
+                              <span>人物 Tilt（SG90）</span>
+                              <input v-model.number="roi.personCaptureTilt" type="number" min="0" max="180" step="1" />
+                            </label>
+                          </div>
+                          <button
+                            class="btn-secondary capture-preset-preview"
+                            type="button"
+                            :disabled="ptzDisabled"
+                            @click="applyCapturePreset('person', roi)"
+                          >
+                            {{ ptzLoading ? '下发中...' : '测试人物角度' }}
+                          </button>
+                        </div>
                         <div class="roi-preset-group">
                           <div class="roi-preset-title">滑轨预设</div>
                           <div class="roi-preset-grid">
@@ -395,45 +496,26 @@
                             </div>
                           </div>
                         </div>
+                        <div class="roi-preset-group collision-config">
+                          <div class="roi-preset-title">滑轨沿途灯具回零</div>
+                          <div class="collision-config-grid">
+                            <label>
+                              <span>回零最坏时间</span>
+                              <div class="roi-preset-input">
+                                <input v-model.number="roi.collisionParkTimeSeconds" type="number" min="0.1" max="3600" step="0.1" inputmode="decimal" />
+                                <small>s</small>
+                              </div>
+                            </label>
+                          </div>
+                          <small class="collision-config-hint">系统按区域 1/2/3 的 Slider 坐标自动判断沿途灯具，移动前全部转到 Pan 0° / Tilt 0°；并按此实测最坏时间再加 0.3 秒等待。</small>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   <p v-if="roiMessage" class="camera-message" :class="{ error: roiMessageIsError }">{{ roiMessage }}</p>
-                  <div class="detail-modal-actions">
-                    <button class="btn-secondary" type="button" :disabled="roiLoading" @click="loadRoiConfig">
-                      {{ roiLoading ? '读取中...' : '重新读取' }}
-                    </button>
-                    <button class="btn-primary" type="button" :disabled="roiSaving" @click="handleSaveRoiConfig">
-                      {{ roiSaving ? '保存中...' : '保存 ROI' }}
-                    </button>
-                  </div>
                 </section>
 
-                <section class="ptz-section">
-                  <div class="section-title-row">
-                    <h4>三轴云台调试</h4>
-                    <span>{{ ptzLoading ? '下发中...' : device.online ? '可控制' : '离线禁用' }}</span>
-                  </div>
-
-                  <div class="ptz-grid">
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('yaw', 'left')">左</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('pitch', 'up')">上</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('yaw', 'right')">右</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('pitch', 'down')">下</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('roll', 'ccw')">逆时针</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('all', 'center')">回中</button>
-                    <button type="button" :disabled="ptzDisabled" @click="sendDirectionalPtz('roll', 'cw')">顺时针</button>
-                  </div>
-
-                  <label class="step-row">
-                    <span>步进</span>
-                    <input v-model.number="ptzStep" type="range" min="1" max="30" />
-                    <strong>{{ ptzStep }}°</strong>
-                  </label>
-
-                  <p v-if="ptzMessage" class="camera-message error">{{ ptzMessage }}</p>
-                </section>
               </div>
 
               <div class="detail-modal-actions detail-modal-footer">
@@ -441,7 +523,9 @@
                   {{ deleting ? '删除中...' : '删除' }}
                 </button>
                 <button class="btn-secondary" type="button" @click="closeDetailModal">取消</button>
-                <button class="btn-primary" type="button" @click="saveDeviceBaseInfo">保存</button>
+                <button class="btn-primary" type="button" :disabled="roiSaving" @click="saveDeviceBaseInfo">
+                  {{ roiSaving ? '保存中...' : '保存' }}
+                </button>
               </div>
             </div>
           </Transition>
@@ -466,8 +550,6 @@ import type {
   DeviceItem,
   FirmwareChannel,
   OtaCheckResult,
-  PtzAxis,
-  PtzDirection,
 } from '../../types/device'
 import {
   checkFirmwareUpdate,
@@ -475,10 +557,12 @@ import {
   createCamCaptureTask,
   getCamRoiConfig,
   saveCamRoiConfig,
-  sendCamPtz,
+  sendArmPosition,
+  startCamGlobalTracking,
   startCamTracking,
   startOtaUpdate,
   stopCamTracking,
+  stopCamGlobalTracking,
 } from '../../api/device'
 import { getPersonFlowImageObjectUrl } from '../../api/personFlow'
 import { applyTargetDeviceToRoi, getTargetDeviceLabel, pickCamRoiFields } from '../../utils/cameraRoi'
@@ -493,6 +577,7 @@ const props = defineProps<{
   device: DeviceItem
   deleting?: boolean
   targetDevices?: DeviceItem[]
+  captureControllerDevices?: DeviceItem[]
   camIndex?: number
 }>()
 
@@ -564,9 +649,11 @@ const otaCheckResult = ref<OtaCheckResult | null>(null)
 const otaMessage = ref('')
 const ptzLoading = ref(false)
 const ptzMessage = ref('')
-const ptzStep = ref(5)
+const ptzMessageIsError = ref(false)
 const aimLoading = ref(false)
 const batchCaptureLoading = ref(false)
+const globalTrackingLoading = ref(false)
+const localGlobalTrackingActive = ref(false)
 const aimMessage = ref('')
 const localCaptureTasks = ref<CamCaptureTaskResult[]>([])
 const trackingActionIndex = ref<number | null>(null)
@@ -639,32 +726,66 @@ const targetSelectOptions = computed(() => {
   })
 })
 
-const roiReady = computed(() => {
-  const configured = props.device.camRoiConfig?.configured ?? roiDraft.value.configured
-  if (configured) return true
-  return roiDraft.value.rois.slice(0, 3).every(isRoiReady)
+const captureControllerSelectOptions = computed(() => {
+  return (props.captureControllerDevices || []).flatMap((controller) => {
+    if (!controller.chipId) return []
+    const name = controller.displayName?.trim() || controller.chipId
+    return [{
+      label: `${name} · ${controller.online ? '在线' : '离线'}`,
+      value: controller.chipId,
+    }]
+  })
 })
 
-const roiWarningText = computed(() => {
-  if (!props.device.online) return ''
-  if (roiLoading.value) return ''
-  if (!roiReady.value) return '区域未配置，请在详情中完成区域标定'
-  if (!isCenterMonitoringStatus.value) return '非中心监测位，ROI 判断暂停'
+const captureControllerDevice = computed(() => {
+  const chipId = normalizeChipId(roiDraft.value.captureControllerChipId)
+  if (!chipId) return undefined
+  return (props.captureControllerDevices || []).find(
+    controller => normalizeChipId(controller.chipId) === chipId,
+  )
+})
+
+const trackingCameraOnline = computed(() => props.device.online === true)
+const captureControllerOnline = computed(() => captureControllerDevice.value?.online === true)
+const cameraCardOnline = computed(() =>
+  trackingCameraOnline.value || captureControllerOnline.value
+)
+
+const captureControllerDisabledReason = computed(() => {
+  if (!roiDraft.value.captureControllerChipId) return '拍照控制器未绑定'
+  if (!captureControllerDevice.value) return '拍照控制器不存在'
+  if (!captureControllerDevice.value.online) return '拍照控制器离线'
   return ''
 })
 
-const isCenterMonitoringStatus = computed(() => {
-  return ['monitoring', 'presence'].includes(normalizedWorkStatus.value)
+const roiReady = computed(() => {
+  const configured = props.device.camRoiConfig?.configured ?? roiDraft.value.configured
+  const roisReady = configured || roiDraft.value.rois.slice(0, 3).every(isRoiReady)
+  return roisReady && isCollisionSafetyReady(roiDraft.value.rois)
 })
 
+const roiWarningText = computed(() => {
+  if (!trackingCameraOnline.value) return ''
+  if (roiLoading.value) return ''
+  if (!roiReady.value) return '区域未配置，请在详情中完成区域标定'
+  return ''
+})
+
+const captureWorkStatus = computed(() =>
+  String(props.device.camLastCapture?.status || '').trim().toLowerCase()
+)
+
 const normalizedWorkStatus = computed(() => {
-  if (!props.device.online) return 'offline'
+  if (['waiting_motion', 'capturing', 'uploading'].includes(captureWorkStatus.value)) {
+    return captureWorkStatus.value
+  }
+  if (!trackingCameraOnline.value) {
+    return captureControllerOnline.value ? 'capture_ready' : 'offline'
+  }
   const trackingStatus = props.device.trackingStatus?.status
   if (trackingStatus === 'tracking') return 'tracking'
   if (trackingStatus === 'lost' || trackingStatus === 'timeout') return 'lost'
   if (trackingStatus === 'error') return 'error'
-  const captureStatus = String(props.device.camLastCapture?.status || '').trim().toLowerCase()
-  if (['waiting_motion', 'capturing', 'uploading'].includes(captureStatus)) return captureStatus
   const status = normalizeCamWorkStatus(props.device.camWorkStatus || props.device.camPresence?.workStatus || 'monitoring')
   if (localCapturePending.value && ['monitoring', 'presence'].includes(status)) return 'capturing'
   return status
@@ -678,7 +799,7 @@ const workStatusClass = computed(() => {
   return {
     busy: isCamBusy.value,
     error: ['lost', 'offline', 'error'].includes(normalizedWorkStatus.value),
-    active: ['presence', 'monitoring'].includes(normalizedWorkStatus.value),
+    active: ['presence', 'monitoring', 'capture_ready'].includes(normalizedWorkStatus.value),
   }
 })
 
@@ -728,6 +849,8 @@ const isLastCaptureError = computed(() => {
     'motion_timeout',
     'camera_offline',
     'camera_command_failed',
+    'capture_controller_offline',
+    'capture_controller_command_failed',
     'timeout',
     'upload_failed',
     'photo_saved_ai_failed',
@@ -738,26 +861,32 @@ const isLastCaptureError = computed(() => {
 const canRetryLastCapture = computed(() => {
   return Boolean(
     isLastCaptureError.value &&
-    props.device.online &&
-    !isCamBusy.value &&
+    !captureControllerDisabledReason.value &&
+    !isCaptureBusy.value &&
     props.device.camLastCapture?.targetIndex,
   )
 })
 
-const isCamBusy = computed(() => {
+const isCaptureBusy = computed(() => {
   const batchHasPhysicalWork = displayCaptureTasks.value.some(task =>
     ['queued', 'waiting_motion', 'capturing', 'uploading'].includes(String(task.status || '')),
   )
-  return batchHasPhysicalWork || [
+  return localCapturePending.value || batchHasPhysicalWork || [
     'waiting_motion',
     'capturing',
     'uploading',
-    'returning_center',
     'returning_target_2',
-    'ready_tracking',
-    'tracking',
-  ].includes(normalizedWorkStatus.value)
+    'returning_standby',
+  ].includes(captureWorkStatus.value)
 })
+
+const isTrackingBusy = computed(() =>
+  ['waiting_motion', 'ready_tracking', 'tracking'].includes(
+    String(props.device.trackingStatus?.status || '').trim().toLowerCase(),
+  )
+)
+
+const isCamBusy = computed(() => isCaptureBusy.value || isTrackingBusy.value)
 
 const displayCaptureTasks = computed(() => {
   const tasks = localCaptureTasks.value.length
@@ -770,8 +899,8 @@ const displayCaptureTasks = computed(() => {
 
 const batchCaptureDisabledReason = computed(() => {
   if (batchCaptureLoading.value || aimLoading.value) return '任务创建中'
-  if (!props.device.online) return '摄像头离线'
-  if (isCamBusy.value) return '摄像头忙碌中'
+  if (captureControllerDisabledReason.value) return captureControllerDisabledReason.value
+  if (isCaptureBusy.value) return '拍照控制器忙碌中'
   if (!roiReady.value || targetButtons.value.some(target => !target.targetChipId || target.targetMissing)) {
     return '三个区域尚未完整配置'
   }
@@ -783,9 +912,35 @@ const batchCaptureDisabledReason = computed(() => {
   return ''
 })
 
+const isGlobalTracking = computed(() => {
+  if (localGlobalTrackingActive.value) return true
+  const status = props.device.trackingStatus
+  return status?.trackingMode === 'global'
+    && ['armed', 'tracking'].includes(String(status.status || '').toLowerCase())
+})
+
+const globalTrackingDisabledReason = computed(() => {
+  if (globalTrackingLoading.value || trackingActionIndex.value != null) return '正在下发追踪指令'
+  if (!props.device.online) return '摄像头离线'
+  if (isGlobalTracking.value) return ''
+  if (isCamBusy.value) return '摄像头忙碌中'
+
+  const targets = targetButtons.value.filter(target => target.targetChipId)
+  if (targets.length !== 3 || targetButtons.value.some(target => !target.targetChipId || target.targetMissing)) {
+    return '三个目标灯尚未完整配置'
+  }
+  if (new Set(targets.map(target => target.targetChipId?.trim().toUpperCase())).size !== 3) {
+    return '三个目标灯不能重复'
+  }
+  if (targets.some(target => !findTargetDevice(target.targetChipId)?.online)) {
+    return '三个目标灯必须全部在线'
+  }
+  return ''
+})
+
 const presenceRows = computed(() => {
   const areas: CamPresenceArea[] = props.device.camPresence?.areas || []
-  const activeRoi = roiReady.value && isCenterMonitoringStatus.value
+  const activeRoi = roiReady.value
   return [1, 2, 3].map((index) => {
     const area = areas.find(item => Number(item.targetIndex) === index)
     const roi = roiDraft.value.rois.find(item => item.targetIndex === index)
@@ -906,7 +1061,7 @@ const canStartOta = computed(() => {
   )
 })
 
-const ptzDisabled = computed(() => !props.device.online || ptzLoading.value)
+const ptzDisabled = computed(() => Boolean(captureControllerDisabledReason.value) || ptzLoading.value)
 
 const selfTest = computed(() => {
   return parseSelfTestJson(props.device.selfTestJson)
@@ -932,7 +1087,7 @@ const selfTestBadgeText = computed(() => {
 })
 
 const selfTestTimeText = computed(() => {
-  if (!props.device.online || !selfTest.value?.done) return '暂无记录'
+  if (!trackingCameraOnline.value || !selfTest.value?.done) return '暂无记录'
   return formatDateTime(props.device.selfTestTime) || '暂无记录'
 })
 
@@ -1029,12 +1184,14 @@ function getCamWorkStatusText(status: CamWorkStatus) {
 
   const map: Record<string, string> = {
     monitoring: '顾客感知中',
+    capture_ready: '拍照控制器在线',
     presence: '有人靠近',
     waiting_motion: '滑轨对位中',
     capturing: '正在拍摄服装',
     uploading: '上传照片中',
     returning_center: '回中心中',
     returning_target_2: '返回区域 2',
+    returning_standby: '返回待机位',
     batch_complete: '批量拍摄完成',
     ready_tracking: '准备追踪',
     tracking: '追踪中',
@@ -1043,6 +1200,8 @@ function getCamWorkStatusText(status: CamWorkStatus) {
     motion_timeout: '滑轨对位超时',
     camera_offline: '摄像头离线',
     camera_command_failed: '拍摄指令失败',
+    capture_controller_offline: '拍照控制器离线',
+    capture_controller_command_failed: '拍照指令失败',
     timeout: '目标丢失',
     ready: '准备追踪',
     offline: '离线',
@@ -1055,6 +1214,9 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
   return {
     camChipId,
     sliderLampChipId: '',
+    captureControllerChipId: '',
+    flowUploadEnabled: false,
+    flowUploadIntervalSeconds: 30,
     configured: false,
     sliderPresets: createDefaultSliderPresetMap(),
     sliderMoveTimes: createDefaultSliderMoveTimeMap(),
@@ -1063,16 +1225,16 @@ function createDefaultRoiConfig(camChipId: string): CamRoiConfig {
 }
 
 function createDefaultSliderMoveTimeMap(): Record<string, CamSliderMoveTimes> {
-  return [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((map, index) => {
-    map[String(index)] = { slow: 0, normal: 0, fast: 0 }
-    return map
+  return [1, 2, 3].reduce<Record<string, CamSliderMoveTimes>>((result, index) => {
+    result[String(index)] = { slow: 0, normal: 0, fast: 0 }
+    return result
   }, {})
 }
 
 function createDefaultSliderPresetMap(): Record<string, number> {
-  return [1, 2, 3].reduce<Record<string, number>>((map, index) => {
-    map[String(index)] = 0
-    return map
+  return [1, 2, 3].reduce<Record<string, number>>((result, index) => {
+    result[String(index)] = 0
+    return result
   }, {})
 }
 
@@ -1087,23 +1249,52 @@ function createDefaultRoi(targetIndex: number): CamRoiItem {
     y: 0.3,
     w: width,
     h: height,
+    garmentCapturePan: 90,
+    garmentCaptureTilt: 90,
+    personCapturePan: 90,
+    personCaptureTilt: 90,
+    collisionCenterMm: 0,
+    collisionClearanceMm: 0,
+    collisionParkTimeSeconds: 0,
   }
 }
 
 function normalizeRoiConfig(value: Partial<CamRoiConfig> | null | undefined, camChipId: string): CamRoiConfig {
   const sourceRois = Array.isArray(value?.rois) ? value.rois : []
+  const legacyAngles = {
+    garmentPan: normalizeCaptureAngle(value?.garmentCapturePan ?? value?.capturePan),
+    garmentTilt: normalizeCaptureAngle(value?.garmentCaptureTilt ?? value?.captureTilt),
+    personPan: normalizeCaptureAngle(value?.personCapturePan),
+    personTilt: normalizeCaptureAngle(value?.personCaptureTilt),
+  }
   const rois = [1, 2, 3].map((index) => {
     const source = sourceRois.find(item => Number(item?.targetIndex) === index)
-    return normalizeRoi(source, index)
+    return normalizeRoi(source, index, legacyAngles)
   })
+  const sliderPresets = normalizeSliderPresetMap(value)
+  const sliderMoveTimes = normalizeSliderMoveTimeMap(value)
   return {
     camChipId,
     sliderLampChipId: String(value?.sliderLampChipId || '').trim(),
-    configured: Boolean(value?.configured) || rois.every(isRoiReady),
-    sliderPresets: normalizeSliderPresetMap(value),
-    sliderMoveTimes: normalizeSliderMoveTimeMap(value),
+    captureControllerChipId: String(value?.captureControllerChipId || '').trim(),
+    flowUploadEnabled: Boolean(value?.flowUploadEnabled),
+    flowUploadIntervalSeconds: normalizeFlowUploadInterval(value?.flowUploadIntervalSeconds),
+    configured: (Boolean(value?.configured) || rois.every(isRoiReady))
+      && isCollisionSafetyReady(rois),
+    sliderPresets,
+    sliderMoveTimes,
     rois,
   }
+}
+
+function normalizeCaptureAngle(value: unknown) {
+  const numeric = value == null || value === '' ? 90 : Number(value)
+  return Math.round(clamp(Number.isFinite(numeric) ? numeric : 90, 0, 180))
+}
+
+function normalizeFlowUploadInterval(value: unknown) {
+  const numeric = value == null || value === '' ? 30 : Number(value)
+  return Math.round(clamp(Number.isFinite(numeric) ? numeric : 30, 5, 3600))
 }
 
 function normalizeSliderPresetMap(value: Partial<CamRoiConfig> | null | undefined): Record<string, number> {
@@ -1145,13 +1336,22 @@ function normalizeSliderMoveTimeMap(
   }, {})
 }
 
+function normalizeSliderPosition(value: unknown) {
+  const numeric = Number(value)
+  return Math.round(Math.max(0, Math.min(2500, Number.isFinite(numeric) ? numeric : 0)))
+}
+
 function normalizeSliderMoveTime(value: unknown) {
   const numeric = Number(value)
   const clamped = Math.max(0, Math.min(3600, Number.isFinite(numeric) ? numeric : 0))
   return Math.round(clamped * 1000) / 1000
 }
 
-function normalizeRoi(value: Partial<CamRoiItem> | undefined, targetIndex: number): CamRoiItem {
+function normalizeRoi(
+  value: Partial<CamRoiItem> | undefined,
+  targetIndex: number,
+  legacyAngles: { garmentPan: number; garmentTilt: number; personPan: number; personTilt: number },
+): CamRoiItem {
   const fallback = createDefaultRoi(targetIndex)
   return pickCamRoiFields({
     targetIndex,
@@ -1161,6 +1361,13 @@ function normalizeRoi(value: Partial<CamRoiItem> | undefined, targetIndex: numbe
     y: clamp(value?.y ?? fallback.y),
     w: clamp(value?.w ?? fallback.w, 0.03, 1),
     h: clamp(value?.h ?? fallback.h, 0.03, 1),
+    garmentCapturePan: normalizeCaptureAngle(value?.garmentCapturePan ?? legacyAngles.garmentPan),
+    garmentCaptureTilt: normalizeCaptureAngle(value?.garmentCaptureTilt ?? legacyAngles.garmentTilt),
+    personCapturePan: normalizeCaptureAngle(value?.personCapturePan ?? legacyAngles.personPan),
+    personCaptureTilt: normalizeCaptureAngle(value?.personCaptureTilt ?? legacyAngles.personTilt),
+    collisionCenterMm: normalizeSliderPosition(value?.collisionCenterMm),
+    collisionClearanceMm: normalizeSliderMoveTime(value?.collisionClearanceMm),
+    collisionParkTimeSeconds: normalizeSliderMoveTime(value?.collisionParkTimeSeconds),
   })
 }
 
@@ -1170,6 +1377,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isRoiReady(roi: CamRoiItem) {
   return Boolean(roi.targetChipId && roi.w >= 0.03 && roi.h >= 0.03)
+}
+
+function isCollisionSafetyReady(rois: CamRoiItem[]) {
+  return rois.slice(0, 3).every(roi => Number(roi.collisionParkTimeSeconds) > 0)
 }
 
 function clamp(value: unknown, min = 0, max = 1) {
@@ -1201,16 +1412,23 @@ function getRoiBoxStyle(roi: CamRoiItem) {
 }
 
 const lastSeenText = computed(() => {
-  if (props.device.lastSeenAt) {
-    return formatMinuteDateTime(props.device.lastSeenAt)
-  }
-
-  const value = props.device.lastSeen
-  if (!value) return ''
-
-  const timestamp = value < 1e12 ? value * 1000 : value
-  return formatMinuteDateTime(timestamp)
+  const timestamps = [props.device, captureControllerDevice.value]
+    .map(deviceLastSeenTimestamp)
+    .filter((value): value is number => value != null)
+  if (!timestamps.length) return ''
+  return formatMinuteDateTime(Math.max(...timestamps))
 })
+
+function deviceLastSeenTimestamp(device?: DeviceItem) {
+  if (!device) return undefined
+  if (device.lastSeenAt) {
+    const parsed = new Date(device.lastSeenAt).getTime()
+    if (Number.isFinite(parsed)) return parsed
+  }
+  const value = Number(device.lastSeen)
+  if (!Number.isFinite(value) || value <= 0) return undefined
+  return value < 1e12 ? value * 1000 : value
+}
 
 function clampProgress(value: unknown) {
   const numericValue = Number(value)
@@ -1238,7 +1456,11 @@ function syncFromProps() {
   roiDraft.value = normalizeRoiConfig(props.device.camRoiConfig || roiDraft.value, props.device.chipId || '')
 }
 
-function saveDeviceBaseInfo() {
+async function saveDeviceBaseInfo() {
+  if (roiSaving.value) return
+  const roiSaved = await persistRoiConfig()
+  if (!roiSaved) return
+
   emit('update-realtime', {
     id: props.device.id,
     payload: {
@@ -1264,8 +1486,8 @@ function isTargetButtonDisabled(target: TargetButton) {
 
 function getTargetButtonDisabledReason(target: TargetButton) {
   if (aimLoading.value) return '任务创建中'
-  if (!props.device.online) return '摄像头离线'
-  if (isCamBusy.value) return '摄像头忙碌中'
+  if (captureControllerDisabledReason.value) return captureControllerDisabledReason.value
+  if (isCaptureBusy.value) return '拍照控制器忙碌中'
   const sliderLampChipId = roiDraft.value.sliderLampChipId
   if (!sliderLampChipId) return '滑轨控制灯未绑定'
   const sliderLamp = findTargetDevice(sliderLampChipId)
@@ -1304,13 +1526,8 @@ function isTrackingButtonDisabled(target: TargetButton) {
 
 function getTrackingButtonDisabledReason(target: TargetButton) {
   if (trackingActionIndex.value != null) return '正在下发'
-  if (!props.device.online) return '摄像头离线'
-
-  const sliderLampChipId = roiDraft.value.sliderLampChipId
-  if (!sliderLampChipId) return '滑轨控制灯未绑定'
-  const sliderLamp = findTargetDevice(sliderLampChipId)
-  if (!sliderLamp) return '滑轨控制灯不存在'
-  if (!sliderLamp.online) return '滑轨控制灯离线'
+  if (!trackingCameraOnline.value) return '跟踪摄像头离线'
+  if (isGlobalTracking.value) return '请先停止全局跟踪'
 
   const targetChipId = getTrackingTargetChipId(target)
   if (!targetChipId) return '目标灯未配置'
@@ -1365,6 +1582,38 @@ async function handleTracking(target: TargetButton) {
   }
 }
 
+async function handleGlobalTracking() {
+  const disabledReason = globalTrackingDisabledReason.value
+  if (!props.device.chipId || disabledReason) {
+    trackingMessageIsError.value = true
+    trackingMessage.value = disabledReason || '摄像头缺少 chipId，无法执行全局跟踪'
+    return
+  }
+
+  const wasTracking = isGlobalTracking.value
+  globalTrackingLoading.value = true
+  trackingMessage.value = ''
+  trackingMessageIsError.value = false
+  try {
+    const payload = { camChipId: props.device.chipId }
+    if (wasTracking) {
+      await stopCamGlobalTracking(payload)
+      localGlobalTrackingActive.value = false
+      trackingMessage.value = '三盏灯已停止全局跟踪'
+    } else {
+      await startCamGlobalTracking(payload)
+      localGlobalTrackingActive.value = true
+      manualTrackingTargetIndex.value = null
+      trackingMessage.value = '三盏灯已开始全局跟踪'
+    }
+  } catch (error) {
+    trackingMessageIsError.value = true
+    trackingMessage.value = getErrorMessage(error, '全局跟踪指令下发失败')
+  } finally {
+    globalTrackingLoading.value = false
+  }
+}
+
 async function handleAimTarget(target: TargetButton) {
   if (!props.device.chipId || isTargetButtonDisabled(target)) {
     aimMessage.value = getTargetButtonDisabledReason(target) || '摄像头缺少 chipId，无法创建拍摄任务'
@@ -1399,6 +1648,8 @@ function isCaptureTaskError(status?: string) {
     'motion_timeout',
     'camera_offline',
     'camera_command_failed',
+    'capture_controller_offline',
+    'capture_controller_command_failed',
     'upload_failed',
     'timeout',
     'photo_saved_ai_failed',
@@ -1435,25 +1686,43 @@ async function createCaptureTaskForTarget(targetIndex: number, targetChipId?: st
 
 async function retryLastCapture() {
   const capture = props.device.camLastCapture
-  if (!capture?.targetIndex || aimLoading.value || isCamBusy.value || !props.device.online) return
+  if (!capture?.targetIndex || aimLoading.value || isCaptureBusy.value || captureControllerDisabledReason.value) return
   await createCaptureTaskForTarget(capture.targetIndex, capture.targetChipId)
 }
 
-async function sendDirectionalPtz(axis: PtzAxis, direction: PtzDirection) {
-  if (!props.device.chipId || ptzDisabled.value) return
+async function applyCapturePreset(kind: 'garment' | 'person', roi: CamRoiItem) {
+  const controller = captureControllerDevice.value
+  if (!controller?.chipId || ptzDisabled.value) {
+    ptzMessageIsError.value = true
+    ptzMessage.value = captureControllerDisabledReason.value || '拍照控制器不可用'
+    return
+  }
 
   ptzLoading.value = true
   ptzMessage.value = ''
+  ptzMessageIsError.value = false
 
   try {
-    await sendCamPtz({
-      chipId: props.device.chipId,
-      axis,
-      direction,
-      step: ptzStep.value,
+    const normalized = normalizeRoiConfig(roiDraft.value, props.device.chipId || '')
+    const normalizedRoi = normalized.rois.find(item => item.targetIndex === roi.targetIndex)
+    if (!normalizedRoi) throw new Error(`区域 ${roi.targetIndex} 配置不存在`)
+    const pan = kind === 'garment' ? normalizedRoi.garmentCapturePan : normalizedRoi.personCapturePan
+    const tilt = kind === 'garment' ? normalizedRoi.garmentCaptureTilt : normalizedRoi.personCaptureTilt
+    if (kind === 'garment') {
+      roi.garmentCapturePan = pan
+      roi.garmentCaptureTilt = tilt
+    } else {
+      roi.personCapturePan = pan
+      roi.personCaptureTilt = tilt
+    }
+    await sendArmPosition(controller.chipId, {
+      pan,
+      tilt,
     })
+    ptzMessage.value = `区域 ${roi.targetIndex} 已下发${kind === 'garment' ? '服装' : '人物'}角度：Pan ${pan}° / Tilt ${tilt}°`
   } catch (error) {
-    ptzMessage.value = getErrorMessage(error, '云台控制下发失败')
+    ptzMessageIsError.value = true
+    ptzMessage.value = getErrorMessage(error, '拍照舵机预置下发失败')
   } finally {
     ptzLoading.value = false
   }
@@ -1511,8 +1780,8 @@ async function loadRoiConfig() {
   }
 }
 
-async function handleSaveRoiConfig() {
-  if (!props.device.chipId || roiSaving.value) return
+async function persistRoiConfig(): Promise<boolean> {
+  if (!props.device.chipId || roiSaving.value) return false
 
   roiSaving.value = true
   roiMessage.value = ''
@@ -1520,22 +1789,31 @@ async function handleSaveRoiConfig() {
 
   const payload = normalizeRoiConfig(roiDraft.value, props.device.chipId)
   payload.configured = payload.rois.every(isRoiReady)
+    && isCollisionSafetyReady(payload.rois)
 
   try {
     const result = await saveCamRoiConfig(props.device.chipId, payload)
     roiDraft.value = normalizeRoiConfig(result, props.device.chipId)
-    if (!payload.configured) {
+    if (!payload.rois.every(isRoiReady)) {
       roiMessage.value = 'ROI 已保存，但仍有区域未绑定目标灯'
+      roiMessageIsError.value = true
+    } else if (!isCollisionSafetyReady(payload.rois)) {
+      roiMessage.value = 'ROI 已保存，但灯具回零最坏时间尚未完整标定'
       roiMessageIsError.value = true
     } else if (!payload.sliderLampChipId) {
       roiMessage.value = 'ROI 已保存，但还未绑定滑轨控制灯'
       roiMessageIsError.value = true
+    } else if (!payload.captureControllerChipId) {
+      roiMessage.value = 'ROI 已保存，但还未绑定拍照控制器'
+      roiMessageIsError.value = true
     } else {
-      roiMessage.value = 'ROI 与滑轨配置已保存'
+      roiMessage.value = 'ROI、滑轨与拍照控制器配置已保存'
     }
+    return true
   } catch (error) {
     roiMessage.value = getErrorMessage(error, 'ROI 配置保存失败')
     roiMessageIsError.value = true
+    return false
   } finally {
     roiSaving.value = false
   }
@@ -1765,9 +2043,9 @@ watch(
 )
 
 watch(
-  () => [props.device.chipId, props.device.online] as const,
-  ([chipId, isOnline]) => {
-    if (chipId && isOnline) {
+  () => props.device.chipId,
+  (chipId) => {
+    if (chipId) {
       void loadRoiConfig()
     }
   },
@@ -1775,7 +2053,7 @@ watch(
 )
 
 watch(
-  () => props.device.online,
+  () => cameraCardOnline.value,
   (isOnline, wasOnline) => {
     if (wasOnline === false && isOnline === true) {
       triggerOnlineFlash()
@@ -1790,6 +2068,7 @@ watch(
     otaCheckResult.value = null
     otaMessage.value = ''
     ptzMessage.value = ''
+    ptzMessageIsError.value = false
     aimMessage.value = ''
   },
 )
@@ -1797,7 +2076,10 @@ watch(
 watch(
   () => props.device.trackingStatus,
   (trackingStatus) => {
-    manualTrackingTargetIndex.value = trackingStatus?.status === 'tracking'
+    const globalActive = trackingStatus?.trackingMode === 'global'
+      && ['armed', 'tracking'].includes(String(trackingStatus.status || '').toLowerCase())
+    localGlobalTrackingActive.value = globalActive
+    manualTrackingTargetIndex.value = !globalActive && trackingStatus?.status === 'tracking'
       ? Number(trackingStatus.targetIndex) || null
       : null
   },
@@ -2061,6 +2343,35 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-size: 11px;
   font-weight: 800;
+}
+
+.global-tracking-btn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: #16a34a;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.global-tracking-btn:hover:not(:disabled) {
+  border-color: #4ade80;
+  background: #dcfce7;
+}
+
+.global-tracking-btn.stopping {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+.global-tracking-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .batch-capture-btn:hover:not(:disabled) {
@@ -2663,6 +2974,140 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.capture-preset-config {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe3f0;
+}
+
+.capture-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.capture-preset-preview {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.capture-preset-config > small {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.capture-config-hint {
+  display: block;
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.flow-upload-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 8px;
+}
+
+.roi-editor-item .flow-upload-row > label {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.roi-editor-item .flow-upload-toggle > .flow-upload-label {
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roi-editor-item .flow-upload-toggle > .flow-upload-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid #dbe3f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.roi-editor-item .flow-upload-switch-input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.flow-upload-switch-track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.flow-upload-switch-track::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+  content: '';
+  transition: transform 0.2s ease;
+}
+
+.flow-upload-switch-input:checked + .flow-upload-switch-track {
+  background: #2563eb;
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.18);
+}
+
+.flow-upload-switch-input:checked + .flow-upload-switch-track::after {
+  transform: translateX(16px);
+}
+
+.flow-upload-switch-input:focus-visible + .flow-upload-switch-track {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.roi-editor-item .flow-upload-control > .flow-upload-state {
+  overflow: hidden;
+  margin: 0 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roi-editor-item .flow-upload-switch-input:checked ~ .flow-upload-state {
+  color: #1d4ed8;
+}
+
+.roi-editor-item .flow-upload-interval > input:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
 .roi-preset-group {
   margin-top: 10px;
   padding-top: 8px;
@@ -2717,6 +3162,23 @@ onBeforeUnmount(() => {
 .roi-speed-select,
 .roi-move-time-row input {
   min-width: 0;
+}
+
+.standby-config {
+  margin-top: 14px;
+}
+
+.standby-config small,
+.collision-config-hint {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.collision-config-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 320px);
+  gap: 8px;
 }
 
 .device-info-head {
@@ -3212,6 +3674,7 @@ onBeforeUnmount(() => {
   .self-test-grid,
   .roi-number-grid,
   .roi-preset-grid,
+  .collision-config-grid,
   .ptz-grid {
     grid-template-columns: 1fr;
   }

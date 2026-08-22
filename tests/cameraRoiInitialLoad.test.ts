@@ -7,10 +7,10 @@ const cameraCardSource = readFileSync(
   'utf8',
 )
 
-test('online camera loads persisted ROI without opening its detail modal', () => {
+test('camera loads persisted ROI without requiring the tracking node to be online', () => {
   assert.match(
     cameraCardSource,
-    /watch\(\s*\(\) => \[props\.device\.chipId, props\.device\.online\] as const[\s\S]*?\(\[chipId, isOnline\]\) => \{[\s\S]*?if \(chipId && isOnline\) \{\s*void loadRoiConfig\(\)/,
+    /watch\(\s*\(\) => props\.device\.chipId[\s\S]*?\(chipId\) => \{[\s\S]*?if \(chipId\) \{\s*void loadRoiConfig\(\)/,
   )
   assert.match(
     cameraCardSource,
@@ -21,7 +21,7 @@ test('online camera loads persisted ROI without opening its detail modal', () =>
 test('camera card does not report ROI as unconfigured while the initial request is pending', () => {
   assert.match(
     cameraCardSource,
-    /const roiWarningText = computed\(\(\) => \{\s*if \(!props\.device\.online\) return ''\s*if \(roiLoading\.value\) return ''/,
+    /const roiWarningText = computed\(\(\) => \{\s*if \(!trackingCameraOnline\.value\) return ''\s*if \(roiLoading\.value\) return ''/,
   )
 })
 

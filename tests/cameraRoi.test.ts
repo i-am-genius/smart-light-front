@@ -82,7 +82,14 @@ describe('camera ROI helpers', () => {
 
     assert.deepEqual(Object.keys(normalized).sort(), [
       'areaName',
+      'collisionCenterMm',
+      'collisionClearanceMm',
+      'collisionParkTimeSeconds',
+      'garmentCapturePan',
+      'garmentCaptureTilt',
       'h',
+      'personCapturePan',
+      'personCaptureTilt',
       'targetChipId',
       'targetIndex',
       'w',
@@ -116,6 +123,26 @@ describe('camera ROI helpers', () => {
     }
     assert.match(globalConfig, /滑轨控制灯/)
     assert.match(globalConfig, /roiDraft\.sliderLampChipId/)
+    assert.match(globalConfig, /拍照控制器/)
+    assert.match(globalConfig, /roiDraft\.captureControllerChipId/)
+    assert.doesNotMatch(globalConfig, /roiDraft\.garmentCapturePan/)
+    assert.doesNotMatch(globalConfig, /roiDraft\.garmentCaptureTilt/)
+    assert.doesNotMatch(globalConfig, /roiDraft\.personCapturePan/)
+    assert.doesNotMatch(globalConfig, /roiDraft\.personCaptureTilt/)
+    assert.match(roiEditor, /服装拍摄角度/)
+    assert.match(roiEditor, /roi\.garmentCapturePan/)
+    assert.match(roiEditor, /roi\.garmentCaptureTilt/)
+    assert.match(roiEditor, /人物拍摄角度/)
+    assert.match(roiEditor, /roi\.personCapturePan/)
+    assert.match(roiEditor, /roi\.personCaptureTilt/)
+    assert.match(globalConfig, /自动人流拍摄/)
+    assert.match(globalConfig, /roiDraft\.flowUploadIntervalSeconds/)
+    assert.match(globalConfig, /class="flow-upload-row"/)
+    assert.match(globalConfig, /class="flow-upload-switch-track"/)
+    assert.doesNotMatch(globalConfig, /开启后拍照控制器使用人物角度/)
+    assert.match(source, /flowUploadIntervalSeconds: 30/)
+    assert.match(source, /\.flow-upload-toggle\s*>\s*\.flow-upload-control\s*\{[\s\S]*?position:\s*relative/)
+    assert.match(source, /\.flow-upload-switch-input\s*\{[\s\S]*?inset:\s*0/)
     assert.equal(roiEditor.includes('拍摄预设'), false)
     assert.equal(roiEditor.includes('追踪预设'), false)
     assert.equal(roiEditor.includes('Pan 水平'), false)
@@ -128,5 +155,28 @@ describe('camera ROI helpers', () => {
     assert.match(source, /waiting_motion: '滑轨对位中'/)
     assert.match(source, /'滑轨控制灯未绑定'/)
     assert.match(source, /'滑轨控制灯离线'/)
+  })
+
+  it('uses the device footer save for both base info and ROI config', () => {
+    const source = readFileSync(new URL('../src/components/device/CameraDeviceCard.vue', import.meta.url), 'utf8')
+    const saveDeviceBlock = source.slice(
+      source.indexOf('async function saveDeviceBaseInfo'),
+      source.indexOf('function handleDelete'),
+    )
+
+    assert.doesNotMatch(source, />\s*保存 ROI\s*</)
+    assert.doesNotMatch(source, /重新读取/)
+    assert.match(source, /@click="saveDeviceBaseInfo"/)
+    assert.match(saveDeviceBlock, /await persistRoiConfig\(\)/)
+    assert.match(source, /async function persistRoiConfig/)
+    assert.match(source, /saveCamRoiConfig\(props\.device\.chipId, payload\)/)
+  })
+
+  it('does not show the obsolete center-position ROI pause warning', () => {
+    const source = readFileSync(new URL('../src/components/device/CameraDeviceCard.vue', import.meta.url), 'utf8')
+
+    assert.doesNotMatch(source, /非中心监测位，ROI 判断暂停/)
+    assert.doesNotMatch(source, /isCenterMonitoringStatus/)
+    assert.match(source, /区域未配置，请在详情中完成区域标定/)
   })
 })

@@ -12,3 +12,7 @@ export function isLampDevice(device: Pick<DeviceItem, 'deviceType'>): boolean {
   const type = normalizeDeviceType(device.deviceType)
   return type === 'lamp' || type === 'camlamp'
 }
+
+export function isCaptureControllerDevice(device: Pick<DeviceItem, 'deviceType'>): boolean {
+  return normalizeDeviceType(device.deviceType) === 'camcapture'
+}

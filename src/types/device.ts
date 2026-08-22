@@ -24,7 +24,7 @@ export interface GarmentState {
   garments: GarmentPart[]
 }
 
-export type DeviceType = 'lamp' | 'camlamp' | 'cam' | string
+export type DeviceType = 'lamp' | 'camlamp' | 'cam' | 'cam_capture' | string
 export type GarmentDetectionStatus = 'not_detected' | 'detecting' | 'detected' | string
 
 export interface DeviceItem {
@@ -102,6 +102,8 @@ export interface DeviceItem {
   camLastCapture?: CamCaptureTaskResult
   camCaptureTasks?: CamCaptureTaskResult[]
   camPresence?: CamPresenceState
+  camCaptureConfig?: CamCaptureConfig
+  /** @deprecated Internal adapter only while CameraDeviceCard is decomposed. */
   camRoiConfig?: CamRoiConfig
   lampClothState?: LampClothState
   lampProximityState?: LampProximityState
@@ -110,7 +112,6 @@ export interface DeviceItem {
   tracking?: boolean
   trackingStatus?: TrackingStatusState
 }
-
 
 export interface DeviceOnlineItem {
   chipId: string
@@ -145,8 +146,7 @@ export interface DeviceCreatePayload {
 }
 
 export type FirmwareChannel = 'stable' | 'test'
-export type FirmwareDeviceType = 'lamp' | 'cam' | 'camlamp'
-
+export type FirmwareDeviceType = 'lamp' | 'cam' | 'camlamp' | 'cam_capture'
 export type OtaStatus = 'idle' | 'updating' | 'success' | 'failed'
 
 export type PtzAxis = 'yaw' | 'pitch' | 'roll' | 'all'
@@ -174,13 +174,20 @@ export interface CamTrackingControlPayload {
   targetIndex: number
 }
 
+export interface CamGlobalTrackingControlPayload {
+  camChipId: string
+}
+
 export interface CamTrackingControlResult {
   chipId?: string
   role?: string
   trackingStatus: string
+  trackingMode?: 'single' | 'global' | string
+  sessionId?: string
   camChipId?: string
   lampChipId?: string
   targetIndex?: number
+  targetChipIds?: string[]
   message?: string
   updateTime?: string | number
 }
@@ -207,8 +214,17 @@ export interface CamRoiItem {
   y: number
   w: number
   h: number
+  garmentCapturePan: number
+  garmentCaptureTilt: number
+  personCapturePan: number
+  personCaptureTilt: number
+  /** 灯具在滑轨上的物理碰撞中心，单位 mm */
+  collisionCenterMm?: number
+  /** 碰撞中心两侧的避让距离，单位 mm */
+  collisionClearanceMm?: number
+  /** 灯具回到 Pan=0/Tilt=0 的最坏实测时间，单位秒 */
+  collisionParkTimeSeconds?: number
 }
-
 export interface CamPtzPreset {
   pan: number
   tilt: number
@@ -221,20 +237,66 @@ export interface CamSliderMoveTimes {
   fast: number
 }
 
+export interface CamCaptureTargetConfig {
+  index: number
+  lampChipId?: string
+  areaName?: string
+  sliderMm: number
+  moveTimes: CamSliderMoveTimes
+  garmentCapturePan: number
+  garmentCaptureTilt: number
+  personCapturePan: number
+  personCaptureTilt: number
+  collisionParkTimeSeconds: number
+}
+
+export interface CamCaptureConfig {
+  camChipId: string
+  sliderLampChipId?: string
+  captureControllerChipId?: string
+  /** @deprecated 旧版全局服装 Pan，仅用于迁移到每个区域 */
+  garmentCapturePan?: number
+  /** @deprecated 旧版全局服装 Tilt，仅用于迁移到每个区域 */
+  garmentCaptureTilt?: number
+  /** @deprecated 旧版全局人物 Pan，仅用于迁移到每个区域 */
+  personCapturePan?: number
+  /** @deprecated 旧版全局人物 Tilt，仅用于迁移到每个区域 */
+  personCaptureTilt?: number
+  flowUploadEnabled: boolean
+  flowUploadIntervalSeconds: number
+  /** @deprecated 仅用于读取旧配置 */
+  capturePan?: number
+  /** @deprecated 仅用于读取旧配置 */
+  captureTilt?: number
+  configured?: boolean
+  targets: CamCaptureTargetConfig[]
+}
+
+/** @deprecated Internal compatibility shape for the legacy Camera card only. */
 export interface CamRoiConfig {
   camChipId: string
   sliderLampChipId?: string
-  configured?: boolean
+  captureControllerChipId?: string
+  garmentCapturePan?: number
+  garmentCaptureTilt?: number
+  personCapturePan?: number
+  personCaptureTilt?: number
+  flowUploadEnabled?: boolean
+  flowUploadIntervalSeconds?: number
+  capturePan?: number
+  captureTilt?: number
+  rois: CamRoiItem[]
   sliderPresets: Record<string, number>
   sliderMoveTimes: Record<string, CamSliderMoveTimes>
-  rois: CamRoiItem[]
+  configured?: boolean
 }
 
+/** @deprecated Camera area presence is synthesized from per-Lamp ToF. */
 export interface CamPresenceArea {
   targetIndex: number
   targetChipId?: string
   areaName?: string
-  present: boolean
+  present?: boolean
   confidence?: number
   dwellSeconds?: number
   updateTime?: string | number
@@ -243,11 +305,11 @@ export interface CamPresenceArea {
 export interface CamPresenceState {
   camChipId: string
   workStatus?: CamWorkStatus
-  configured?: boolean
   personCount?: number
   confidence?: number
   updateTime?: string | number
-  areas: CamPresenceArea[]
+  /** @deprecated Internal UI adapter only; backend no longer accepts ROI areas. */
+  areas?: CamPresenceArea[]
 }
 
 export interface CamStatusState {
@@ -318,6 +380,7 @@ export type LampClothStatus = 'on_rack' | 'taken' | 'unknown' | string
 export interface LampClothState {
   chipId: string
   clothStatus?: LampClothStatus
+  clothState?: LampClothStatus
   lastTakenAt?: string | number
   tracking?: boolean
   updateTime?: string | number
@@ -331,10 +394,14 @@ export interface LampProximityState {
 
 export interface TrackingStatusState {
   chipId?: string
+  sessionId?: string
+  trackingMode?: 'single' | 'global' | string
   camChipId?: string
+  lampChipId?: string
   targetChipId?: string
   targetIndex?: number
-  status?: 'waiting_motion' | 'ready' | 'tracking' | 'lost' | 'stopped' | 'monitoring' | 'timeout' | 'error' | string
+  targetChipIds?: string[]
+  status?: 'armed' | 'ready' | 'tracking' | 'lost' | 'stopped' | 'monitoring' | 'timeout' | 'error' | string
   message?: string
   timestamp?: string | number
 }

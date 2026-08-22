@@ -118,7 +118,6 @@ function findDeviceByChipId(chipId?: string) {
 async function validateBeforeRun() {
   const camera = getSmartLightingCamera(props.devices)
   if (!camera?.chipId) throw new Error('未配置独立摄像头，无法启动智能布光')
-  if (!camera.online) throw new Error('摄像头离线，无法启动智能布光')
 
   const busyStatuses = new Set([
     'waiting_motion', 'capturing', 'uploading', 'returning_center',
@@ -141,10 +140,15 @@ async function validateBeforeRun() {
     throw new Error('三个区域尚未完整配置，请先完成摄像头区域标定')
   }
   if (!roi.sliderLampChipId) throw new Error('尚未绑定滑轨控制灯')
+  if (!roi.captureControllerChipId) throw new Error('尚未绑定拍照控制器')
 
   const sliderLamp = findDeviceByChipId(roi.sliderLampChipId)
   if (!sliderLamp) throw new Error('滑轨控制灯不存在')
   if (!sliderLamp.online) throw new Error('滑轨控制灯离线')
+
+  const captureController = findDeviceByChipId(roi.captureControllerChipId)
+  if (!captureController) throw new Error('拍照控制器不存在')
+  if (!captureController.online) throw new Error('拍照控制器离线')
 
   for (const target of targets) {
     const lamp = findDeviceByChipId(target.targetChipId)
