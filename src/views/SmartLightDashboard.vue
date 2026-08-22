@@ -2473,9 +2473,12 @@ function handleWsMessage(message: any) {
 
     const trackingStatus = {
       chipId: message.data.chipId,
+      sessionId: message.data.sessionId,
       camChipId: message.data.camChipId,
+      trackingMode: message.data.trackingMode,
       targetChipId: message.data.targetChipId ?? message.data.lampChipId,
       targetIndex: message.data.targetIndex,
+      targetChipIds: Array.isArray(message.data.targetChipIds) ? message.data.targetChipIds : undefined,
       status: message.data.status ?? message.data.trackingStatus,
       message: message.data.message,
       timestamp: message.data.timestamp ?? message.data.updateTime,
@@ -2494,6 +2497,14 @@ function handleWsMessage(message: any) {
     if (trackingStatus.targetChipId && normalizeChipId(trackingStatus.targetChipId) !== normalizeChipId(chipId)) {
       updateDeviceByIncoming({
         chipId: trackingStatus.targetChipId,
+        trackingStatus,
+        tracking: trackingStatus.status === 'tracking',
+      })
+    }
+    for (const targetChipId of trackingStatus.targetChipIds || []) {
+      if (!targetChipId || normalizeChipId(targetChipId) === normalizeChipId(chipId)) continue
+      updateDeviceByIncoming({
+        chipId: targetChipId,
         trackingStatus,
         tracking: trackingStatus.status === 'tracking',
       })

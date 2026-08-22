@@ -1,5 +1,5 @@
 <template>
-  <CameraDeviceCard
+  <CameraDeviceCardShell
     v-if="isCamera"
     :device="device"
     :deleting="deleting"
@@ -32,22 +32,10 @@
     </header>
 
     <dl class="unknown-device-grid">
-      <div>
-        <dt>Chip ID</dt>
-        <dd>{{ device.chipId || '-' }}</dd>
-      </div>
-      <div>
-        <dt>IP</dt>
-        <dd>{{ device.ip || '-' }}</dd>
-      </div>
-      <div>
-        <dt>固件版本</dt>
-        <dd>{{ firmwareVersionText }}</dd>
-      </div>
-      <div>
-        <dt>OTA 状态</dt>
-        <dd>{{ device.otaStatus || 'idle' }}</dd>
-      </div>
+      <div><dt>Chip ID</dt><dd>{{ device.chipId || '-' }}</dd></div>
+      <div><dt>IP</dt><dd>{{ device.ip || '-' }}</dd></div>
+      <div><dt>固件版本</dt><dd>{{ firmwareVersionText }}</dd></div>
+      <div><dt>OTA 状态</dt><dd>{{ device.otaStatus || 'idle' }}</dd></div>
     </dl>
 
     <section v-if="isCaptureController" class="capture-ota-panel">
@@ -114,7 +102,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import BaseSelect from '../common/BaseSelect.vue'
-import CameraDeviceCard from './CameraDeviceCard.vue'
+import CameraDeviceCardShell from './CameraDeviceCardShell.vue'
 import LampDeviceCard from './LampDeviceCard.vue'
 import { checkFirmwareUpdate, startOtaUpdate } from '../../api/device'
 import type { DeviceItem, FirmwareChannel, OtaCheckResult } from '../../types/device'
@@ -157,7 +145,6 @@ const deviceTypeText = computed(() => {
   if (isCaptureControllerDevice(props.device)) return '拍照控制器 · cam_capture'
   return props.device.deviceType || 'unknown'
 })
-
 const firmwareVersionText = computed(() => {
   const version = props.device.firmwareVersion || 'unknown'
   const code = props.device.firmwareVersionCode
@@ -273,7 +260,6 @@ async function handleStartOtaUpdate() {
   background: var(--card-bg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
-
 .unknown-device-card.offline {
   opacity: 0.82;
 }
