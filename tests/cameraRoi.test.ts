@@ -160,4 +160,12 @@ describe('camera ROI helpers', () => {
     assert.match(source, /async function persistRoiConfig/)
     assert.match(source, /saveCamRoiConfig\(props\.device\.chipId, payload\)/)
   })
+
+  it('does not show the obsolete center-position ROI pause warning', () => {
+    const source = readFileSync(new URL('../src/components/device/CameraDeviceCard.vue', import.meta.url), 'utf8')
+
+    assert.doesNotMatch(source, /非中心监测位，ROI 判断暂停/)
+    assert.doesNotMatch(source, /isCenterMonitoringStatus/)
+    assert.match(source, /区域未配置，请在详情中完成区域标定/)
+  })
 })

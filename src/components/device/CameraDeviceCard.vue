@@ -728,12 +728,7 @@ const roiWarningText = computed(() => {
   if (!props.device.online) return ''
   if (roiLoading.value) return ''
   if (!roiReady.value) return '区域未配置，请在详情中完成区域标定'
-  if (!isCenterMonitoringStatus.value) return '非中心监测位，ROI 判断暂停'
   return ''
-})
-
-const isCenterMonitoringStatus = computed(() => {
-  return ['monitoring', 'presence'].includes(normalizedWorkStatus.value)
 })
 
 const normalizedWorkStatus = computed(() => {
@@ -866,7 +861,7 @@ const batchCaptureDisabledReason = computed(() => {
 
 const presenceRows = computed(() => {
   const areas: CamPresenceArea[] = props.device.camPresence?.areas || []
-  const activeRoi = roiReady.value && isCenterMonitoringStatus.value
+  const activeRoi = roiReady.value
   return [1, 2, 3].map((index) => {
     const area = areas.find(item => Number(item.targetIndex) === index)
     const roi = roiDraft.value.rois.find(item => item.targetIndex === index)
