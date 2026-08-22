@@ -82,6 +82,9 @@ describe('camera ROI helpers', () => {
 
     assert.deepEqual(Object.keys(normalized).sort(), [
       'areaName',
+      'collisionCenterMm',
+      'collisionClearanceMm',
+      'collisionParkTimeSeconds',
       'h',
       'targetChipId',
       'targetIndex',

@@ -207,6 +207,12 @@ export interface CamRoiItem {
   y: number
   w: number
   h: number
+  /** 灯具在滑轨上的物理碰撞中心，单位 mm */
+  collisionCenterMm?: number
+  /** 碰撞中心两侧的避让距离，单位 mm */
+  collisionClearanceMm?: number
+  /** 灯具回到 Pan=0/Tilt=0 的最坏实测时间，单位秒 */
+  collisionParkTimeSeconds?: number
 }
 
 export interface CamPtzPreset {

@@ -80,5 +80,8 @@ export function pickCamRoiFields(value: CamRoiItem): CamRoiItem {
     y: value.y,
     w: value.w,
     h: value.h,
+    collisionCenterMm: value.collisionCenterMm,
+    collisionClearanceMm: value.collisionClearanceMm,
+    collisionParkTimeSeconds: value.collisionParkTimeSeconds,
   }
 }
