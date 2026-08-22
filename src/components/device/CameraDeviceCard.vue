@@ -32,6 +32,16 @@
           <strong class="camera-work-status" :class="workStatusClass">{{ workStatusText }}</strong>
           <button
             type="button"
+            class="global-tracking-btn"
+            :class="{ stopping: isGlobalTracking }"
+            :disabled="Boolean(globalTrackingDisabledReason)"
+            :title="globalTrackingDisabledReason || (isGlobalTracking ? '停止三灯同步跟踪' : '让三盏灯同时执行 UDP 跟踪')"
+            @click.stop="handleGlobalTracking"
+          >
+            {{ globalTrackingLoading ? '下发中...' : (isGlobalTracking ? '停止全局跟踪' : '全局跟踪') }}
+          </button>
+          <button
+            type="button"
             class="batch-capture-btn"
             :disabled="Boolean(batchCaptureDisabledReason)"
             :title="batchCaptureDisabledReason || '按滑轨位置从小到大拍摄三个区域'"
@@ -476,9 +486,11 @@ import {
   getCamRoiConfig,
   saveCamRoiConfig,
   sendCamPtz,
+  startCamGlobalTracking,
   startCamTracking,
   startOtaUpdate,
   stopCamTracking,
+  stopCamGlobalTracking,
 } from '../../api/device'
 import { getPersonFlowImageObjectUrl } from '../../api/personFlow'
 import { applyTargetDeviceToRoi, getTargetDeviceLabel, pickCamRoiFields } from '../../utils/cameraRoi'
@@ -567,6 +579,8 @@ const ptzMessage = ref('')
 const ptzStep = ref(5)
 const aimLoading = ref(false)
 const batchCaptureLoading = ref(false)
+const globalTrackingLoading = ref(false)
+const localGlobalTrackingActive = ref(false)
 const aimMessage = ref('')
 const localCaptureTasks = ref<CamCaptureTaskResult[]>([])
 const trackingActionIndex = ref<number | null>(null)
@@ -755,6 +769,7 @@ const isCamBusy = computed(() => {
     'returning_center',
     'returning_target_2',
     'ready_tracking',
+    'armed',
     'tracking',
   ].includes(normalizedWorkStatus.value)
 })
@@ -780,6 +795,32 @@ const batchCaptureDisabledReason = computed(() => {
   const sliderLamp = findTargetDevice(sliderLampChipId)
   if (!sliderLamp) return '滑轨控制灯不存在'
   if (!sliderLamp.online) return '滑轨控制灯离线'
+  return ''
+})
+
+const isGlobalTracking = computed(() => {
+  if (localGlobalTrackingActive.value) return true
+  const status = props.device.trackingStatus
+  return status?.trackingMode === 'global'
+    && ['armed', 'tracking'].includes(String(status.status || '').toLowerCase())
+})
+
+const globalTrackingDisabledReason = computed(() => {
+  if (globalTrackingLoading.value || trackingActionIndex.value != null) return '正在下发追踪指令'
+  if (!props.device.online) return '摄像头离线'
+  if (isGlobalTracking.value) return ''
+  if (isCamBusy.value) return '摄像头忙碌中'
+
+  const targets = targetButtons.value.filter(target => target.targetChipId)
+  if (targets.length !== 3 || targetButtons.value.some(target => !target.targetChipId || target.targetMissing)) {
+    return '三个目标灯尚未完整配置'
+  }
+  if (new Set(targets.map(target => target.targetChipId?.trim().toUpperCase())).size !== 3) {
+    return '三个目标灯不能重复'
+  }
+  if (targets.some(target => !findTargetDevice(target.targetChipId)?.online)) {
+    return '三个目标灯必须全部在线'
+  }
   return ''
 })
 
@@ -1305,6 +1346,7 @@ function isTrackingButtonDisabled(target: TargetButton) {
 function getTrackingButtonDisabledReason(target: TargetButton) {
   if (trackingActionIndex.value != null) return '正在下发'
   if (!props.device.online) return '摄像头离线'
+  if (isGlobalTracking.value) return '请先停止全局跟踪'
 
   const sliderLampChipId = roiDraft.value.sliderLampChipId
   if (!sliderLampChipId) return '滑轨控制灯未绑定'
@@ -1362,6 +1404,38 @@ async function handleTracking(target: TargetButton) {
     trackingMessage.value = getErrorMessage(error, '追踪指令下发失败')
   } finally {
     trackingActionIndex.value = null
+  }
+}
+
+async function handleGlobalTracking() {
+  const disabledReason = globalTrackingDisabledReason.value
+  if (!props.device.chipId || disabledReason) {
+    trackingMessageIsError.value = true
+    trackingMessage.value = disabledReason || '摄像头缺少 chipId，无法执行全局跟踪'
+    return
+  }
+
+  const wasTracking = isGlobalTracking.value
+  globalTrackingLoading.value = true
+  trackingMessage.value = ''
+  trackingMessageIsError.value = false
+  try {
+    const payload = { camChipId: props.device.chipId }
+    if (wasTracking) {
+      await stopCamGlobalTracking(payload)
+      localGlobalTrackingActive.value = false
+      trackingMessage.value = '三盏灯已停止全局跟踪'
+    } else {
+      await startCamGlobalTracking(payload)
+      localGlobalTrackingActive.value = true
+      manualTrackingTargetIndex.value = null
+      trackingMessage.value = '三盏灯已开始全局跟踪'
+    }
+  } catch (error) {
+    trackingMessageIsError.value = true
+    trackingMessage.value = getErrorMessage(error, '全局跟踪指令下发失败')
+  } finally {
+    globalTrackingLoading.value = false
   }
 }
 
@@ -1797,7 +1871,10 @@ watch(
 watch(
   () => props.device.trackingStatus,
   (trackingStatus) => {
-    manualTrackingTargetIndex.value = trackingStatus?.status === 'tracking'
+    const globalActive = trackingStatus?.trackingMode === 'global'
+      && ['armed', 'tracking'].includes(String(trackingStatus.status || '').toLowerCase())
+    localGlobalTrackingActive.value = globalActive
+    manualTrackingTargetIndex.value = !globalActive && trackingStatus?.status === 'tracking'
       ? Number(trackingStatus.targetIndex) || null
       : null
   },
@@ -2061,6 +2138,35 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-size: 11px;
   font-weight: 800;
+}
+
+.global-tracking-btn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: #16a34a;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.global-tracking-btn:hover:not(:disabled) {
+  border-color: #4ade80;
+  background: #dcfce7;
+}
+
+.global-tracking-btn.stopping {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+.global-tracking-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .batch-capture-btn:hover:not(:disabled) {

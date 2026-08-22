@@ -13,6 +13,7 @@ import type {
   CamPresenceState,
   CamStatusState,
   CamTrackingControlPayload,
+  CamGlobalTrackingControlPayload,
   CamTrackingControlResult,
   CameraPtzPayload,
   FirmwareHistoryParams,
@@ -151,6 +152,24 @@ export async function startCamTracking(payload: CamTrackingControlPayload): Prom
 
 export async function stopCamTracking(payload: CamTrackingControlPayload): Promise<CamTrackingControlResult> {
   const res = await http.post<CommonResult<CamTrackingControlResult>>('/admin/device/cam/tracking/stop', payload)
+  return res.data.data
+}
+
+export async function startCamGlobalTracking(
+  payload: CamGlobalTrackingControlPayload,
+): Promise<CamTrackingControlResult> {
+  const res = await http.post<CommonResult<CamTrackingControlResult>>(
+    '/admin/device/cam/tracking/global/start', payload,
+  )
+  return res.data.data
+}
+
+export async function stopCamGlobalTracking(
+  payload: CamGlobalTrackingControlPayload,
+): Promise<CamTrackingControlResult> {
+  const res = await http.post<CommonResult<CamTrackingControlResult>>(
+    '/admin/device/cam/tracking/global/stop', payload,
+  )
   return res.data.data
 }
 

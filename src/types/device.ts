@@ -174,14 +174,20 @@ export interface CamTrackingControlPayload {
   targetIndex: number
 }
 
+export interface CamGlobalTrackingControlPayload {
+  camChipId: string
+}
+
 export interface CamTrackingControlResult {
   chipId?: string
   role?: string
   trackingStatus: string
+  trackingMode?: 'single' | 'global' | string
   sessionId?: string
   camChipId?: string
   lampChipId?: string
   targetIndex?: number
+  targetChipIds?: string[]
   message?: string
   updateTime?: string | number
 }
@@ -351,10 +357,12 @@ export interface LampProximityState {
 export interface TrackingStatusState {
   chipId?: string
   sessionId?: string
+  trackingMode?: 'single' | 'global' | string
   camChipId?: string
   lampChipId?: string
   targetChipId?: string
   targetIndex?: number
+  targetChipIds?: string[]
   status?: 'armed' | 'ready' | 'tracking' | 'lost' | 'stopped' | 'monitoring' | 'timeout' | 'error' | string
   message?: string
   timestamp?: string | number
